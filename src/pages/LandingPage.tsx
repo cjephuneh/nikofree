@@ -342,7 +342,130 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
         </div>
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 mb-16">
+      {/* Organization Banner */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="relative bg-gradient-to-r from-blue-900 via-blue-700 to-blue-600 rounded-3xl overflow-hidden shadow-2xl">
+          {/* Animated background pattern */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute inset-0" style={{
+              backgroundImage: 'radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 50%, white 1px, transparent 1px)',
+              backgroundSize: '50px 50px'
+            }}></div>
+          </div>
+          
+          <div className="relative px-8 py-10 md:px-12 md:py-14">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+              {/* Left Content */}
+              <div className="text-white space-y-4">
+                <div className="inline-flex items-center space-x-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full mb-2">
+                  <Sparkles className="w-5 h-5 text-yellow-300" />
+                  <span className="font-semibold text-sm">Niko Free</span>
+                </div>
+                <h2 className="text-4xl md:text-5xl font-bold leading-tight">
+                  Discover Amazing Events
+                </h2>
+                <p className="text-lg text-blue-100 leading-relaxed">
+                  Join millions of people discovering and attending incredible events every day. From concerts to conferences, find your next adventure with Niko Free.
+                </p>
+                <div className="flex flex-wrap gap-4 pt-4">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+                      <Users className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">2M+</p>
+                      <p className="text-sm text-blue-100">Active Users</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+                      <Calendar className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">10K+</p>
+                      <p className="text-sm text-blue-100">Events Monthly</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+                      <Heart className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">98%</p>
+                      <p className="text-sm text-blue-100">Satisfaction</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3 pt-2">
+                  <button 
+                    onClick={() => onNavigate('become-partner')}
+                    className="px-6 py-3 bg-white text-blue-600 rounded-xl font-bold hover:bg-blue-50 transform hover:scale-105 transition-all shadow-lg"
+                  >
+                    Become a Partner
+                  </button>
+                  <button 
+                    onClick={() => onNavigate('about')}
+                    className="px-6 py-3 bg-white/10 backdrop-blur-sm text-white border-2 border-white/30 rounded-xl font-bold hover:bg-white/20 transition-all"
+                  >
+                    Learn More
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Content - Event Preview Cards */}
+              <div className="hidden md:block relative h-80">
+                <div className="absolute top-0 right-0 w-56 transform rotate-6 hover:rotate-0 transition-transform duration-300">
+                  <div className="bg-white rounded-2xl overflow-hidden shadow-2xl">
+                    <img
+                      src="https://images.pexels.com/photos/1105666/pexels-photo-1105666.jpeg?auto=compress&cs=tinysrgb&w=400"
+                      alt="Event"
+                      className="w-full h-32 object-cover"
+                    />
+                    <div className="p-4">
+                      <h3 className="font-bold text-gray-900 text-sm mb-1">Live Music Festival</h3>
+                      <p className="text-xs text-gray-600">This Weekend</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="absolute top-16 right-16 w-56 transform -rotate-6 hover:rotate-0 transition-transform duration-300">
+                  <div className="bg-white rounded-2xl overflow-hidden shadow-2xl">
+                    <img
+                      src="https://images.pexels.com/photos/2747449/pexels-photo-2747449.jpeg?auto=compress&cs=tinysrgb&w=400"
+                      alt="Event"
+                      className="w-full h-32 object-cover"
+                    />
+                    <div className="p-4">
+                      <h3 className="font-bold text-gray-900 text-sm mb-1">Tech Summit 2025</h3>
+                      <p className="text-xs text-gray-600">Nov 2 • KICC</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="absolute bottom-0 right-8 w-56 transform rotate-3 hover:rotate-0 transition-transform duration-300">
+                  <div className="bg-white rounded-2xl overflow-hidden shadow-2xl">
+                    <img
+                      src="https://images.pexels.com/photos/3822647/pexels-photo-3822647.jpeg?auto=compress&cs=tinysrgb&w=400"
+                      alt="Event"
+                      className="w-full h-32 object-cover"
+                    />
+                    <div className="p-4">
+                      <h3 className="font-bold text-gray-900 text-sm mb-1">Yoga in the Park</h3>
+                      <p className="text-xs text-gray-600">Every Morning</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Decorative Elements */}
+          <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-400 rounded-full opacity-20 blur-3xl"></div>
+          <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-300 rounded-full opacity-20 blur-3xl"></div>
+        </div>
+      </div>
+
+      {/* Featured Events Banner */}
+
+      {/* <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 mb-16">
         <div className="relative bg-white rounded-3xl shadow-2xl overflow-hidden">
           <div className="relative h-96 md:h-[500px]">
             <img
@@ -408,7 +531,7 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
             ))}
           </div>
         </div>
-      </div>
+      </div> */}
 
       <div className=" max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-16">
         <div className="mb-8">

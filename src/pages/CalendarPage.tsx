@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MapPin, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import EventCard from '../components/EventCard';
@@ -10,7 +10,6 @@ interface CalendarPageProps {
 }
 
 export default function CalendarPage({ onNavigate, onEventClick }: CalendarPageProps) {
-  const [selectedLocation, setSelectedLocation] = useState('Nairobi, Kenya');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedMonth, setSelectedMonth] = useState(new Date());
 
@@ -162,24 +161,8 @@ export default function CalendarPage({ onNavigate, onEventClick }: CalendarPageP
           </p>
         </div>
 
-        <div className="mb-8">
-          <div className="flex items-center space-x-3 bg-white rounded-xl px-4 py-3 border border-gray-200 max-w-xs">
-            <MapPin className="w-5 h-5 text-gray-400" />
-            <select
-              value={selectedLocation}
-              onChange={(e) => setSelectedLocation(e.target.value)}
-              className="flex-1 bg-transparent outline-none text-gray-900 cursor-pointer"
-            >
-              <option>Nairobi, Kenya</option>
-              <option>Mombasa, Kenya</option>
-              <option>Nakuru, Kenya</option>
-              <option>Eldoret, Kenya</option>
-              <option>Meru, Kenya</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-12">
+        
+        <div className="bg-white rounded-2xl border p-6 mb-12">
           <div className="flex justify-between items-center mb-6">
             <button
               onClick={prevMonth}
