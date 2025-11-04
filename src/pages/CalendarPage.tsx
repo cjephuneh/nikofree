@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -12,6 +12,7 @@ interface CalendarPageProps {
 export default function CalendarPage({ onNavigate, onEventClick }: CalendarPageProps) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const eventsRef = useRef<HTMLDivElement>(null);
 
   const daysInMonth = (date: Date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -58,6 +59,14 @@ export default function CalendarPage({ onNavigate, onEventClick }: CalendarPageP
 
   const isSelectedDate = (date: Date) => {
     return date.toDateString() === selectedDate.toDateString();
+  };
+
+  const handleDateClick = (date: Date) => {
+    setSelectedDate(date);
+    // Smooth scroll to events section
+    setTimeout(() => {
+      eventsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   // Sample events data
@@ -191,7 +200,7 @@ export default function CalendarPage({ onNavigate, onEventClick }: CalendarPageP
             {generateCalendarDays().map((date, index) => (
               <button
                 key={index}
-                onClick={() => date && setSelectedDate(date)}
+                onClick={() => date && handleDateClick(date)}
                 className={`
                   aspect-square p-1 rounded-lg transition-all relative flex flex-col items-start
                   ${!date ? 'invisible' : ''}
@@ -232,7 +241,7 @@ export default function CalendarPage({ onNavigate, onEventClick }: CalendarPageP
           </div>
         </div>
 
-        <div>
+        <div ref={eventsRef} className="scroll-mt-24">
           <h3 className="text-2xl font-bold text-gray-900 mb-6">
             Events on {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
             {selectedDateEvents.length > 0 && (
