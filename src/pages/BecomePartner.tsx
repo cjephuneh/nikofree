@@ -24,6 +24,10 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
   const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]);
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const locationTimeoutRef = useRef<NodeJS.Timeout>();
+  const [emailError, setEmailError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [customInterest, setCustomInterest] = useState('');
+  const [customInterests, setCustomInterests] = useState<string[]>([]);
 
   const categories = [
     { id: 'travel', name: 'Travel' },
@@ -131,9 +135,72 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
     setLocationSuggestions([]);
   };
 
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) {
+      setEmailError('Email is required');
+      return false;
+    }
+    if (!emailRegex.test(email)) {
+      setEmailError('Please enter a valid email address');
+      return false;
+    }
+    setEmailError('');
+    return true;
+  };
+
+  const validatePhone = (phone: string) => {
+    // Kenyan phone number format: +254 or 0 followed by 9 digits
+    const phoneRegex = /^(\+254|0)[17]\d{8}$/;
+    if (!phone) {
+      setPhoneError('Phone number is required');
+      return false;
+    }
+    if (!phoneRegex.test(phone.replace(/\s/g, ''))) {
+      setPhoneError('Please enter a valid Kenyan phone number (e.g., +254 700 000 000 or 0700 000 000)');
+      return false;
+    }
+    setPhoneError('');
+    return true;
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFormData({ ...formData, email: value });
+    if (value) {
+      validateEmail(value);
+    }
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFormData({ ...formData, phone: value });
+    if (value) {
+      validatePhone(value);
+    }
+  };
+
+  const handleAddCustomInterest = () => {
+    if (customInterest.trim() && !customInterests.includes(customInterest.trim())) {
+      setCustomInterests([...customInterests, customInterest.trim()]);
+      setCustomInterest('');
+    }
+  };
+
+  const handleRemoveCustomInterest = (interest: string) => {
+    setCustomInterests(customInterests.filter(i => i !== interest));
+  };
+
+  const handleCustomInterestKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddCustomInterest();
+    }
+  };
+
   const canProceedStep1 = formData.businessName && formData.location;
   const canProceedStep2 = formData.categories.length > 0;
-  const canProceedStep3 = formData.email && formData.phone;
+  const canProceedStep3 = formData.email && formData.phone && !emailError && !phoneError;
   const canProceedStep4 = formData.signature && formData.acceptTerms;
 
   if (submitted) {
@@ -149,15 +216,18 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
             <p className="text-xl text-gray-600 mb-4">
               Thank you for your interest in becoming a partner.
             </p>
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 mb-8">
-              <p className="text-lg font-semibold text-blue-900 mb-2">What's Next?</p>
+            <div className="rounded-xl p-6 mb-8" style={{ backgroundColor: '#e6f7ff', borderWidth: '2px', borderStyle: 'solid', borderColor: '#27aae2' }}>
+              <p className="text-lg font-semibold mb-2" style={{ color: '#1a8ec4' }}>What's Next?</p>
               <p className="text-gray-700">
                 Our admin team will review your application within 24 hours. You'll receive an email at <strong>{formData.email}</strong> with the approval status.
               </p>
             </div>
             <button
               onClick={() => onNavigate('landing')}
-              className="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
+              className="px-8 py-4 text-white rounded-xl font-bold transition-colors"
+              style={{ backgroundColor: '#27aae2' }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
             >
               Back to Home
             </button>
@@ -169,10 +239,23 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar onNavigate={onNavigate} />
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200 relative">
+      {/* Light mode dot pattern overlay */}
+      <div className="block dark:hidden fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(0, 0, 0, 0.08) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      {/* Dark mode dot pattern overlay */}
+      <div className="hidden dark:block fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(156, 163, 175, 0.15) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      <div className="relative z-10">
+        <Navbar onNavigate={onNavigate} />
 
-      <div className="py-16">
+      <div className="py-10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 text-center">
             Become a Partner
@@ -182,45 +265,33 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
           </p>
           
           {/* Progress Steps */}
-          <div className="flex items-center justify-between max-w-2xl mx-auto">
-            {[1, 2, 3, 4].map((step) => (
-              <div key={step} className="flex items-center flex-1">
-                <div className="flex flex-col items-center flex-1">
+          <div className="max-w-md mx-auto">
+            <div className="flex items-center">
+              {[1, 2, 3, 4].map((step) => (
+                <div key={step} className="flex items-center flex-1">
                   <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
-                      currentStep >= step
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-300 text-gray-600'
+                    className={`h-2.5 flex-1 transition-all ${
+                      currentStep >= step ? 'bg-gray-300' : 'bg-gray-300'
+                    } ${
+                      step === 1 ? 'rounded-l-full' : 
+                      step === 4 ? 'rounded-r-full' : ''
                     }`}
-                  >
-                    {step}
-                  </div>
-                  <span className="text-xs text-gray-600 mt-2 hidden sm:block">
-                    {step === 1 && 'Basic Info'}
-                    {step === 2 && 'Categories'}
-                    {step === 3 && 'Contact'}
-                    {step === 4 && 'Sign'}
-                  </span>
-                </div>
-                {step < 4 && (
-                  <div
-                    className={`h-1 flex-1 mx-2 transition-all ${
-                      currentStep > step ? 'bg-blue-600' : 'bg-gray-300'
-                    }`}
+                    style={currentStep >= step ? { backgroundColor: '#27aae2' } : {}}
                   />
-                )}
-              </div>
-            ))}
+                  {step < 4 && <div className="w-2" />}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 mb-20">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 mt-1 mb-3">
         <div className="p-8 md:p-12">
           
           {/* Step 1: Basic Information */}
           {currentStep === 1 && (
-            <div className="space-y-6">
+            <div className="space-y-4">
               <div className="text-center mb-8">
                 <h2 className="text-3xl font-bold text-gray-900 mb-2">Basic Information</h2>
                 <p className="text-gray-600">Tell us about your business</p>
@@ -236,7 +307,10 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                   required
                   value={formData.businessName}
                   onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none transition-colors"
+                  style={{ borderColor: formData.businessName ? '#27aae2' : '' }}
+                  onFocus={(e) => e.target.style.borderColor = '#27aae2'}
+                  onBlur={(e) => { if (!formData.businessName) e.target.style.borderColor = ''; }}
                   placeholder="Enter your business or brand name"
                 />
               </div>
@@ -246,7 +320,11 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                   <Upload className="w-4 h-4" />
                   <span>Logo Upload</span>
                 </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-500 transition-colors cursor-pointer">
+                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center transition-colors cursor-pointer"
+                  style={{ borderColor: formData.logo ? '#27aae2' : '' }}
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = '#27aae2'}
+                  onMouseLeave={(e) => { if (!formData.logo) e.currentTarget.style.borderColor = ''; }}
+                >
                   <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
                   <p className="text-gray-600 mb-2">Click to upload or drag and drop</p>
                   <p className="text-sm text-gray-500">PNG, JPG up to 5MB</p>
@@ -269,8 +347,13 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                   required
                   value={formData.location}
                   onChange={handleLocationChange}
-                  onFocus={() => formData.location.length >= 3 && setShowLocationSuggestions(true)}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors"
+                  onFocus={(e) => { 
+                    if (formData.location.length >= 3) setShowLocationSuggestions(true);
+                    e.target.style.borderColor = '#27aae2';
+                  }}
+                  onBlur={(e) => { if (!formData.location) e.target.style.borderColor = ''; }}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none transition-colors"
+                  style={{ borderColor: formData.location ? '#27aae2' : '' }}
                   placeholder="Search for your location..."
                 />
                 {showLocationSuggestions && locationSuggestions.length > 0 && (
@@ -280,9 +363,12 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                         key={index}
                         type="button"
                         onClick={() => handleLocationSelect(location)}
-                        className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors flex items-start space-x-2 border-b border-gray-100 last:border-b-0"
+                        className="w-full px-4 py-3 text-left transition-colors flex items-start space-x-2 border-b border-gray-100 last:border-b-0"
+                        style={{ backgroundColor: 'white' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e6f7ff'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                       >
-                        <MapPin className="w-4 h-4 text-blue-600 mt-1 flex-shrink-0" />
+                        <MapPin className="w-4 h-4 mt-1 flex-shrink-0" style={{ color: '#27aae2' }} />
                         <span className="text-sm text-gray-900">{location.display_name}</span>
                       </button>
                     ))}
@@ -296,9 +382,10 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                   disabled={!canProceedStep1}
                   className={`px-8 py-3 rounded-xl font-bold transition-all flex items-center space-x-2 ${
                     canProceedStep1
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      ? 'text-white hover:opacity-90'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
+                  style={canProceedStep1 ? { backgroundColor: '#27aae2' } : {}}
                 >
                   <span>Next</span>
                   <ArrowRight className="w-5 h-5" />
@@ -330,9 +417,19 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                         onClick={() => handleCategoryToggle(category.id)}
                         className={`px-4 py-2 rounded-full border-2 transition-all flex items-center space-x-2 ${
                           isSelected
-                            ? 'border-blue-500 bg-blue-600 text-white'
-                            : 'border-gray-200 bg-white text-gray-900 hover:border-blue-300'
+                            ? 'text-white'
+                            : 'border-gray-200 bg-white text-gray-900'
                         }`}
+                        style={isSelected ? { 
+                          borderColor: '#27aae2', 
+                          backgroundColor: '#27aae2' 
+                        } : {}}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) e.currentTarget.style.borderColor = '#27aae2';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) e.currentTarget.style.borderColor = '';
+                        }}
                       >
                         <span className="text-sm font-medium">{category.name}</span>
                         {isSelected ? (
@@ -351,19 +448,60 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                   <FileText className="w-4 h-4" />
                   <span>Additional Interests (Optional)</span>
                 </label>
-                <textarea
-                  rows={4}
-                  value={formData.interests}
-                  onChange={(e) => setFormData({ ...formData, interests: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors resize-none"
-                  placeholder="Tell us more about specific interests or niche event types you plan to organize..."
-                />
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="text"
+                    value={customInterest}
+                    onChange={(e) => setCustomInterest(e.target.value)}
+                    onKeyPress={handleCustomInterestKeyPress}
+                    className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none transition-colors text-sm"
+                    onFocus={(e) => e.target.style.borderColor = '#27aae2'}
+                    onBlur={(e) => e.target.style.borderColor = ''}
+                    placeholder="Type an interest and press Enter or click Add"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCustomInterest}
+                    className="px-6 py-2 text-white rounded-xl font-medium hover:opacity-90 transition-colors text-sm"
+                    style={{ backgroundColor: '#27aae2' }}
+                  >
+                    Add
+                  </button>
+                </div>
+                {customInterests.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {customInterests.map((interest, index) => (
+                      <div
+                        key={index}
+                        className="px-4 py-2 rounded-full border-2 text-white flex items-center space-x-2"
+                        style={{ borderColor: '#000000', backgroundColor: '#000000' }}
+                      >
+                        <span className="text-sm font-medium">{interest}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCustomInterest(interest)}
+                          className="hover:bg-gray-800 rounded-full p-0.5 transition-colors"
+                        >
+                          <Minus className="w-4 h-4 flex-shrink-0" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-between pt-4">
                 <button
                   onClick={handlePrevious}
-                  className="px-8 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-bold hover:border-blue-500 hover:text-blue-600 transition-all flex items-center space-x-2"
+                  className="px-8 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-bold transition-all flex items-center space-x-2"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = '#27aae2';
+                    e.currentTarget.style.color = '#27aae2';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = '';
+                    e.currentTarget.style.color = '';
+                  }}
                 >
                   <ArrowLeft className="w-5 h-5" />
                   <span>Back</span>
@@ -373,9 +511,10 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                   disabled={!canProceedStep2}
                   className={`px-8 py-3 rounded-xl font-bold transition-all flex items-center space-x-2 ${
                     canProceedStep2
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      ? 'text-white hover:opacity-90'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
+                  style={canProceedStep2 ? { backgroundColor: '#27aae2' } : {}}
                 >
                   <span>Next</span>
                   <ArrowRight className="w-5 h-5" />
@@ -401,11 +540,29 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                   type="email"
                   required
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors"
+                  onChange={handleEmailChange}
+                  onBlur={() => formData.email && validateEmail(formData.email)}
+                  className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors ${
+                    emailError 
+                      ? 'border-red-500 focus:border-red-500' 
+                      : 'border-gray-200'
+                  }`}
+                  onFocus={(e) => { if (!emailError) e.target.style.borderColor = '#27aae2'; }}
+                  onBlur={(e) => { 
+                    if (formData.email) validateEmail(formData.email);
+                    if (!emailError && !formData.email) e.target.style.borderColor = '';
+                  }}
                   placeholder="email@example.com"
                 />
-                <p className="text-sm text-gray-500 mt-1">You'll receive event confirmations and attendee notifications here</p>
+                {emailError && (
+                  <p className="text-sm text-red-600 mt-1 flex items-center space-x-1">
+                    <span>⚠</span>
+                    <span>{emailError}</span>
+                  </p>
+                )}
+                {!emailError && formData.email && (
+                  <p className="text-sm text-gray-500 mt-1">You'll receive event confirmations and attendee notifications here</p>
+                )}
               </div>
 
               <div>
@@ -417,17 +574,42 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                   type="tel"
                   required
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors"
-                  placeholder="+254 700 000 000"
+                  onChange={handlePhoneChange}
+                  className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors ${
+                    phoneError 
+                      ? 'border-red-500 focus:border-red-500' 
+                      : 'border-gray-200'
+                  }`}
+                  onFocus={(e) => { if (!phoneError) e.target.style.borderColor = '#27aae2'; }}
+                  onBlur={(e) => { 
+                    if (formData.phone) validatePhone(formData.phone);
+                    if (!phoneError && !formData.phone) e.target.style.borderColor = '';
+                  }}
+                  placeholder="+254 700 000 000 or 0700 000 000"
                 />
-                <p className="text-sm text-gray-500 mt-1">This will be displayed to attendees for inquiries</p>
+                {phoneError && (
+                  <p className="text-sm text-red-600 mt-1 flex items-center space-x-1">
+                    <span>⚠</span>
+                    <span>{phoneError}</span>
+                  </p>
+                )}
+                {!phoneError && formData.phone && (
+                  <p className="text-sm text-gray-500 mt-1">This will be displayed to attendees for inquiries</p>
+                )}
               </div>
 
               <div className="flex justify-between pt-4">
                 <button
                   onClick={handlePrevious}
-                  className="px-8 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-bold hover:border-blue-500 hover:text-blue-600 transition-all flex items-center space-x-2"
+                  className="px-8 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-bold transition-all flex items-center space-x-2"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = '#27aae2';
+                    e.currentTarget.style.color = '#27aae2';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = '';
+                    e.currentTarget.style.color = '';
+                  }}
                 >
                   <ArrowLeft className="w-5 h-5" />
                   <span>Back</span>
@@ -437,9 +619,10 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                   disabled={!canProceedStep3}
                   className={`px-8 py-3 rounded-xl font-bold transition-all flex items-center space-x-2 ${
                     canProceedStep3
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      ? 'text-white hover:opacity-90'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
+                  style={canProceedStep3 ? { backgroundColor: '#27aae2' } : {}}
                 >
                   <span>Next</span>
                   <ArrowRight className="w-5 h-5" />
@@ -456,7 +639,7 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                 <p className="text-gray-600">Review and sign the partner contract</p>
               </div>
 
-              <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
+              <div className="border-2 rounded-xl p-6" style={{ backgroundColor: '#e6f7ff', borderColor: '#27aae2' }}>
                 <h3 className="font-bold text-gray-900 mb-3 flex items-center space-x-2">
                   <FileText className="w-5 h-5" />
                   <span>Partner Terms & Conditions</span>
@@ -476,7 +659,12 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                   <p>• Refunds must be processed according to your stated event policy</p>
                   <p>• Partners are responsible for communicating cancellations to attendees</p>
                 </div>
-                <button className="text-blue-600 text-sm font-medium hover:text-blue-700 transition-colors">
+                <button 
+                  className="text-sm font-medium transition-colors"
+                  style={{ color: '#27aae2' }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                >
                   Read Full Terms & Conditions →
                 </button>
               </div>
@@ -491,9 +679,11 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                   required
                   value={formData.signature}
                   onChange={(e) => setFormData({ ...formData, signature: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors font-cursive text-xl"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none transition-colors font-cursive text-xl"
+                  onFocus={(e) => e.target.style.borderColor = '#27aae2'}
+                  onBlur={(e) => { if (!formData.signature) e.target.style.borderColor = ''; }}
                   placeholder="Type your full name as signature"
-                  style={{ fontFamily: 'Brush Script MT, cursive' }}
+                  style={{ fontFamily: 'Brush Script MT, cursive', borderColor: formData.signature ? '#27aae2' : '' }}
                 />
                 <p className="text-sm text-gray-500 mt-1">By typing your name, you agree to sign this contract electronically</p>
               </div>
@@ -504,7 +694,11 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                     type="checkbox"
                     checked={formData.acceptTerms}
                     onChange={(e) => setFormData({ ...formData, acceptTerms: e.target.checked })}
-                    className="mt-1 w-5 h-5 text-blue-600 border-2 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                    className="mt-1 w-5 h-5 border-2 border-gray-300 rounded focus:ring-2"
+                    style={{ 
+                      accentColor: '#27aae2',
+                      outlineColor: '#27aae2'
+                    }}
                   />
                   <span className="text-sm text-gray-700">
                     I have read and agree to the Partner Terms & Conditions and Privacy Policy. I understand that my digital signature above constitutes a legally binding agreement.
@@ -515,7 +709,15 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
               <div className="flex justify-between pt-4">
                 <button
                   onClick={handlePrevious}
-                  className="px-8 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-bold hover:border-blue-500 hover:text-blue-600 transition-all flex items-center space-x-2"
+                  className="px-8 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-bold transition-all flex items-center space-x-2"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = '#27aae2';
+                    e.currentTarget.style.color = '#27aae2';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = '';
+                    e.currentTarget.style.color = '';
+                  }}
                 >
                   <ArrowLeft className="w-5 h-5" />
                   <span>Back</span>
@@ -525,9 +727,18 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                   disabled={!canProceedStep4}
                   className={`px-8 py-3 rounded-xl font-bold transition-all flex items-center space-x-2 ${
                     canProceedStep4
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:shadow-xl'
+                      ? 'text-white'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
+                  style={canProceedStep4 ? { 
+                    background: 'linear-gradient(to right, #27aae2, #1a8ec4)'
+                  } : {}}
+                  onMouseEnter={(e) => {
+                    if (canProceedStep4) e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (canProceedStep4) e.currentTarget.style.boxShadow = '';
+                  }}
                 >
                   <CheckCircle className="w-5 h-5" />
                   <span>Submit Application</span>
@@ -539,7 +750,8 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
         </div>
       </div>
 
-      <Footer />
+      {/* <Footer /> */}
+      </div>
     </div>
   );
 }

@@ -250,34 +250,58 @@ export default function ThisWeekend({ onNavigate, onEventClick }: ThisWeekendPro
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      <Navbar onNavigate={onNavigate} currentPage="this-weekend" />
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 transition-colors duration-200 relative">
+      {/* Light mode dot pattern overlay */}
+      <div className="block dark:hidden fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(0, 0, 0, 0.08) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      {/* Dark mode dot pattern overlay */}
+      <div className="hidden dark:block fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(156, 163, 175, 0.15) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      <div className="relative z-10">
+        <Navbar onNavigate={onNavigate} currentPage="this-weekend" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center space-x-2 bg-blue-100 px-4 py-2 rounded-full mb-6">
-            <Calendar className="w-4 h-4 text-blue-600" />
-            <span className="text-blue-600 text-sm font-medium">This Weekend</span>
+        <div className="text-center mb-12" data-aos="fade-down">
+          <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full mb-6" style={{ backgroundColor: '#27aae2' }}>
+            <Calendar className="w-4 h-4 text-white" />
+            <span className="text-white text-sm font-medium">This Weekend</span>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4 transition-colors duration-200">
             Weekend Events Near You
           </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto transition-colors duration-200">
             Discover exciting events happening this weekend in your area
           </p>
         </div>
 
         {/* Day Selection Buttons */}
-        <div className="flex flex-wrap gap-3 mb-8 justify-center">
+        <div className="flex flex-wrap gap-3 mb-8 justify-center" data-aos="fade-up">
           {days.map((day) => (
             <button
               key={day}
               onClick={() => setSelectedDay(day)}
               className={`px-6 py-3 rounded-full font-semibold transition-all ${
                 selectedDay === day
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-blue-300'
+                  ? 'text-white shadow-lg'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-2 border-gray-200 dark:border-gray-700'
               }`}
+              style={selectedDay === day ? { backgroundColor: '#27aae2' } : {}}
+              onMouseEnter={(e) => {
+                if (selectedDay !== day) {
+                  e.currentTarget.style.borderColor = '#27aae2';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (selectedDay !== day) {
+                  e.currentTarget.style.borderColor = '';
+                }
+              }}
             >
               {day}
             </button>
@@ -285,7 +309,7 @@ export default function ThisWeekend({ onNavigate, onEventClick }: ThisWeekendPro
         </div>
 
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" data-aos="fade-up" data-aos-delay="100">
           {weekendEvents.map((event) => (
             <EventCard
               key={event.id}
@@ -297,23 +321,23 @@ export default function ThisWeekend({ onNavigate, onEventClick }: ThisWeekendPro
 
         {weekendEvents.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-600 text-lg">No events found for this weekend</p>
+            <p className="text-gray-600 dark:text-gray-400 text-lg transition-colors duration-200">No events found for this weekend</p>
           </div>
         )}
       </div>
 
       {/* Next Week Section */}
-      <div className="bg-gradient-to-b from-blue-50 to-white py-16">
+      <div className="bg-gradient-to-b from-gray-100 to-white dark:from-gray-800 dark:to-gray-900 py-16 transition-colors duration-200" data-aos="fade-up">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <div className="inline-flex items-center space-x-2 bg-blue-100 px-4 py-2 rounded-full mb-6">
-              <Calendar className="w-4 h-4 text-blue-600" />
-              <span className="text-blue-600 text-sm font-medium">Coming Soon</span>
+            <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full mb-6" style={{ backgroundColor: '#27aae2' }}>
+              <Calendar className="w-4 h-4 text-white" />
+              <span className="text-white text-sm font-medium">Coming Soon</span>
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4 transition-colors duration-200">
               Next Week
             </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto transition-colors duration-200">
               Plan ahead with upcoming events for next week
             </p>
           </div>
@@ -338,21 +362,22 @@ export default function ThisWeekend({ onNavigate, onEventClick }: ThisWeekendPro
             {/* Scroll Arrows for Next Week */}
             <button
               onClick={() => scrollNextWeek('left')}
-              className={`hidden lg:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 w-12 h-12 bg-white rounded-full items-center justify-center shadow-xl hover:bg-gray-50 transition-all z-10 ${showNextWeekLeftArrow ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              className={`hidden lg:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 w-12 h-12 bg-white dark:bg-gray-800 rounded-full items-center justify-center shadow-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all z-10 ${showNextWeekLeftArrow ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
             >
-              <ChevronLeft className="w-6 h-6 text-gray-900" />
+              <ChevronLeft className="w-6 h-6 text-gray-900 dark:text-white" />
             </button>
             <button
               onClick={() => scrollNextWeek('right')}
-              className="hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 w-12 h-12 bg-white rounded-full items-center justify-center shadow-xl hover:bg-gray-50 transition-all z-10"
+              className="hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 w-12 h-12 bg-white dark:bg-gray-800 rounded-full items-center justify-center shadow-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all z-10"
             >
-              <ChevronRight className="w-6 h-6 text-gray-900" />
+              <ChevronRight className="w-6 h-6 text-gray-900 dark:text-white" />
             </button>
           </div>
         </div>
       </div>
 
       <Footer />
+      </div>
     </div>
   );
 }

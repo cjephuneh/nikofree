@@ -55,8 +55,21 @@ Don't miss this opportunity to be part of Africa's tech revolution!`,
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar onNavigate={onNavigate} />
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200 relative">
+      {/* Light mode dot pattern overlay */}
+      <div className="block dark:hidden fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(0, 0, 0, 0.08) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      {/* Dark mode dot pattern overlay */}
+      <div className="hidden dark:block fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(156, 163, 175, 0.15) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      <div className="relative z-10">
+        <Navbar onNavigate={onNavigate} />
 
       <button
         onClick={() => onNavigate('landing')}
@@ -392,6 +405,7 @@ Don't miss this opportunity to be part of Africa's tech revolution!`,
           setShowLoginModal(true);
         }}
       />
+      </div>
     </div>
   );
 }

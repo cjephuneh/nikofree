@@ -1,0 +1,57 @@
+/* Mobile Size Optimizations */
+
+/* Base mobile optimizations */
+@media (max-width: 640px) {
+  /* Reduce all text sizes on mobile */
+  h1 {
+    font-size: 1.5rem !important;
+    line-height: 2rem !important;
+  }
+  
+  h2 {
+    font-size: 1.25rem !important;
+    line-height: 1.75rem !important;
+  }
+  
+  h3 {
+    font-size: 1.125rem !important;
+    line-height: 1.5rem !important;
+  }
+  
+  /* Reduce padding and margins */
+  .mobile-compact {
+    padding: 0.5rem !important;
+  }
+  
+  /* Smaller buttons */
+  button {
+    padding-top: 0.375rem !important;
+    padding-bottom: 0.375rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  /* Smaller input fields */
+  input {
+    padding-top: 0.375rem !important;
+    padding-bottom: 0.375rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  /* Smaller cards */
+  .event-card {
+    border-radius: 0.5rem !important;
+  }
+  
+  /* Compact spacing */
+  .space-y-4 > * + * {
+    margin-top: 0.75rem !important;
+  }
+  
+  .space-y-6 > * + * {
+    margin-top: 1rem !important;
+  }
+  
+  .space-y-8 > * + * {
+    margin-top: 1.5rem !important;
+  }
+}

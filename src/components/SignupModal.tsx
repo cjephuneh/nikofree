@@ -81,7 +81,8 @@ export default function SignupModal({ isOpen, onClose, onNavigate, onSwitchToLog
             {/* Email signup button */}
             <button
               onClick={handleEmailSignup}
-              className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-medium hover:shadow-lg transform hover:scale-105 transition-all"
+              className="w-full px-4 py-3 text-white rounded-xl font-medium hover:shadow-lg transform hover:scale-105 transition-all"
+              style={{ background: 'linear-gradient(to right, #27aae2, #1a8ec4)' }}
             >
               Sign up with email
             </button>
@@ -91,7 +92,10 @@ export default function SignupModal({ isOpen, onClose, onNavigate, onSwitchToLog
               <span className="text-gray-600">Already have an account? </span>
               <button
                 onClick={handleLogin}
-                className="text-blue-600 font-medium hover:text-blue-700 transition-colors"
+                className="font-medium transition-colors"
+                style={{ color: '#27aae2' }}
+                onMouseEnter={(e) => e.currentTarget.style.color = '#1a8ec4'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#27aae2'}
               >
                 Log in
               </button>

@@ -76,7 +76,20 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
   ];
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200 relative">
+      {/* Light mode dot pattern overlay */}
+      <div className="block dark:hidden fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(0, 0, 0, 0.08) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      {/* Dark mode dot pattern overlay */}
+      <div className="hidden dark:block fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(156, 163, 175, 0.15) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      <div className="relative z-10 flex min-h-screen w-full">
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 
@@ -500,6 +513,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
           </div>
         )}
         </main>
+      </div>
       </div>
     </div>
   );

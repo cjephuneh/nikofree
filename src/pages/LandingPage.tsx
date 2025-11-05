@@ -311,26 +311,45 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      <div className="sticky top-0 z-50">
-        <Navbar onNavigate={onNavigate} currentPage="landing" />
-      </div>
-      <div className="">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col md:flex-row gap-3 items-center bg-gray-100 rounded-2xl p-4">
-            <div className="w-full md:flex-1 flex items-center space-x-3 bg-white rounded-xl px-4 py-3 min-w-0">
-              <Search className="w-5 h-5 text-gray-400 flex-shrink-0" />
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 transition-colors duration-200 relative">
+      {/* Light mode dot pattern overlay */}
+      <div className="block dark:hidden fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(0, 0, 0, 0.08) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      {/* Dark mode dot pattern overlay */}
+      <div className="hidden dark:block fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(156, 163, 175, 0.15) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      <div className="relative z-10">
+        <div className="sticky top-0 z-50">
+          <Navbar onNavigate={onNavigate} currentPage="landing" />
+        </div>
+        <div className="">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4" data-aos="fade-down">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-2 gap-2 transition-colors duration-200">
+            {/* Search Input */}
+            <div className="flex-1 flex items-center space-x-3 px-3 py-2 min-w-0">
+              <Search className="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
               <input
                 type="text"
                 placeholder="Search events, categories, or interests..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-transparent outline-none text-gray-900 placeholder-gray-500"
+                className="flex-1 bg-transparent outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
               />
             </div>
+
+            {/* Divider - Vertical on desktop, Horizontal on mobile */}
+            <div className="h-px w-full md:h-10 md:w-px bg-gray-300 dark:bg-gray-600"></div>
+
+            {/* Location Input */}
             <div className="w-full md:w-80 relative">
-              <div className="flex items-center space-x-3 bg-white rounded-xl px-4 py-3">
-                <MapPin className="w-5 h-5 text-gray-400 flex-shrink-0" />
+              <div className="flex items-center space-x-3 px-3 py-2">
+                <MapPin className="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
                 <input
                   ref={locationInputRef}
                   type="text"
@@ -352,26 +371,28 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
                       setShowLocationSuggestions(false);
                     }, 200);
                   }}
-                  className="flex-1 bg-transparent outline-none text-gray-900 placeholder-gray-500"
+                  className="flex-1 bg-transparent outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                 />
               </div>
               
               {showLocationSuggestions && locationSuggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-lg border border-gray-200 z-50 max-h-64 overflow-y-auto">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-50 max-h-64 overflow-y-auto transition-colors duration-200">
                   {locationSuggestions.map((suggestion, index) => (
                     <button
                       key={index}
                       onClick={() => selectLocationSuggestion(suggestion)}
-                      className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 flex items-start space-x-3"
+                      className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700 last:border-b-0 flex items-start space-x-3"
                     >
-                      <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" />
-                      <span className="text-sm text-gray-900">{suggestion.display_name}</span>
+                      <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0 mt-1" />
+                      <span className="text-sm text-gray-900 dark:text-gray-100">{suggestion.display_name}</span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
-            <button className="w-full md:w-12 md:h-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transform hover:scale-105 transition-all flex-shrink-0">
+
+            {/* Search Button */}
+            <button className="w-full md:w-12 h-12 text-white rounded-full flex items-center justify-center transform hover:scale-105 transition-all flex-shrink-0" style={{ backgroundColor: '#27aae2' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a8ec4'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#27aae2'}>
               <Search className="w-5 h-5" />
             </button>
           </div>
@@ -379,8 +400,8 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
       </div>
 
       {/* Organization Banner */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="relative bg-gradient-to-r from-blue-900 via-blue-700 to-blue-600 rounded-3xl overflow-hidden shadow-2xl">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6" data-aos="fade-up">
+        <div className="relative rounded-3xl overflow-hidden shadow-2xl" style={{ background: 'linear-gradient(to right, #000000, #1a1a1a, #27aae2)' }}>
           {/* Animated background pattern */}
           <div className="absolute inset-0 opacity-10">
             <div className="absolute inset-0" style={{
@@ -393,14 +414,14 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
               {/* Left Content */}
               <div className="text-white space-y-4">
-                <div className="inline-flex items-center space-x-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full mb-2">
+                <div className="inline-flex items-center space-x-2 backdrop-blur-sm px-4 py-2 rounded-full mb-2" style={{ backgroundColor: 'rgba(39, 170, 226, 0.3)' }}>
                   <Sparkles className="w-5 h-5 text-yellow-300" />
                   <span className="font-semibold text-sm">Niko Free</span>
                 </div>
                 <h2 className="text-4xl md:text-5xl font-bold leading-tight">
                   Discover Amazing Events
                 </h2>
-                <p className="text-lg text-blue-100 leading-relaxed">
+                <p className="text-lg text-gray-100 leading-relaxed">
                   Join millions of people discovering and attending incredible events every day. From concerts to conferences, find your next adventure with Niko Free.
                 </p>
                 <div className="flex flex-wrap gap-4 pt-4">
@@ -410,7 +431,7 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
                     </div>
                     <div>
                       <p className="text-2xl font-bold">2M+</p>
-                      <p className="text-sm text-blue-100">Active Users</p>
+                      <p className="text-sm text-gray-100">Active Users</p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -419,7 +440,7 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
                     </div>
                     <div>
                       <p className="text-2xl font-bold">10K+</p>
-                      <p className="text-sm text-blue-100">Events Monthly</p>
+                      <p className="text-sm text-gray-100">Events Monthly</p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -428,20 +449,26 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
                     </div>
                     <div>
                       <p className="text-2xl font-bold">98%</p>
-                      <p className="text-sm text-blue-100">Satisfaction</p>
+                      <p className="text-sm text-gray-100">Satisfaction</p>
                     </div>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-3 pt-2">
                   <button 
                     onClick={() => onNavigate('become-partner')}
-                    className="px-6 py-3 bg-white text-blue-600 rounded-xl font-bold hover:bg-blue-50 transform hover:scale-105 transition-all shadow-lg"
+                    className="px-6 py-3 bg-white rounded-xl font-bold transform hover:scale-105 transition-all shadow-lg"
+                    style={{ color: '#27aae2' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f9ff'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
                   >
                     Become a Partner
                   </button>
                   <button 
                     onClick={() => onNavigate('about')}
-                    className="px-6 py-3 bg-white/10 backdrop-blur-sm text-white border-2 border-white/30 rounded-xl font-bold hover:bg-white/20 transition-all"
+                    className="px-6 py-3 bg-white/10 backdrop-blur-sm text-white border-2 rounded-xl font-bold transition-all"
+                    style={{ borderColor: 'rgba(255, 255, 255, 0.3)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
                   >
                     Learn More
                   </button>
@@ -494,8 +521,8 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
           </div>
 
           {/* Decorative Elements */}
-          <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-400 rounded-full opacity-20 blur-3xl"></div>
-          <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-300 rounded-full opacity-20 blur-3xl"></div>
+          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-20 blur-3xl" style={{ backgroundColor: '#27aae2' }}></div>
+          <div className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full opacity-20 blur-3xl" style={{ backgroundColor: '#27aae2' }}></div>
         </div>
       </div>
 
@@ -569,10 +596,10 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
         </div>
       </div> */}
 
-      <div className=" max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-16">
+      <div className=" max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-16" data-aos="fade-up">
         <div className="mb-8">
-          <h2 className="text-4xl font-bold text-gray-900 mb-2">Can't Miss!</h2>
-          <p className="text-xl text-gray-600">Promoted events you shouldn't miss</p>
+          <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-2 transition-colors duration-200">Can't Miss!</h2>
+          <p className="text-xl text-gray-600 dark:text-gray-400 transition-colors duration-200">Promoted events you shouldn't miss</p>
         </div>
 
         <div className="relative">
@@ -660,7 +687,10 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
                           e.stopPropagation();
                           onEventClick(event.id);
                         }}
-                        className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors"
+                        className="w-full px-4 py-2.5 text-white rounded-xl font-semibold transition-colors"
+                        style={{ backgroundColor: '#27aae2' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a8ec4'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#27aae2'}
                       >
                         Get Tickets • {event.price}
                       </button>
@@ -687,10 +717,10 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-16" data-aos="fade-up">
         <div className="text-center mb-12">
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">Browse by Category</h2>
-          <p className="text-xl text-gray-600">Find events that match your interests</p>
+          <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-4 transition-colors duration-200">Browse by Category</h2>
+          <p className="text-xl text-gray-600 dark:text-gray-400 transition-colors duration-200">Find events that match your interests</p>
         </div>
 
         <div className="relative">
@@ -708,12 +738,12 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
                     onClick={() => setSelectedCategory(index === 0 ? null : category.name)}
                     className={`flex-none snap-start group flex flex-col items-center rounded-xl px-4 py-5 transition-all duration-200 relative`}
                   >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 mb-2 group-hover:scale-110 transition-transform">
-                      <Icon className="w-6 h-6 text-blue-500" />
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 mb-2 group-hover:scale-110 transition-transform">
+                      <Icon className="w-6 h-6" style={{ color: '#27aae2' }} />
                     </div>
-                    <span className={`text-sm mb-1 text-center whitespace-nowrap ${isSelected ? 'font-bold text-gray-900' : 'font-medium text-gray-900 group-hover:font-bold'}`}>{category.name}</span>
-                    <span className="text-xs text-gray-500 text-center whitespace-nowrap">{category.count} events</span>
-                    <span className={`absolute left-2 right-2 bottom-0 h-0.5 rounded-full ${isSelected ? 'bg-blue-600' : 'bg-gray-200'}`} />
+                    <span className={`text-sm mb-1 text-center whitespace-nowrap ${isSelected ? 'font-bold text-gray-900 dark:text-white' : 'font-medium text-gray-900 dark:text-gray-300 group-hover:font-bold'}`}>{category.name}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">{category.count} events</span>
+                    <span className={`absolute left-2 right-2 bottom-0 h-0.5 rounded-full ${isSelected ? '' : 'bg-gray-200 dark:bg-gray-700'}`} style={isSelected ? { backgroundColor: '#27aae2' } : {}} />
                   </button>
                 );
               })}
@@ -736,7 +766,7 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mt-4">
           {(selectedCategory ? upcomingEvents.filter(event => event.category === selectedCategory) : upcomingEvents)
             .map(event => (
-              <div key={event.id} className="bg-white rounded-xl p-6 transition-colors duration-200 hover:bg-gray-50">
+              <div key={event.id} className="bg-white dark:bg-gray-800 rounded-xl p-6 transition-colors duration-200 hover:bg-gray-50 dark:hover:bg-gray-700">
                 <EventCard
                   {...event}
                   onClick={onEventClick}
@@ -746,23 +776,26 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
         </div>
         {(selectedCategory && upcomingEvents.filter(event => event.category === selectedCategory).length === 0) && (
           <div className="text-center py-12">
-            <p className="text-gray-600">No events found in this category</p>
+            <p className="text-gray-600 dark:text-gray-400 transition-colors duration-200">No events found in this category</p>
           </div>
         )}
       </div>
 
-      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 py-20">
+      <div className="py-20 bg-[#27aae2]" data-aos="fade-up">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
             Ready to Host Your Own Event?
           </h2>
-          <p className="text-xl text-blue-100 mb-8 leading-relaxed">
+          <p className="text-xl text-gray-100 mb-8 leading-relaxed">
             Join thousands of organizers using Niko Free to create memorable experiences.
             Start for free and reach your community today.
           </p>
           <button
             onClick={() => onNavigate('become-partner')}
-            className="px-10 py-4 bg-white text-blue-600 rounded-xl font-bold text-lg hover:bg-blue-50 transform hover:scale-105 transition-all shadow-xl"
+            className="px-10 py-4 bg-white rounded-xl font-bold text-lg transform hover:scale-105 transition-all shadow-xl"
+            style={{ color: '#27aae2' }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f9ff'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
           >
             Become a Partner
           </button>
@@ -770,6 +803,7 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
       </div>
 
       <Footer />
+    </div>
     </div>
   );
 }

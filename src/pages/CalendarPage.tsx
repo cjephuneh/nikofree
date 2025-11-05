@@ -153,44 +153,57 @@ export default function CalendarPage({ onNavigate, onEventClick }: CalendarPageP
   const selectedDateEvents = getEventsForDate(selectedDate);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      <Navbar onNavigate={onNavigate} currentPage="calendar" />
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 transition-colors duration-200 relative">
+      {/* Light mode dot pattern overlay */}
+      <div className="block dark:hidden fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(0, 0, 0, 0.08) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      {/* Dark mode dot pattern overlay */}
+      <div className="hidden dark:block fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(156, 163, 175, 0.15) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      <div className="relative z-10">
+        <Navbar onNavigate={onNavigate} currentPage="calendar" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center space-x-2 bg-blue-100 px-4 py-2 rounded-full mb-6">
-            <CalendarIcon className="w-4 h-4 text-blue-600" />
-            <span className="text-blue-600 text-sm font-medium">Event Calendar</span>
+        <div className="text-center mb-12" data-aos="fade-down">
+          <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full mb-6" style={{ backgroundColor: '#27aae2' }}>
+            <CalendarIcon className="w-4 h-4 text-white" />
+            <span className="text-white text-sm font-medium">Event Calendar</span>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4 transition-colors duration-200">
             Browse Events by Date
           </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto transition-colors duration-200">
             Find events on specific dates and plan your schedule
           </p>
         </div>
 
         
-        <div className="bg-white rounded-2xl border p-6 mb-12">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 mb-12 transition-colors duration-200" data-aos="zoom-in">
           <div className="flex justify-between items-center mb-6">
             <button
               onClick={prevMonth}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-5 h-5 text-gray-900 dark:text-white" />
             </button>
-            <h2 className="text-xl font-semibold">{formatDate(selectedMonth)}</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white transition-colors duration-200">{formatDate(selectedMonth)}</h2>
             <button
               onClick={nextMonth}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="w-5 h-5 text-gray-900 dark:text-white" />
             </button>
           </div>
 
           <div className="grid grid-cols-7 gap-2 mb-2">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-              <div key={day} className="text-center text-sm font-medium text-gray-600 py-2">
+              <div key={day} className="text-center text-sm font-medium text-gray-600 dark:text-gray-400 py-2 transition-colors duration-200">
                 {day}
               </div>
             ))}
@@ -204,10 +217,15 @@ export default function CalendarPage({ onNavigate, onEventClick }: CalendarPageP
                 className={`
                   aspect-square p-1 rounded-lg transition-all relative flex flex-col items-start
                   ${!date ? 'invisible' : ''}
-                  ${date && isToday(date) ? 'bg-blue-100 text-blue-600' : ''}
-                  ${date && isSelectedDate(date) ? 'bg-blue-600 text-white' : ''}
-                  ${date && !isToday(date) && !isSelectedDate(date) ? 'hover:bg-gray-100' : ''}
+                  ${date && isToday(date) ? 'text-white' : ''}
+                  ${date && isSelectedDate(date) ? 'text-white' : ''}
+                  ${date && !isToday(date) && !isSelectedDate(date) ? 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100' : ''}
                 `}
+                style={
+                  date && (isToday(date) || isSelectedDate(date))
+                    ? { backgroundColor: '#27aae2' }
+                    : {}
+                }
               >
                 <span className="text-sm font-medium mb-0.5">{date?.getDate()}</span>
                 {date && hasEvents(date) && (
@@ -216,10 +234,15 @@ export default function CalendarPage({ onNavigate, onEventClick }: CalendarPageP
                       <div
                         key={i}
                         className={`text-[8px] leading-tight truncate w-full px-0.5 py-0.5 rounded ${
-                          isSelectedDate(date) 
+                          isSelectedDate(date) || isToday(date)
                             ? 'bg-white/20 text-white' 
-                            : 'bg-blue-100 text-blue-700'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
                         }`}
+                        style={
+                          !isSelectedDate(date) && !isToday(date)
+                            ? { backgroundColor: '#e6f7ff', color: '#1a8ec4' }
+                            : {}
+                        }
                         title={event.title}
                       >
                         {event.title}
@@ -228,7 +251,7 @@ export default function CalendarPage({ onNavigate, onEventClick }: CalendarPageP
                     {getEventsForDate(date).length > 2 && (
                       <div
                         className={`text-[8px] text-center ${
-                          isSelectedDate(date) ? 'text-white/70' : 'text-gray-500'
+                          isSelectedDate(date) || isToday(date) ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
                         }`}
                       >
                         +{getEventsForDate(date).length - 2}
@@ -241,11 +264,11 @@ export default function CalendarPage({ onNavigate, onEventClick }: CalendarPageP
           </div>
         </div>
 
-        <div ref={eventsRef} className="scroll-mt-24">
-          <h3 className="text-2xl font-bold text-gray-900 mb-6">
+        <div ref={eventsRef} className="scroll-mt-24" data-aos="fade-up">
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 transition-colors duration-200">
             Events on {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
             {selectedDateEvents.length > 0 && (
-              <span className="ml-2 text-blue-600">({selectedDateEvents.length})</span>
+              <span className="ml-2" style={{ color: '#27aae2' }}>({selectedDateEvents.length})</span>
             )}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -258,9 +281,9 @@ export default function CalendarPage({ onNavigate, onEventClick }: CalendarPageP
             ))}
             {selectedDateEvents.length === 0 && (
               <div className="col-span-full text-center py-12">
-                <CalendarIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-600 text-lg">No events found on this date</p>
-                <p className="text-gray-500 text-sm mt-2">Try selecting another date</p>
+                <CalendarIcon className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4 transition-colors duration-200" />
+                <p className="text-gray-600 dark:text-gray-400 text-lg transition-colors duration-200">No events found on this date</p>
+                <p className="text-gray-500 dark:text-gray-500 text-sm mt-2 transition-colors duration-200">Try selecting another date</p>
               </div>
             )}
           </div>
@@ -268,6 +291,7 @@ export default function CalendarPage({ onNavigate, onEventClick }: CalendarPageP
       </div>
 
       <Footer />
+      </div>
     </div>
   );
 }

@@ -8,18 +8,31 @@ interface AboutUsProps {
 
 export default function AboutUs({ onNavigate }: AboutUsProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      <Navbar onNavigate={onNavigate} currentPage="about" />
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 transition-colors duration-200 relative">
+      {/* Light mode dot pattern overlay */}
+      <div className="block dark:hidden fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(0, 0, 0, 0.08) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      {/* Dark mode dot pattern overlay */}
+      <div className="hidden dark:block fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(156, 163, 175, 0.15) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      <div className="relative z-10">
+        <Navbar onNavigate={onNavigate} currentPage="about" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-12">
+        <div className="text-center mb-12" data-aos="fade-down">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">About Niko Free</h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             Connecting communities through meaningful events and experiences
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-12 items-center mb-20">
+        <div className="grid md:grid-cols-2 gap-12 items-center mb-20" data-aos="fade-up">
           <div className="space-y-6">
             <h2 className="text-3xl font-bold text-gray-900">Our Mission</h2>
             <p className="text-lg text-gray-600 leading-relaxed">
@@ -67,7 +80,7 @@ export default function AboutUs({ onNavigate }: AboutUsProps) {
           </div>
         </div>
 
-        <div className="bg-blue-50 rounded-3xl p-8 md:p-12 mb-20">
+        <div className="bg-blue-50 rounded-3xl p-8 md:p-12 mb-20" data-aos="zoom-in">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">What Sets Us Apart</h2>
             <p className="text-lg text-gray-600">Discover why event organizers and attendees choose Niko Free</p>
@@ -103,7 +116,7 @@ export default function AboutUs({ onNavigate }: AboutUsProps) {
           </div>
         </div>
 
-        <div className="text-center">
+        <div className="text-center" data-aos="fade-up">
           <h2 className="text-3xl font-bold text-gray-900 mb-8">Ready to Get Started?</h2>
           <div className="flex justify-center">
             <button
@@ -117,6 +130,7 @@ export default function AboutUs({ onNavigate }: AboutUsProps) {
       </div>
 
       <Footer />
+      </div>
     </div>
   );
 }

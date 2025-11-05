@@ -99,7 +99,15 @@ export default function LoginModal({ isOpen, onClose, onNavigate, onSwitchToSign
                   id="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all"
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#27aae2';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(39, 170, 226, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#d1d5db';
+                    e.target.style.boxShadow = 'none';
+                  }}
                   placeholder="Enter your email"
                   required
                 />
@@ -114,7 +122,15 @@ export default function LoginModal({ isOpen, onClose, onNavigate, onSwitchToSign
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all"
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#27aae2';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(39, 170, 226, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#d1d5db';
+                    e.target.style.boxShadow = 'none';
+                  }}
                   placeholder="Enter your password"
                   required
                 />
@@ -127,7 +143,8 @@ export default function LoginModal({ isOpen, onClose, onNavigate, onSwitchToSign
                   id="keepLoggedIn"
                   checked={keepLoggedIn}
                   onChange={(e) => setKeepLoggedIn(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  className="w-4 h-4 border-gray-300 rounded"
+                  style={{ accentColor: '#27aae2' }}
                 />
                 <label htmlFor="keepLoggedIn" className="ml-2 text-sm text-gray-700">
                   Keep me logged in
@@ -137,7 +154,8 @@ export default function LoginModal({ isOpen, onClose, onNavigate, onSwitchToSign
               {/* Login button */}
               <button
                 type="submit"
-                className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-medium hover:shadow-lg transform hover:scale-105 transition-all"
+                className="w-full px-4 py-3 text-white rounded-xl font-medium hover:shadow-lg transform hover:scale-105 transition-all"
+                style={{ background: 'linear-gradient(to right, #27aae2, #1a8ec4)' }}
               >
                 Log in
               </button>
@@ -145,7 +163,12 @@ export default function LoginModal({ isOpen, onClose, onNavigate, onSwitchToSign
 
             {/* Forgot password */}
             <div className="mt-4 text-center">
-              <button className="text-blue-600 text-sm font-medium hover:text-blue-700 transition-colors">
+              <button 
+                className="text-sm font-medium transition-colors"
+                style={{ color: '#27aae2' }}
+                onMouseEnter={(e) => e.currentTarget.style.color = '#1a8ec4'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#27aae2'}
+              >
                 Forgot password?
               </button>
             </div>
@@ -162,7 +185,10 @@ export default function LoginModal({ isOpen, onClose, onNavigate, onSwitchToSign
               <span className="text-gray-600">Do not have an account yet? </span>
               <button
                 onClick={handleSignup}
-                className="text-blue-600 font-medium hover:text-blue-700 transition-colors"
+                className="font-medium transition-colors"
+                style={{ color: '#27aae2' }}
+                onMouseEnter={(e) => e.currentTarget.style.color = '#1a8ec4'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#27aae2'}
               >
                 Sign up
               </button>

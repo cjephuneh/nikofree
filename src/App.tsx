@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import EventDetailPage from './pages/EventDetailPage';
@@ -9,10 +9,21 @@ import BecomePartner from './pages/BecomePartner';
 import AboutUs from './pages/AboutUs';
 import ThisWeekend from './pages/ThisWeekend';
 import CalendarPage from './pages/CalendarPage';
+import AOS from 'aos';
+import 'aos/dist/aos.css';
 
 function AppContent() {
   const navigate = useNavigate();
   const [selectedEventId, setSelectedEventId] = useState<string>('1');
+
+  useEffect(() => {
+    AOS.init({
+      duration: 800,
+      once: true,
+      offset: 100,
+      easing: 'ease-out-cubic'
+    });
+  }, []);
 
   const navigateToEventDetail = (eventId: string) => {
     setSelectedEventId(eventId);

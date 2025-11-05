@@ -129,7 +129,20 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200 relative">
+      {/* Light mode dot pattern overlay */}
+      <div className="block dark:hidden fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(0, 0, 0, 0.08) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      {/* Dark mode dot pattern overlay */}
+      <div className="hidden dark:block fixed inset-0 pointer-events-none z-0" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(156, 163, 175, 0.15) 1px, transparent 1px)',
+        backgroundSize: '30px 30px'
+      }}></div>
+      
+      <div className="relative z-10">
       <div className="flex">
         {/* Mobile Sidebar Overlay */}
         {sidebarOpen && (
@@ -190,18 +203,18 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
         <main className="flex-1 overflow-x-hidden">
           {/* Top Bar */}
           <div className="bg-white border-b border-gray-200 fixed top-0 right-0 left-0 lg:left-64 z-30 shadow-sm">
-            <div className="px-4 sm:px-6 lg:px-8 py-4">
-              <div className="flex items-center justify-between gap-4">
+            <div className="px-2 sm:px-4 lg:px-8 py-2 sm:py-3 md:py-4">
+              <div className="flex items-center justify-between gap-2 sm:gap-4">
                 {/* Left Section - Menu & Title */}
-                <div className="flex items-center space-x-4 flex-shrink-0">
+                <div className="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
                   <button
                     onClick={() => setSidebarOpen(true)}
                     className="lg:hidden text-gray-500 hover:text-gray-700"
                   >
-                    <Menu className="w-6 h-6" />
+                    <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
                   <div className="hidden sm:block">
-                    <h1 className="text-xl font-bold text-gray-900">
+                    <h1 className="text-base sm:text-lg md:text-xl font-bold text-gray-900">
                       {menuItems.find(item => item.id === activeTab)?.label}
                     </h1>
                   </div>
@@ -210,27 +223,27 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
                 {/* Center Section - Search Bar */}
                 <div className="flex-1 max-w-md hidden md:block">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-gray-400" />
                     <input
                       type="text"
                       placeholder="Search events, attendees..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full pl-9 md:pl-10 pr-3 md:pr-4 py-2 md:py-2.5 text-sm border border-gray-200 rounded-lg md:rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
 
                 {/* Right Section - Actions & Account */}
-                <div className="flex items-center space-x-3 flex-shrink-0">
+                <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
                   {/* Account Menu */}
                   <div className="relative">
                     <button
                       onClick={() => setAccountMenuOpen(!accountMenuOpen)}
-                      className="flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                      className="flex items-center space-x-2 sm:space-x-3 p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors"
                     >
-                      <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full flex items-center justify-center">
-                        <User className="w-5 h-5 text-white" />
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full flex items-center justify-center">
+                        <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-white" />
                       </div>
                       <div className="hidden lg:block text-left">
                         <p className="text-sm font-semibold text-gray-900">Tech Hub Africa</p>
@@ -269,15 +282,15 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
               </div>
 
               {/* Mobile Search Bar */}
-              <div className="mt-3 md:hidden">
+              <div className="mt-2 md:hidden">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Search events, attendees..."
+                    placeholder="Search events..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
               </div>
@@ -285,83 +298,83 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
           </div>
 
           {/* Content Area */}
-          <div className="px-4 sm:px-6 lg:px-8 py-8 pt-24">
+          <div className="px-2 sm:px-4 lg:px-8 py-3 sm:py-4 lg:py-6 pt-[7.5rem] sm:pt-32 md:pt-20 lg:pt-24">
             {activeTab === 'dashboard' && (
-              <div className="space-y-8">
+              <div className="space-y-3 sm:space-y-4 lg:space-y-5">
                 {/* Financial Stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
                   {financialStats.map((stat, index) => {
                     const Icon = stat.icon;
                     return (
                       <div
                         key={index}
-                        className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all border border-gray-100"
+                        className="bg-white rounded-lg sm:rounded-xl p-2 sm:p-3 md:p-4 shadow-sm hover:shadow-lg transition-all border border-gray-100"
                       >
-                        <div className="flex items-center justify-between mb-4">
-                          <div className={`w-12 h-12 bg-gradient-to-br ${stat.color} rounded-xl flex items-center justify-center`}>
-                            <Icon className="w-6 h-6 text-white" />
+                        <div className="flex items-center justify-between mb-1 sm:mb-2">
+                          <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gradient-to-br ${stat.color} rounded-lg flex items-center justify-center`}>
+                            <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-white" />
                           </div>
                           {stat.change && (
-                            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                            <span className={`text-[9px] sm:text-[10px] font-semibold px-1 sm:px-1.5 py-0.5 rounded-full ${
                               stat.isPositive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
                             }`}>
                               {stat.change}
                             </span>
                           )}
                         </div>
-                        <p className="text-gray-600 text-sm mb-1">{stat.label}</p>
-                        <p className="text-2xl font-bold text-gray-900 mb-1">{stat.value}</p>
-                        <p className="text-xs text-gray-500">{stat.subtext}</p>
+                        <p className="text-gray-600 text-[10px] sm:text-xs mb-0.5">{stat.label}</p>
+                        <p className="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-gray-900 mb-0.5">{stat.value}</p>
+                        <p className="text-[9px] sm:text-[10px] text-gray-500">{stat.subtext}</p>
                       </div>
                     );
                   })}
                 </div>
 
                 {/* Withdraw & Statement Buttons */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <button className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                  <button className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-lg hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                       <div className="text-left">
-                        <h3 className="text-lg font-bold mb-1">Withdraw Funds</h3>
-                        <p className="text-blue-100 text-sm">Instant to M-Pesa or Bank</p>
+                        <h3 className="text-xs sm:text-sm md:text-base font-bold mb-0.5">Withdraw Funds</h3>
+                        <p className="text-blue-100 text-[10px] sm:text-xs">Instant to M-Pesa or Bank</p>
                       </div>
-                      <ArrowUpRight className="w-8 h-8" />
+                      <ArrowUpRight className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7" />
                     </div>
                   </button>
-                  <button className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-lg hover:border-blue-500 transition-all">
+                  <button className="bg-white border-2 border-gray-200 rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm hover:shadow-lg hover:border-blue-500 transition-all">
                     <div className="flex items-center justify-between">
                       <div className="text-left">
-                        <h3 className="text-lg font-bold text-gray-900 mb-1">Download Statement</h3>
-                        <p className="text-gray-600 text-sm">PDF or Excel format</p>
+                        <h3 className="text-xs sm:text-sm md:text-base font-bold text-gray-900 mb-0.5">Download Statement</h3>
+                        <p className="text-gray-600 text-[10px] sm:text-xs">PDF or Excel format</p>
                       </div>
-                      <Download className="w-8 h-8 text-gray-700" />
+                      <Download className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-gray-700" />
                     </div>
                   </button>
                 </div>
 
                 {/* Recent Withdrawals */}
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-gray-900">Recent Withdrawals</h3>
-                    <button className="text-blue-600 hover:text-blue-700 font-semibold text-sm">View All</button>
+                <div className="bg-white rounded-lg sm:rounded-xl p-2 sm:p-3 md:p-4 shadow-sm border border-gray-100">
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900">Recent Withdrawals</h3>
+                    <button className="text-blue-600 hover:text-blue-700 font-semibold text-[10px] sm:text-xs">View All</button>
                   </div>
-                  <div className="space-y-4">
+                  <div className="space-y-1.5 sm:space-y-2">
                     {withdrawals.map((withdrawal) => (
-                      <div key={withdrawal.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <CreditCard className="w-5 h-5 text-blue-600" />
+                      <div key={withdrawal.id} className="flex items-center justify-between p-1.5 sm:p-2 md:p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center space-x-1.5 sm:space-x-2 flex-1 min-w-0">
+                          <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <CreditCard className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-blue-600" />
                           </div>
-                          <div>
-                            <p className="font-semibold text-gray-900">{withdrawal.method}</p>
-                            <p className="text-sm text-gray-600">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-gray-900 text-[10px] sm:text-xs truncate">{withdrawal.method}</p>
+                            <p className="text-[9px] sm:text-[10px] text-gray-600 truncate">
                               {withdrawal.phone || withdrawal.account} • {withdrawal.date}
                             </p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-bold text-gray-900">{withdrawal.amount}</p>
-                          <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full font-semibold">
+                        <div className="text-right flex-shrink-0 ml-1.5">
+                          <p className="font-bold text-gray-900 text-[10px] sm:text-xs md:text-sm">{withdrawal.amount}</p>
+                          <span className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full font-semibold">
                             {withdrawal.status}
                           </span>
                         </div>
@@ -371,47 +384,47 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
                 </div>
 
                 {/* Current Events Slideshow */}
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-gray-900">Current Events</h3>
-                    <ChevronRight className="w-6 h-6 text-gray-400" />
+                <div className="bg-white rounded-lg sm:rounded-xl p-2 sm:p-3 md:p-4 shadow-sm border border-gray-100">
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900">Current Events</h3>
+                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                     {currentEvents.map((event) => (
                       <div
                         key={event.id}
-                        className="group cursor-pointer bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-all"
+                        className="group cursor-pointer bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-all"
                       >
-                        <div className="relative h-40">
+                        <div className="relative h-20 sm:h-24">
                           <img
                             src={event.image}
                             alt={event.title}
                             className="w-full h-full object-cover"
                           />
-                          <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold">
+                          <div className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 bg-green-500 text-white px-1 py-0.5 rounded-full text-[7px] sm:text-[8px] font-bold">
                             ACTIVE
                           </div>
                         </div>
-                        <div className="p-4">
-                          <h4 className="font-bold text-gray-900 mb-2 line-clamp-1">{event.title}</h4>
-                          <p className="text-sm text-gray-600 mb-3">{event.date}</p>
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-gray-600">Net Earnings</span>
-                              <span className="font-bold text-green-600">{event.netEarnings}</span>
+                        <div className="p-1.5 sm:p-2">
+                          <h4 className="font-bold text-gray-900 mb-0.5 line-clamp-1 text-[9px] sm:text-[10px]">{event.title}</h4>
+                          <p className="text-[8px] sm:text-[9px] text-gray-600 mb-1">{event.date}</p>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between text-[8px] sm:text-[9px]">
+                              <span className="text-gray-600">Earnings</span>
+                              <span className="font-bold text-green-600 text-[7px] sm:text-[8px]">{event.netEarnings}</span>
                             </div>
-                            <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center justify-between text-[8px] sm:text-[9px]">
                               <span className="text-gray-600">Attendees</span>
                               <span className="font-semibold">{event.attendees}</span>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div className="w-full bg-gray-200 rounded-full h-0.5 sm:h-1">
                               <div
-                                className="bg-blue-600 h-2 rounded-full"
+                                className="bg-blue-600 h-0.5 sm:h-1 rounded-full"
                                 style={{ width: `${(event.ticketsSold / event.totalTickets) * 100}%` }}
                               ></div>
                             </div>
-                            <p className="text-xs text-gray-600 text-right">
-                              {event.ticketsSold}/{event.totalTickets} tickets sold
+                            <p className="text-[7px] sm:text-[8px] text-gray-600 text-right">
+                              {event.ticketsSold}/{event.totalTickets} sold
                             </p>
                           </div>
                         </div>
@@ -421,41 +434,41 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
                 </div>
 
                 {/* Events History Slideshow */}
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-gray-900">Events History</h3>
-                    <ChevronRight className="w-6 h-6 text-gray-400" />
+                <div className="bg-white rounded-lg sm:rounded-xl p-2 sm:p-3 md:p-4 shadow-sm border border-gray-100">
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900">Events History</h3>
+                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                     {eventHistory.map((event) => (
                       <div
                         key={event.id}
-                        className="group cursor-pointer bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-all"
+                        className="group cursor-pointer bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-all"
                       >
-                        <div className="relative h-40">
+                        <div className="relative h-20 sm:h-24">
                           <img
                             src={event.image}
                             alt={event.title}
                             className="w-full h-full object-cover"
                           />
-                          <div className="absolute top-2 right-2 bg-gray-500 text-white px-3 py-1 rounded-full text-xs font-bold">
-                            COMPLETED
+                          <div className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 bg-gray-500 text-white px-1 py-0.5 rounded-full text-[7px] sm:text-[8px] font-bold">
+                            DONE
                           </div>
                         </div>
-                        <div className="p-4">
-                          <h4 className="font-bold text-gray-900 mb-2 line-clamp-1">{event.title}</h4>
-                          <p className="text-sm text-gray-600 mb-3">{event.date}</p>
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-gray-600">Net Earnings</span>
-                              <span className="font-bold text-green-600">{event.netEarnings}</span>
+                        <div className="p-1.5 sm:p-2">
+                          <h4 className="font-bold text-gray-900 mb-0.5 line-clamp-1 text-[9px] sm:text-[10px]">{event.title}</h4>
+                          <p className="text-[8px] sm:text-[9px] text-gray-600 mb-1">{event.date}</p>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between text-[8px] sm:text-[9px]">
+                              <span className="text-gray-600">Earnings</span>
+                              <span className="font-bold text-green-600 text-[7px] sm:text-[8px]">{event.netEarnings}</span>
                             </div>
-                            <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center justify-between text-[8px] sm:text-[9px]">
                               <span className="text-gray-600">Attendees</span>
                               <span className="font-semibold">{event.attendees}</span>
                             </div>
-                            <button className="w-full py-2 bg-blue-50 text-blue-600 rounded-lg font-semibold hover:bg-blue-100 transition-colors text-sm">
-                              View Details
+                            <button className="w-full py-0.5 sm:py-1 bg-blue-50 text-blue-600 rounded font-semibold hover:bg-blue-100 transition-colors text-[8px] sm:text-[9px]">
+                              View
                             </button>
                           </div>
                         </div>
@@ -467,62 +480,63 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
             )}
 
             {activeTab === 'events' && (
-              <div className="text-center py-12">
-                <Calendar className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Events Management</h3>
-                <p className="text-gray-600">Edit events, manage tickets, and update hosts</p>
+              <div className="text-center py-8 sm:py-10 md:py-12">
+                <Calendar className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 mx-auto text-gray-400 mb-3 sm:mb-4" />
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1.5 sm:mb-2">Events Management</h3>
+                <p className="text-sm sm:text-base text-gray-600">Edit events, manage tickets, and update hosts</p>
               </div>
             )}
 
             {activeTab === 'attendees' && (
-              <div className="text-center py-12">
-                <Users className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Attendees Demographics</h3>
-                <p className="text-gray-600">View attendee details and download reports</p>
+              <div className="text-center py-8 sm:py-10 md:py-12">
+                <Users className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 mx-auto text-gray-400 mb-3 sm:mb-4" />
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1.5 sm:mb-2">Attendees Demographics</h3>
+                <p className="text-sm sm:text-base text-gray-600">View attendee details and download reports</p>
               </div>
             )}
 
             {activeTab === 'boost' && (
-              <div className="text-center py-12">
-                <Zap className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Boost Your Events</h3>
-                <p className="text-gray-600">Increase visibility and reach more attendees</p>
+              <div className="text-center py-8 sm:py-10 md:py-12">
+                <Zap className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 mx-auto text-gray-400 mb-3 sm:mb-4" />
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1.5 sm:mb-2">Boost Your Events</h3>
+                <p className="text-sm sm:text-base text-gray-600">Increase visibility and reach more attendees</p>
               </div>
             )}
 
             {activeTab === 'notifications' && (
-              <div className="text-center py-12">
-                <Bell className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Notification Settings</h3>
-                <p className="text-gray-600">Manage your notification preferences</p>
+              <div className="text-center py-8 sm:py-10 md:py-12">
+                <Bell className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 mx-auto text-gray-400 mb-3 sm:mb-4" />
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1.5 sm:mb-2">Notification Settings</h3>
+                <p className="text-sm sm:text-base text-gray-600">Manage your notification preferences</p>
               </div>
             )}
 
             {activeTab === 'roles' && (
-              <div className="text-center py-12">
-                <UserPlus className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Assign Roles</h3>
-                <p className="text-gray-600">Manage team members and promotional agents</p>
+              <div className="text-center py-8 sm:py-10 md:py-12">
+                <UserPlus className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 mx-auto text-gray-400 mb-3 sm:mb-4" />
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1.5 sm:mb-2">Assign Roles</h3>
+                <p className="text-sm sm:text-base text-gray-600">Manage team members and promotional agents</p>
               </div>
             )}
 
             {activeTab === 'scanner' && (
-              <div className="text-center py-12">
-                <QrCode className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Scan Tickets</h3>
-                <p className="text-gray-600">Verify attendee tickets at your events</p>
+              <div className="text-center py-8 sm:py-10 md:py-12">
+                <QrCode className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 mx-auto text-gray-400 mb-3 sm:mb-4" />
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1.5 sm:mb-2">Scan Tickets</h3>
+                <p className="text-sm sm:text-base text-gray-600">Verify attendee tickets at your events</p>
               </div>
             )}
 
             {activeTab === 'verification' && (
-              <div className="text-center py-12">
-                <Award className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Partner Verification</h3>
-                <p className="text-gray-600">Track your progress to become NIKO VERIFIED</p>
+              <div className="text-center py-8 sm:py-10 md:py-12">
+                <Award className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 mx-auto text-gray-400 mb-3 sm:mb-4" />
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1.5 sm:mb-2">Partner Verification</h3>
+                <p className="text-sm sm:text-base text-gray-600">Track your progress to become NIKO VERIFIED</p>
               </div>
             )}
           </div>
         </main>
+      </div>
       </div>
     </div>
   );
