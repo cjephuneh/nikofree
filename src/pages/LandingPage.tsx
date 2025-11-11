@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, MapPin, ChevronLeft, ChevronRight, Plane, Dumbbell, Users, Music, Heart, Dog, Car, Sparkles, Brain, Gamepad2, ShoppingBag, Church, Target, Camera, Calendar, Share2, Briefcase, Theater } from 'lucide-react';
+import { Search, MapPin, ChevronLeft, ChevronRight, Dumbbell, Users, Music, Heart, Dog, Car, Sparkles, Brain, Gamepad2, ShoppingBag, Church, Target, Camera, Calendar, Share2, Briefcase, Theater, Truck, Mountain } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import EventCard from '../components/EventCard';
@@ -84,7 +84,8 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
   React.useEffect(() => {
     const categoryNames = [
       'Search events...',
-      'Travel events...',
+      'Explore-Kenya events...',
+      'Hiking adventures...',
       'Sports & Fitness...',
       'Social Activities...',
       'Music & Dance...',
@@ -340,7 +341,8 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
 
   const categories = React.useMemo(() => [
     { name: 'All', icon: Users, color: '', count: upcomingEvents.length, iconColor: '#6B7280' },
-    { name: 'Travel', icon: Plane, color: 'from-blue-500 to-cyan-500', count: 234, iconColor: '#0EA5E9' },
+    { name: 'Explore-Kenya', icon: Truck, color: 'from-blue-500 to-cyan-500', count: 234, iconColor: '#0EA5E9' },
+    { name: 'Hiking', icon: Mountain, color: 'from-green-600 to-teal-600', count: 156, iconColor: '#059669' },
     { name: 'Sports & Fitness', icon: Dumbbell, color: 'from-green-500 to-emerald-500', count: 189, iconColor: '#10B981' },
     { name: 'Social Activities', icon: Users, color: 'from-purple-500 to-pink-500', count: 456, iconColor: '#A855F7' },
     { name: 'Hobbies & Interests', icon: Sparkles, color: 'from-indigo-500 to-blue-500', count: 278, iconColor: '#F59E0B' },
@@ -967,18 +969,25 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
                           <span className="text-sm text-gray-600 dark:text-gray-500">+{event.attendees - 3} attending</span>
                         </div>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onEventClick(event.id);
-                        }}
-                        className="w-full px-4 py-2.5 text-white rounded-xl font-semibold transition-colors"
-                        style={{ backgroundColor: '#27aae2' }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a8ec4'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#000000'}
-                      >
-                        Get Tickets • {event.price}
-                      </button>
+                      <div className="flex items-center justify-between gap-3 border-t border-gray-200 dark:border-gray-700 pt-3 mt-4">
+                        <div className="flex-shrink-0">
+                          <p className="text-lg font-bold text-gray-900 dark:text-white">
+                            {event.price}
+                          </p>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEventClick(event.id);
+                          }}
+                          className="px-4 py-2 text-white rounded-lg font-semibold transition-colors text-sm"
+                          style={{ backgroundColor: '#27aae2' }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a8ec4'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#27aae2'}
+                        >
+                          {event.price === 'Free' ? 'RSVP' : 'Get Tickets'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

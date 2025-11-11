@@ -33,18 +33,24 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const categories = [
-    { id: 'travel', name: 'Travel' },
+    { id: 'explore-kenya', name: 'Explore-Kenya' },
+    { id: 'hiking', name: 'Hiking' },
     { id: 'sports', name: 'Sports & Fitness' },
     { id: 'social', name: 'Social Activities' },
-    { id: 'music', name: 'Music & Culture' },
-    { id: 'health', name: 'Health & Wellbeing' },
-    { id: 'pets', name: 'Pets & Animals' },
-    { id: 'autofest', name: 'Autofest' },
     { id: 'hobbies', name: 'Hobbies & Interests' },
-    { id: 'gaming', name: 'Gaming' },
-    { id: 'shopping', name: 'Shopping' },
     { id: 'religious', name: 'Religious' },
-    { id: 'dance', name: 'Dance' },
+    { id: 'autofest', name: 'Autofest' },
+    { id: 'health', name: 'Health & Wellbeing' },
+    { id: 'music', name: 'Music & Dance' },
+    { id: 'culture', name: 'Culture' },
+    { id: 'pets', name: 'Pets & Animals' },
+    { id: 'coaching', name: 'Coaching & Support' },
+    { id: 'business', name: 'Business & Networking' },
+    { id: 'technology', name: 'Technology' },
+    { id: 'plays', name: 'Live Plays' },
+    { id: 'art', name: 'Art & Photography' },
+    { id: 'shopping', name: 'Shopping' },
+    { id: 'gaming', name: 'Gaming' },
   ];
 
   const handleCategoryToggle = (categoryId: string) => {
@@ -197,14 +203,14 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
   };
 
   const validatePhone = (phone: string) => {
-    // Kenyan (+254) or Ugandan (+256) phone number format: +254/+256 followed by 9 digits, or 0 followed by 9 digits
-    const phoneRegex = /^(\+254|\+256|0)[17]\d{8}$/;
+    // Kenyan (+254) phone number format: +254 followed by 9 digits, or 0 followed by 9 digits
+    const phoneRegex = /^(\+254|0)[17]\d{8}$/;
     if (!phone) {
       setPhoneError('Phone number is required');
       return false;
     }
     if (!phoneRegex.test(phone.replace(/\s/g, ''))) {
-      setPhoneError('Please enter a valid number');
+      setPhoneError('Please enter a valid Kenyan number');
       return false;
     }
     setPhoneError('');
@@ -409,7 +415,7 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
               <div>
                 <label className="flex items-center space-x-2 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                   <Upload className="w-4 h-4" />
-                  <span>Logo Upload *</span>
+                  <span>Logo/Profile Picture Upload *</span>
                 </label>
                 <div 
                   className={`border-2 border-dashed dark:bg-gray-800 rounded-xl p-8 text-center transition-colors cursor-pointer ${
@@ -698,7 +704,7 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                     if (formData.phone) validatePhone(formData.phone);
                     if (!phoneError && !formData.phone) e.target.style.borderColor = '';
                   }}
-                  placeholder="+254 700 000 000 or +256 700 000 000"
+                  placeholder="+254 700 000 000"
                 />
                 {phoneError && (
                   <p className="text-sm text-red-600 mt-1 flex items-center space-x-1">
