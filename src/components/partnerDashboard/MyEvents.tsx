@@ -1,10 +1,13 @@
-import { Calendar, MapPin, Users, Eye, Plus } from 'lucide-react';
+import { Calendar, MapPin, Users, Eye, Plus, Trash2, Edit } from 'lucide-react';
 import { useState } from 'react';
 
-export default function MyEvents() {
-  const [filter, setFilter] = useState<'all' | 'upcoming' | 'ongoing' | 'past'>('all');
+interface MyEventsProps {
+  onCreateEvent: () => void;
+}
 
-  const events = [
+export default function MyEvents({ onCreateEvent }: MyEventsProps) {
+  const [filter, setFilter] = useState<'all' | 'upcoming' | 'ongoing' | 'past'>('all');
+  const [events, setEvents] = useState([
     {
       id: 1,
       title: 'Summer Music Festival 2024',
@@ -58,9 +61,20 @@ export default function MyEvents() {
       totalTickets: 300,
       views: 1120,
       status: 'upcoming',
-      image: 'https://images.unsplash.com/photo-1531243269054-5ebf6f34081e?w=400&h=250&fit=crop'
+      image: 'https://images.unsplash.com/photo-1585699324551-f6c309eedeca?w=400&h=250&fit=crop'
     }
-  ];
+  ]);
+
+  const handleDeleteEvent = (eventId: number) => {
+    if (window.confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
+      setEvents(events.filter(event => event.id !== eventId));
+    }
+  };
+
+  const handleEditEvent = (eventId: number) => {
+    // In production, this would navigate to edit page or open edit modal
+    alert(`Editing event ID: ${eventId}`);
+  };
 
   const filteredEvents = filter === 'all' ? events : events.filter(e => e.status === filter);
 
@@ -72,7 +86,10 @@ export default function MyEvents() {
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">My Events</h2>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Manage and track your events</p>
         </div>
-        <button className="flex items-center space-x-2 bg-[#27aae2] text-white px-6 py-3 rounded-xl font-medium hover:bg-[#1e8bc3] transition-all shadow-lg">
+        <button 
+          onClick={onCreateEvent}
+          className="flex items-center space-x-2 bg-[#27aae2] text-white px-6 py-3 rounded-xl font-medium hover:bg-[#1e8bc3] transition-all shadow-lg"
+        >
           <Plus className="w-5 h-5" />
           <span>Create Event</span>
         </button>
@@ -167,9 +184,23 @@ export default function MyEvents() {
                     </div>
                   </div>
 
-                  <button className="text-[#27aae2] font-medium text-xs hover:underline">
-                    Details
-                  </button>
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-4">
+                    <button 
+                      onClick={() => handleEditEvent(event.id)}
+                      className="flex items-center space-x-1 text-[#27aae2] hover:text-[#1e8bc3] transition-colors"
+                      title="Edit event"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteEvent(event.id)}
+                      className="flex items-center space-x-1 text-red-500 hover:text-red-600 transition-colors"
+                      title="Delete event"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

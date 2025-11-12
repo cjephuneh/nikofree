@@ -1,7 +1,11 @@
 import { TrendingUp, DollarSign, Wallet, ArrowDownRight, Calendar, Users, Eye, Download, ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 
-export default function Overview() {
+interface OverviewProps {
+  onWithdrawClick?: () => void;
+}
+
+export default function Overview({ onWithdrawClick }: OverviewProps) {
   const [currentEventsPage, setCurrentEventsPage] = useState(0);
   const [historyEventsPage, setHistoryEventsPage] = useState(0);
   const eventsPerPage = 5;
@@ -259,7 +263,10 @@ export default function Overview() {
 
       {/* Action Buttons */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <button className="bg-gradient-to-r from-[#27aae2] to-[#1e8bb8] text-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all group">
+        <button 
+          onClick={onWithdrawClick}
+          className="bg-gradient-to-r from-[#27aae2] to-[#1e8bb8] text-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all group"
+        >
           <div className="flex items-center justify-between">
             <div className="text-left">
               <h3 className="text-lg font-bold mb-1">Withdraw Funds</h3>

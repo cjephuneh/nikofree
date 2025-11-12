@@ -1,5 +1,6 @@
-import { Calendar, Users, Zap, Home, Bell, UserPlus, QrCode, Award, Menu, X, Search, User, Settings as SettingsIcon, LogOut } from 'lucide-react';
-import { useState } from 'react';
+import { Calendar, Users, Zap, Home, Bell, UserPlus, QrCode, Award, Menu, X, Search, User, Settings as SettingsIcon, LogOut, Moon, Sun } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import Overview from '../components/partnerDashboard/Overview';
 import MyEvents from '../components/partnerDashboard/MyEvents';
 import Attendees from '../components/partnerDashboard/Attendees';
@@ -8,16 +9,24 @@ import NotificationSettings from '../components/partnerDashboard/NotificationSet
 import AssignRoles from '../components/partnerDashboard/AssignRoles';
 import TicketScanner from '../components/partnerDashboard/TicketScanner';
 import PartnerVerification from '../components/partnerDashboard/PartnerVerification';
+import Settings from '../components/partnerDashboard/Settings';
+import MyProfile from '../components/partnerDashboard/MyProfile';
+import CreateEvent from '../components/partnerDashboard/CreateEvent';
+import WithdrawFunds from '../components/partnerDashboard/WithdrawFunds';
 
 interface PartnerDashboardProps {
   onNavigate: (page: string) => void;
 }
 
 export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'events' | 'attendees' | 'boost' | 'notifications' | 'roles' | 'scanner' | 'verification'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'events' | 'attendees' | 'boost' | 'notifications' | 'roles' | 'scanner' | 'verification' | 'settings' | 'profile'>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [createEventOpen, setCreateEventOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  const { isDarkMode, toggleTheme } = useTheme();
 
   const menuItems = [
     { id: 'overview', label: 'Home', icon: Home },
@@ -29,6 +38,23 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
     { id: 'scanner', label: 'Scan Tickets', icon: QrCode },
     { id: 'verification', label: 'Partner Verification', icon: Award }
   ];
+
+  // Close account menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+        setAccountMenuOpen(false);
+      }
+    };
+
+    if (accountMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [accountMenuOpen]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200 relative">
@@ -138,8 +164,21 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
 
                 {/* Right Section - Actions & Account */}
                 <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
+                  {/* Dark Mode Toggle */}
+                  <button
+                    onClick={toggleTheme}
+                    className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    aria-label="Toggle dark mode"
+                  >
+                    {isDarkMode ? (
+                      <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" />
+                    ) : (
+                      <Moon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" />
+                    )}
+                  </button>
+                  
                   {/* Account Menu */}
-                  <div className="relative">
+                  <div className="relative" ref={accountMenuRef}>
                     <button
                       onClick={() => setAccountMenuOpen(!accountMenuOpen)}
                       className="flex items-center space-x-2 sm:space-x-3 p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg sm:rounded-xl transition-colors"
@@ -160,11 +199,23 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
                           <p className="text-sm font-semibold text-gray-900 dark:text-white">Tech Hub Africa</p>
                           <p className="text-xs text-gray-500 dark:text-gray-400">partner@techhub.com</p>
                         </div>
-                        <button className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3">
+                        <button 
+                          onClick={() => {
+                            setActiveTab('profile');
+                            setAccountMenuOpen(false);
+                          }}
+                          className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3"
+                        >
                           <User className="w-4 h-4" />
                           <span>My Profile</span>
                         </button>
-                        <button className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3">
+                        <button 
+                          onClick={() => {
+                            setActiveTab('settings');
+                            setAccountMenuOpen(false);
+                          }}
+                          className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3"
+                        >
                           <SettingsIcon className="w-4 h-4" />
                           <span>Settings</span>
                         </button>
@@ -201,16 +252,31 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
 
           {/* Content Area */}
           <div className="px-2 sm:px-4 lg:px-8 py-3 sm:py-4 lg:py-6 pt-[7.5rem] sm:pt-32 md:pt-20 lg:pt-24">
-            {activeTab === 'overview' && <Overview />}
-            {activeTab === 'events' && <MyEvents />}
+            {activeTab === 'overview' && <Overview onWithdrawClick={() => setWithdrawOpen(true)} />}
+            {activeTab === 'events' && <MyEvents onCreateEvent={() => setCreateEventOpen(true)} />}
             {activeTab === 'attendees' && <Attendees />}
             {activeTab === 'boost' && <BoostEvent />}
             {activeTab === 'notifications' && <NotificationSettings />}
             {activeTab === 'roles' && <AssignRoles />}
             {activeTab === 'scanner' && <TicketScanner />}
             {activeTab === 'verification' && <PartnerVerification />}
+            {activeTab === 'settings' && <Settings />}
+            {activeTab === 'profile' && <MyProfile />}
           </div>
         </main>
+
+        {/* Create Event Modal */}
+        <CreateEvent 
+          isOpen={createEventOpen} 
+          onClose={() => setCreateEventOpen(false)} 
+        />
+
+        {/* Withdraw Funds Modal */}
+        <WithdrawFunds 
+          isOpen={withdrawOpen} 
+          onClose={() => setWithdrawOpen(false)}
+          availableBalance={36000}
+        />
       </div>
       </div>
     </div>
