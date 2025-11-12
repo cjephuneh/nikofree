@@ -948,16 +948,16 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
         </div>
 
         <div className="relative">
-          <div ref={cantMissRef} className="overflow-x-auto scrollbar-hide hide-scrollbar">
-            <div className="flex gap-6 pb-4">
+          <div ref={cantMissRef} className="overflow-x-auto scrollbar-hide hide-scrollbar snap-x snap-mandatory">
+            <div className="flex gap-3 sm:gap-4 md:gap-6 pb-4">
               {cantMissEvents.map((event) => (
                 <div
                   key={event.id}
-                  className="flex-shrink-0 w-[260px] sm:w-[280px] lg:w-[calc(25%-18px)] cursor-pointer group"
+                  className="flex-shrink-0 snap-start snap-always w-[calc(100vw-2rem)] sm:w-[280px] md:w-[300px] lg:w-[calc(25%-18px)] cursor-pointer group"
                   onClick={() => onEventClick(event.id)}
                 >
-                  <div className="rounded-2xl overflow-hidden">
-                    <div className="relative h-36">
+                  <div className="rounded-2xl overflow-hidden h-full">
+                    <div className="relative h-48 sm:h-36 md:h-40">
                       <img
                         src={event.image}
                         alt={event.title}
@@ -966,10 +966,11 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
                       <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white/20"></div>
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent transition-opacity duration-300 group-hover:opacity-0"></div>
                       
-                      <div className="absolute top-3 left-3 transition-opacity duration-300 group-hover:opacity-0">
-                        <span className="px-3 py-1.5 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold rounded-full shadow-lg flex items-center gap-1">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          CAN'T MISS
+                      <div className="absolute top-2 sm:top-3 left-2 sm:left-3 transition-opacity duration-300 group-hover:opacity-0">
+                        <span className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold rounded-full shadow-lg flex items-center gap-1">
+                          <Sparkles className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                          <span className="hidden sm:inline">CAN'T MISS</span>
+                          <span className="sm:hidden">HOT</span>
                         </span>
                       </div>
 
@@ -984,27 +985,27 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
                             });
                           }
                         }}
-                        className="absolute top-3 left-3 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-white shadow-lg z-10"
+                        className="absolute top-2 sm:top-3 left-2 sm:left-3 w-9 sm:w-10 h-9 sm:h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-white shadow-lg z-10"
                       >
-                        <Share2 className="w-5 h-5 text-gray-900" />
+                        <Share2 className="w-4 sm:w-5 h-4 sm:h-5 text-gray-900" />
                       </button>
 
-                      <div className="absolute bottom-0 left-0 right-0 p-4 transition-opacity duration-300 group-hover:opacity-0">
-                        <h3 className="text-xl font-bold text-white mb-2 line-clamp-2">
+                      <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 transition-opacity duration-300 group-hover:opacity-0">
+                        <h3 className="text-lg sm:text-xl font-bold text-white mb-1 sm:mb-2 line-clamp-2">
                           {event.title}
                         </h3>
                       </div>
                     </div>
 
-                    <div className="py-4">
-                      <div className="space-y-2 mb-4">
+                    <div className="py-3 sm:py-4 px-1">
+                      <div className="space-y-2 mb-3 sm:mb-4">
                         <div className="flex items-center text-gray-600 dark:text-gray-400 text-sm">
-                          <Calendar className="w-4 h-4 mr-2" />
-                          <span>{event.date} • {event.time}</span>
+                          <Calendar className="w-4 h-4 mr-2 flex-shrink-0" />
+                          <span className="truncate">{event.date} • {event.time}</span>
                         </div>
                         <div className="flex items-center text-gray-600 dark:text-gray-400 text-sm">
-                          <MapPin className="w-4 h-4 mr-2" />
-                          <span>{event.location}</span>
+                          <MapPin className="w-4 h-4 mr-2 flex-shrink-0" />
+                          <span className="truncate">{event.location}</span>
                         </div>
                         <div className="flex items-center space-x-2">
                           <div className="flex -space-x-2">
@@ -1024,12 +1025,12 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
                               className="w-6 h-6 rounded-full border-2 border-white"
                             />
                           </div>
-                          <span className="text-sm text-gray-600 dark:text-gray-500">+{event.attendees - 3} attending</span>
+                          <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-500 truncate">+{event.attendees - 3} attending</span>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between gap-3 border-t border-gray-200 dark:border-gray-700 pt-3 mt-4">
+                      <div className="flex items-center justify-between gap-2 sm:gap-3 border-t border-gray-200 dark:border-gray-700 pt-3 mt-3 sm:mt-4">
                         <div className="flex-shrink-0">
-                          <p className="text-lg font-bold text-gray-900 dark:text-white">
+                          <p className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
                             {event.price}
                           </p>
                         </div>
@@ -1038,7 +1039,7 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
                             e.stopPropagation();
                             onEventClick(event.id);
                           }}
-                          className="px-4 py-2 text-white rounded-lg font-semibold transition-colors text-sm"
+                          className="px-4 sm:px-5 py-2 sm:py-2.5 text-white rounded-lg font-semibold transition-colors text-sm whitespace-nowrap"
                           style={{ backgroundColor: '#27aae2' }}
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a8ec4'}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#27aae2'}
