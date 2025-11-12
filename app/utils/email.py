@@ -8,22 +8,89 @@ def send_async_email(app, msg):
     """Send email asynchronously"""
     with app.app_context():
         try:
+            # Check if email sending is suppressed (for development)
+            if app.config.get('MAIL_SUPPRESS_SEND', False):
+                print(f"📧 [DEV MODE] Email suppressed: {msg.subject} to {msg.recipients}")
+                return
+            
             mail.send(msg)
+            print(f"✅ Email sent: {msg.subject} to {msg.recipients}")
         except Exception as e:
-            print(f"Error sending email: {str(e)}")
+            print(f"❌ Error sending email: {str(e)}")
 
 
 def send_email(subject, recipient, html_body, text_body=None):
-    """Send email"""
-    msg = Message(
-        subject=subject,
-        recipients=[recipient] if isinstance(recipient, str) else recipient,
-        html=html_body,
-        body=text_body or html_body
-    )
+    """Send email (async and non-blocking)"""
+    try:
+        msg = Message(
+            subject=subject,
+            recipients=[recipient] if isinstance(recipient, str) else recipient,
+            html=html_body,
+            body=text_body or html_body
+        )
+        
+        app = current_app._get_current_object()
+        
+        # Start thread and don't wait for it
+        thread = Thread(target=send_async_email, args=(app, msg))
+        thread.daemon = True  # Daemon thread won't block app shutdown
+        thread.start()
+    except Exception as e:
+        # Don't let email errors crash the app
+        print(f"❌ Error creating email: {str(e)}")
+
+
+def send_password_reset_email(user, reset_token):
+    """Send password reset email"""
+    subject = "Reset Your Niko Free Password"
+    reset_url = f"{current_app.config.get('FRONTEND_URL')}/reset-password?token={reset_token}"
     
-    app = current_app._get_current_object()
-    Thread(target=send_async_email, args=(app, msg)).start()
+    html_body = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #27aae2;">Reset Your Password</h2>
+                <p>Hi {user.first_name},</p>
+                <p>We received a request to reset your password for your Niko Free account.</p>
+                
+                <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 15px; 
+                            border-radius: 5px; margin: 20px 0;">
+                    <p style="margin: 0; color: #856404;">
+                        <strong>⚠️ Security Notice:</strong> This link will expire in 1 hour.
+                    </p>
+                </div>
+                
+                <p>Click the button below to reset your password:</p>
+                
+                <a href="{reset_url}" 
+                   style="display: inline-block; padding: 12px 30px; background-color: #27aae2; 
+                          color: white; text-decoration: none; border-radius: 5px; margin-top: 20px;">
+                    Reset Password
+                </a>
+                
+                <p style="margin-top: 30px; font-size: 14px; color: #666;">
+                    Or copy and paste this link into your browser:<br>
+                    <a href="{reset_url}" style="color: #27aae2; word-break: break-all;">{reset_url}</a>
+                </p>
+                
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <p style="font-size: 14px; color: #666;">
+                        <strong>Didn't request this?</strong><br>
+                        If you didn't request a password reset, you can safely ignore this email. 
+                        Your password will remain unchanged.
+                    </p>
+                </div>
+                
+                <p style="margin-top: 30px; font-size: 12px; color: #999;">
+                    Best regards,<br>
+                    The Niko Free Team
+                </p>
+            </div>
+        </body>
+    </html>
+    """
+    
+    send_email(subject, user.email, html_body)
 
 
 def send_welcome_email(user):
@@ -111,10 +178,27 @@ def send_booking_confirmation_email(booking, tickets):
     send_email(subject, user.email, html_body)
 
 
-def send_partner_approval_email(partner, approved=True):
+def send_partner_approval_email(partner, approved=True, temp_password=None):
     """Send partner approval/rejection email"""
     if approved:
         subject = "Your Partner Account Has Been Approved! 🎉"
+        
+        # Include credentials if provided
+        credentials_html = ""
+        if temp_password:
+            credentials_html = f"""
+            <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 15px; 
+                        border-radius: 5px; margin: 20px 0;">
+                <h3 style="margin-top: 0; color: #856404;">Your Login Credentials</h3>
+                <p><strong>Email:</strong> {partner.email}</p>
+                <p><strong>Temporary Password:</strong> <code style="background-color: #fff; 
+                   padding: 5px 10px; border-radius: 3px; font-size: 16px;">{temp_password}</code></p>
+                <p style="color: #856404; font-size: 14px; margin-top: 15px;">
+                    ⚠️ Please change this password immediately after your first login for security.
+                </p>
+            </div>
+            """
+        
         html_body = f"""
         <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -123,15 +207,28 @@ def send_partner_approval_email(partner, approved=True):
                     <p>Hi {partner.business_name},</p>
                     <p>Great news! Your partner account has been approved and you can now start creating events.</p>
                     
-                    <a href="{current_app.config.get('FRONTEND_URL')}/partner/dashboard" 
+                    {credentials_html}
+                    
+                    <a href="{current_app.config.get('FRONTEND_URL')}/partner/login" 
                        style="display: inline-block; padding: 12px 30px; background-color: #4CAF50; 
                               color: white; text-decoration: none; border-radius: 5px; margin-top: 20px;">
-                        Go to Dashboard
+                        Login to Dashboard
                     </a>
                     
                     <p style="margin-top: 30px;">
                         Start creating your first event and reach thousands of potential attendees!
                     </p>
+                    
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                        <h3>Benefits of Niko Free</h3>
+                        <ul>
+                            <li>Over 2 Million Users visibility</li>
+                            <li>Instant notifications on RSVPs</li>
+                            <li>Know estimated event attendance</li>
+                            <li>Set attendees limit or unlimited tickets</li>
+                            <li>Comprehensive dashboard with analytics</li>
+                        </ul>
+                    </div>
                 </div>
             </body>
         </html>
@@ -146,8 +243,18 @@ def send_partner_approval_email(partner, approved=True):
                     <p>Hi {partner.business_name},</p>
                     <p>Thank you for your interest in becoming a partner with Niko Free.</p>
                     <p>Unfortunately, we are unable to approve your application at this time.</p>
-                    <p><strong>Reason:</strong> {partner.rejection_reason}</p>
-                    <p>If you have any questions, please contact our support team.</p>
+                    
+                    <div style="background-color: #f8d7da; border: 1px solid #f5c6cb; 
+                                padding: 15px; border-radius: 5px; margin: 20px 0;">
+                        <p style="margin: 0;"><strong>Reason:</strong> {partner.rejection_reason}</p>
+                    </div>
+                    
+                    <p>If you believe this is an error or have any questions, please contact our support team.</p>
+                    
+                    <p style="margin-top: 30px;">
+                        <strong>Email:</strong> support@nikofree.com<br>
+                        <strong>Phone:</strong> +254 700 000 000
+                    </p>
                 </div>
             </body>
         </html>

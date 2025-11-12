@@ -2,13 +2,14 @@ from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime
 from app import db
 from app.models.payment import Payment
-from app.models.booking import Booking
+from app.models.ticket import Booking
 from app.models.ticket import Ticket
 from app.models.event import EventPromotion
 from app.utils.decorators import user_required
 from app.utils.mpesa import MPesaClient, format_phone_number
 from app.utils.qrcode_generator import generate_qr_code
 from app.utils.email import send_booking_confirmation_email
+from app.routes.notifications import notify_new_booking, notify_payment_completed
 
 bp = Blueprint('payments', __name__)
 
@@ -80,7 +81,7 @@ def initiate_payment(current_user):
     
     if response.get('ResponseCode') == '0':
         # Success - STK push sent
-        payment.metadata = {
+        payment.payment_metadata = {
             'CheckoutRequestID': response.get('CheckoutRequestID'),
             'MerchantRequestID': response.get('MerchantRequestID')
         }
@@ -116,7 +117,7 @@ def mpesa_callback():
     
     # Find payment
     payment = Payment.query.filter(
-        Payment.metadata['CheckoutRequestID'].astext == checkout_request_id
+        Payment.payment_metadata['CheckoutRequestID'].astext == checkout_request_id
     ).first()
     
     if not payment:
@@ -190,6 +191,10 @@ def mpesa_callback():
             
             # Send confirmation email
             send_booking_confirmation_email(booking, tickets)
+            
+            # Notify partner of new booking and payment
+            notify_new_booking(event, booking)
+            notify_payment_completed(booking, payment)
     else:
         # Payment failed
         payment.status = 'failed'
@@ -217,8 +222,8 @@ def check_payment_status(current_user, payment_id):
         return jsonify({'error': 'Payment not found'}), 404
     
     # If still pending, query MPesa
-    if payment.status == 'pending' and payment.metadata:
-        checkout_request_id = payment.metadata.get('CheckoutRequestID')
+    if payment.status == 'pending' and payment.payment_metadata:
+        checkout_request_id = payment.payment_metadata.get('CheckoutRequestID')
         
         if checkout_request_id:
             mpesa = MPesaClient()
@@ -348,7 +353,7 @@ def initiate_promotion_payment():
     payment.provider_response = response
     
     if response.get('ResponseCode') == '0':
-        payment.metadata = {
+        payment.payment_metadata = {
             'CheckoutRequestID': response.get('CheckoutRequestID'),
             'MerchantRequestID': response.get('MerchantRequestID')
         }

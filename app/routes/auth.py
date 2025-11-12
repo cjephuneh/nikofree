@@ -7,7 +7,8 @@ from app import db, limiter
 from app.models.user import User
 from app.models.partner import Partner
 from app.utils.validators import validate_email, validate_phone, validate_password
-from app.utils.email import send_welcome_email
+from app.utils.email import send_welcome_email, send_password_reset_email
+import secrets
 
 bp = Blueprint('auth', __name__)
 
@@ -120,6 +121,75 @@ def login():
     }), 200
 
 
+@bp.route('/forgot-password', methods=['POST'])
+@limiter.limit("3 per hour")
+def forgot_password():
+    """Request password reset - sends reset token via email"""
+    data = request.get_json()
+    
+    if not data.get('email'):
+        return jsonify({'error': 'Email is required'}), 400
+    
+    email = data['email'].lower().strip()
+    
+    # Validate email format
+    if not validate_email(email):
+        return jsonify({'error': 'Invalid email address'}), 400
+    
+    # Find user
+    user = User.query.filter_by(email=email).first()
+    
+    # For security, always return success even if user doesn't exist
+    if not user:
+        return jsonify({'message': 'If an account with that email exists, a password reset link has been sent'}), 200
+    
+    # Generate reset token
+    reset_token = secrets.token_urlsafe(32)
+    user.reset_token = reset_token
+    user.reset_token_expires = datetime.utcnow() + timedelta(hours=1)  # Token expires in 1 hour
+    
+    db.session.commit()
+    
+    # Send password reset email
+    send_password_reset_email(user, reset_token)
+    
+    return jsonify({'message': 'If an account with that email exists, a password reset link has been sent'}), 200
+
+
+@bp.route('/reset-password', methods=['POST'])
+@limiter.limit("5 per hour")
+def reset_password():
+    """Reset password using token"""
+    data = request.get_json()
+    
+    if not data.get('token') or not data.get('password'):
+        return jsonify({'error': 'Token and new password are required'}), 400
+    
+    # Validate password
+    is_valid, error_msg = validate_password(data['password'])
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
+    
+    # Find user with valid token
+    user = User.query.filter_by(reset_token=data['token']).first()
+    
+    if not user:
+        return jsonify({'error': 'Invalid or expired reset token'}), 400
+    
+    # Check if token is expired
+    if user.reset_token_expires < datetime.utcnow():
+        return jsonify({'error': 'Reset token has expired. Please request a new one'}), 400
+    
+    # Update password
+    user.set_password(data['password'])
+    user.reset_token = None
+    user.reset_token_expires = None
+    
+    db.session.commit()
+    
+    return jsonify({'message': 'Password has been reset successfully'}), 200
+
+
 @bp.route('/google', methods=['POST'])
 @limiter.limit("10 per hour")
 def google_login():
@@ -210,6 +280,116 @@ def apple_login():
 
 
 # ============ PARTNER AUTHENTICATION ============
+
+@bp.route('/partner/apply', methods=['POST'])
+@limiter.limit("3 per hour")
+def partner_apply():
+    """Apply to become a partner - awaits admin approval"""
+    from app.utils.file_upload import upload_file
+    import json
+    
+    # Get form data (multipart/form-data for file upload)
+    business_name = request.form.get('business_name')
+    email = request.form.get('email')
+    phone_number = request.form.get('phone_number')
+    location = request.form.get('location')
+    category_id = request.form.get('category_id')
+    interests = request.form.get('interests')  # Optional, comma-separated or JSON array
+    signature_name = request.form.get('signature_name')
+    terms_accepted = request.form.get('terms_accepted')  # 'true' or 'false' string
+    
+    # Validate required fields
+    if not all([business_name, email, phone_number, location, category_id, signature_name]):
+        return jsonify({'error': 'business_name, email, phone_number, location, category_id, and signature_name are required'}), 400
+    
+    # Validate terms acceptance
+    if terms_accepted != 'true':
+        return jsonify({'error': 'You must accept the terms and conditions'}), 400
+    
+    email = email.lower().strip()
+    
+    # Validate email
+    if not validate_email(email):
+        return jsonify({'error': 'Invalid email address'}), 400
+    
+    # Validate phone
+    if not validate_phone(phone_number):
+        return jsonify({'error': 'Invalid phone number'}), 400
+    
+    # Check if partner already exists
+    existing = Partner.query.filter_by(email=email).first()
+    if existing:
+        if existing.status == 'pending':
+            return jsonify({'error': 'Application already submitted and pending review'}), 409
+        elif existing.status == 'approved':
+            return jsonify({'error': 'Email already registered as partner'}), 409
+        elif existing.status == 'rejected':
+            return jsonify({'error': 'Previous application was rejected. Please contact support.'}), 409
+    
+    # Validate category exists
+    from app.models.category import Category
+    category = Category.query.get(category_id)
+    if not category:
+        return jsonify({'error': 'Invalid category'}), 400
+    
+    # Handle logo upload
+    logo_path = None
+    if 'logo' in request.files:
+        file = request.files['logo']
+        if file:
+            try:
+                logo_path = upload_file(file, folder='logos')
+            except ValueError as e:
+                return jsonify({'error': f'Logo upload error: {str(e)}'}), 400
+    
+    # Parse interests if provided
+    interests_json = None
+    if interests:
+        try:
+            # Try parsing as JSON array
+            interests_list = json.loads(interests)
+            interests_json = json.dumps(interests_list)
+        except:
+            # If not JSON, treat as comma-separated
+            interests_list = [i.strip() for i in interests.split(',') if i.strip()]
+            interests_json = json.dumps(interests_list)
+    
+    # Generate a temporary password (will be sent on approval)
+    import secrets
+    temp_password = secrets.token_urlsafe(12)
+    
+    # Create partner application
+    partner = Partner(
+        email=email,
+        business_name=business_name.strip(),
+        phone_number=phone_number,
+        location=location,
+        category_id=category_id,
+        interests=interests_json,
+        signature_name=signature_name.strip(),
+        logo=logo_path,
+        terms_accepted=True,
+        terms_accepted_at=datetime.utcnow(),
+        contract_accepted=True,
+        contract_accepted_at=datetime.utcnow(),
+        status='pending'  # Awaiting admin approval
+    )
+    
+    # Set temporary password (will be sent in approval email)
+    partner.set_password(temp_password)
+    
+    # Store temp password temporarily (you might want to encrypt this)
+    partner.rejection_reason = f"TEMP_PASS:{temp_password}"  # Temporary storage
+    
+    db.session.add(partner)
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Application submitted successfully! You will receive an email within 24 hours with login credentials if approved.',
+        'application_id': partner.id,
+        'status': 'pending'
+    }), 201
+
 
 @bp.route('/partner/register', methods=['POST'])
 @limiter.limit("5 per hour")

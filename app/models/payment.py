@@ -36,7 +36,7 @@ class Payment(db.Model):
     # Metadata
     description = db.Column(db.String(500), nullable=True)
     payment_type = db.Column(db.String(50), nullable=True)  # ticket, promotion, etc
-    metadata = db.Column(db.JSON, nullable=True)
+    payment_metadata = db.Column(db.JSON, nullable=True)
     
     # Provider Response
     provider_response = db.Column(db.JSON, nullable=True)

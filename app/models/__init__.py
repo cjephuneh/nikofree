@@ -6,6 +6,7 @@ from app.models.payment import Payment, PartnerPayout
 from app.models.category import Category, Location
 from app.models.notification import Notification
 from app.models.admin import AdminLog
+from app.models.review import Review
 
 __all__ = [
     'User',
@@ -23,6 +24,7 @@ __all__ = [
     'Category',
     'Location',
     'Notification',
-    'AdminLog'
+    'AdminLog',
+    'Review'
 ]
 

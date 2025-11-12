@@ -229,6 +229,77 @@
 					"name": "Partner",
 					"item": [
 						{
+							"name": "Apply to Become a Partner",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "business_name",
+											"value": "My Event Company",
+											"type": "text"
+										},
+										{
+											"key": "email",
+											"value": "newpartner@example.com",
+											"type": "text"
+										},
+										{
+											"key": "phone_number",
+											"value": "+254712345678",
+											"type": "text"
+										},
+										{
+											"key": "location",
+											"value": "Nairobi",
+											"type": "text"
+										},
+										{
+											"key": "category_id",
+											"value": "1",
+											"type": "text",
+											"description": "Choose one category"
+										},
+										{
+											"key": "interests",
+											"value": "Sports, Music, Technology",
+											"type": "text",
+											"description": "Optional: comma-separated or JSON array"
+										},
+										{
+											"key": "signature_name",
+											"value": "John Doe",
+											"type": "text",
+											"description": "Name as signature"
+										},
+										{
+											"key": "terms_accepted",
+											"value": "true",
+											"type": "text",
+											"description": "Must be 'true'"
+										},
+										{
+											"key": "logo",
+											"type": "file",
+											"description": "Logo image file (optional)"
+										}
+									]
+								},
+								"url": {
+									"raw": "{{base_url}}/api/auth/partner/apply",
+									"host": ["{{base_url}}"],
+									"path": ["api", "auth", "partner", "apply"]
+								},
+								"description": "Submit application to become a partner. Admin approval required. Upon approval, partner will receive login credentials via email."
+							},
+							"response": []
+						},
+						{
 							"name": "Register Partner",
 							"request": {
 								"auth": {

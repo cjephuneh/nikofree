@@ -23,6 +23,14 @@ class Partner(db.Model):
     contact_person = db.Column(db.String(200), nullable=True)
     address = db.Column(db.String(500), nullable=True)
     website = db.Column(db.String(200), nullable=True)
+    description = db.Column(db.Text, nullable=True)  # Business description
+    
+    # Application Information
+    location = db.Column(db.String(200), nullable=True)  # City/Location for application
+    interests = db.Column(db.Text, nullable=True)  # JSON string of additional interests
+    signature_name = db.Column(db.String(200), nullable=True)  # Name as signature
+    terms_accepted = db.Column(db.Boolean, default=False)
+    terms_accepted_at = db.Column(db.DateTime, nullable=True)
     
     # Legal
     contract_accepted = db.Column(db.Boolean, default=False)
@@ -77,7 +85,10 @@ class Partner(db.Model):
             'logo': self.logo,
             'category': self.category.to_dict() if self.category else None,
             'contact_person': self.contact_person,
+            'address': self.address,
             'website': self.website,
+            'location': self.location,
+            'description': self.description,
             'status': self.status,
             'is_active': self.is_active,
             'is_verified': self.is_verified,

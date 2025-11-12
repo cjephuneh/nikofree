@@ -7,6 +7,7 @@ from app.models.payment import Payment
 from app.utils.decorators import user_required, partner_required
 from app.utils.qrcode_generator import generate_qr_code
 from app.utils.email import send_booking_confirmation_email
+from app.routes.notifications import notify_new_booking
 
 bp = Blueprint('tickets', __name__)
 
@@ -202,6 +203,9 @@ def book_event(current_user):
         
         # Send confirmation email
         send_booking_confirmation_email(booking, tickets)
+        
+        # Notify partner of new booking
+        notify_new_booking(event, booking)
         
         return jsonify({
             'message': 'Booking confirmed!',
@@ -402,5 +406,97 @@ def scan_ticket(current_partner):
         'message': 'Ticket checked in successfully',
         'ticket': ticket.to_dict(),
         'attendee': ticket.booking.user.to_dict()
+    }), 200
+
+
+@bp.route('/<int:booking_id>/qr', methods=['GET'])
+@user_required
+def get_ticket_qr(current_user, booking_id):
+    """Get QR code for a booking"""
+    booking = Booking.query.filter_by(
+        id=booking_id,
+        user_id=current_user.id
+    ).first()
+    
+    if not booking:
+        return jsonify({'error': 'Booking not found'}), 404
+    
+    # Get first ticket for QR code
+    ticket = booking.tickets.first()
+    if not ticket:
+        return jsonify({'error': 'No tickets found for this booking'}), 404
+    
+    # Generate QR code if it doesn't exist
+    if not ticket.qr_code:
+        qr_data = ticket.ticket_number
+        qr_path = generate_qr_code(qr_data, ticket.ticket_number)
+        ticket.qr_code = qr_path
+        db.session.commit()
+    
+    # Return QR code URL
+    from flask import current_app
+    # Handle both relative paths and full URLs
+    if ticket.qr_code.startswith('http'):
+        qr_url = ticket.qr_code
+    elif ticket.qr_code.startswith('/'):
+        qr_url = f"{current_app.config.get('BASE_URL', 'http://localhost:5005')}{ticket.qr_code}"
+    else:
+        qr_url = f"{current_app.config.get('BASE_URL', 'http://localhost:5005')}/uploads/{ticket.qr_code}"
+    
+    return jsonify({
+        'qr_code_url': qr_url,
+        'ticket_number': ticket.ticket_number,
+        'booking_number': booking.booking_number
+    }), 200
+
+
+@bp.route('/<int:booking_id>/download', methods=['GET'])
+@user_required
+def download_ticket(current_user, booking_id):
+    """Download ticket as PDF"""
+    booking = Booking.query.filter_by(
+        id=booking_id,
+        user_id=current_user.id
+    ).first()
+    
+    if not booking:
+        return jsonify({'error': 'Booking not found'}), 404
+    
+    # For now, return a simple text response
+    # In production, generate a PDF
+    from flask import current_app, send_file
+    import os
+    
+    # Get first ticket
+    ticket = booking.tickets.first()
+    if not ticket:
+        return jsonify({'error': 'No tickets found'}), 404
+    
+    # Generate simple ticket text
+    ticket_text = f"""
+    NIKO FREE TICKET
+    ================
+    
+    Booking Number: {booking.booking_number}
+    Ticket Number: {ticket.ticket_number}
+    
+    Event: {booking.event.title}
+    Date: {booking.event.start_date.strftime('%B %d, %Y at %I:%M %p')}
+    Location: {booking.event.venue_name or 'Online'}
+    
+    Ticket Type: {ticket.ticket_type.name if ticket.ticket_type else 'General Admission'}
+    Quantity: {booking.quantity}
+    Total: KES {booking.total_amount:,.2f}
+    
+    Status: {booking.status.upper()}
+    
+    Thank you for using Niko Free!
+    """
+    
+    # Return as JSON for now (in production, generate PDF)
+    return jsonify({
+        'ticket_data': ticket_text,
+        'booking': booking.to_dict(),
+        'message': 'PDF generation coming soon. Use QR code for entry.'
     }), 200
 

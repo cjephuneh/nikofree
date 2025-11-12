@@ -5,7 +5,7 @@ from sqlalchemy import or_
 from app import db
 from app.models.user import User
 from app.models.event import Event
-from app.models.booking import Booking
+from app.models.ticket import Booking
 from app.models.notification import Notification
 from app.utils.decorators import user_required
 from app.utils.file_upload import upload_file
@@ -267,6 +267,39 @@ def mark_all_notifications_read(current_user):
     db.session.commit()
     
     return jsonify({'message': 'All notifications marked as read'}), 200
+
+
+@bp.route('/change-password', methods=['POST'])
+@user_required
+def change_password(current_user):
+    """Change user password"""
+    data = request.get_json()
+    
+    if not data.get('current_password') or not data.get('new_password'):
+        return jsonify({'error': 'Current password and new password are required'}), 400
+    
+    # Verify current password
+    if not current_user.check_password(data['current_password']):
+        return jsonify({'error': 'Current password is incorrect'}), 401
+    
+    # Validate new password
+    from app.utils.validators import validate_password
+    is_valid, error_msg = validate_password(data['new_password'])
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
+    
+    # Check if new password is same as current
+    if current_user.check_password(data['new_password']):
+        return jsonify({'error': 'New password must be different from current password'}), 400
+    
+    # Update password
+    current_user.set_password(data['new_password'])
+    current_user.updated_at = datetime.utcnow()
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Password changed successfully'
+    }), 200
 
 
 @bp.route('/search', methods=['GET'])

@@ -5,6 +5,7 @@ from app import db
 from app.models.event import Event, EventHost, EventInterest, EventPromotion
 from app.models.category import Category, Location
 from app.models.user import User
+from sqlalchemy import func
 from app.utils.decorators import optional_user, user_required
 from app.utils.file_upload import upload_file
 
@@ -12,6 +13,7 @@ bp = Blueprint('events', __name__)
 
 
 @bp.route('/', methods=['GET'])
+@bp.route('', methods=['GET'])  # Also handle without trailing slash
 @optional_user
 def get_events(current_user):
     """Get all events with filters"""
@@ -151,12 +153,28 @@ def get_promoted_events():
 
 
 @bp.route('/categories', methods=['GET'])
+@bp.route('/categories/', methods=['GET'])
 def get_categories():
     """Get all event categories"""
+    from sqlalchemy import func
     categories = Category.query.filter_by(is_active=True).order_by(Category.display_order).all()
     
+    # Add event count for each category
+    categories_data = []
+    for cat in categories:
+        cat_dict = cat.to_dict()
+        # Count upcoming approved events in this category
+        event_count = Event.query.filter(
+            Event.category_id == cat.id,
+            Event.is_published == True,
+            Event.status == 'approved',
+            Event.start_date > datetime.utcnow()
+        ).count()
+        cat_dict['event_count'] = event_count
+        categories_data.append(cat_dict)
+    
     return jsonify({
-        'categories': [cat.to_dict() for cat in categories]
+        'categories': categories_data
     }), 200
 
 
@@ -333,5 +351,146 @@ def autocomplete_search():
     
     return jsonify({
         'suggestions': suggestions
+    }), 200
+
+
+# ============ REVIEWS ============
+
+@bp.route('/<int:event_id>/reviews', methods=['GET'])
+@optional_user
+def get_event_reviews(current_user, event_id):
+    """Get reviews for an event"""
+    event = Event.query.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    
+    from app.models.review import Review
+    reviews = Review.query.filter_by(event_id=event_id).order_by(
+        Review.created_at.desc()
+    ).paginate(page=page, per_page=per_page, error_out=False)
+    
+    # Calculate average rating
+    avg_rating = db.session.query(db.func.avg(Review.rating)).filter_by(
+        event_id=event_id
+    ).scalar() or 0
+    
+    total_reviews = Review.query.filter_by(event_id=event_id).count()
+    
+    return jsonify({
+        'reviews': [review.to_dict() for review in reviews.items],
+        'average_rating': round(float(avg_rating), 1),
+        'total_reviews': total_reviews,
+        'page': reviews.page,
+        'pages': reviews.pages
+    }), 200
+
+
+@bp.route('/<int:event_id>/reviews', methods=['POST'])
+@user_required
+def add_event_review(current_user, event_id):
+    """Add review to event"""
+    event = Event.query.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    
+    # Check if event is published and approved (users can only review published events)
+    if not event.is_published or event.status != 'approved':
+        return jsonify({'error': 'Event not available for review'}), 403
+    
+    data = request.get_json()
+    
+    if not data.get('rating'):
+        return jsonify({'error': 'Rating is required'}), 400
+    
+    rating = int(data['rating'])
+    if rating < 1 or rating > 5:
+        return jsonify({'error': 'Rating must be between 1 and 5'}), 400
+    
+    from app.models.review import Review
+    
+    # Check if user already reviewed this event
+    existing_review = Review.query.filter_by(
+        user_id=current_user.id,
+        event_id=event_id
+    ).first()
+    
+    if existing_review:
+        return jsonify({'error': 'You have already reviewed this event'}), 409
+    
+    # Create review
+    review = Review(
+        user_id=current_user.id,
+        event_id=event_id,
+        rating=rating,
+        comment=data.get('comment', '').strip()
+    )
+    
+    db.session.add(review)
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Review added successfully',
+        'review': review.to_dict()
+    }), 201
+
+
+@bp.route('/<int:event_id>/reviews/<int:review_id>', methods=['PUT'])
+@user_required
+def update_event_review(current_user, event_id, review_id):
+    """Update review"""
+    from app.models.review import Review
+    
+    review = Review.query.filter_by(
+        id=review_id,
+        user_id=current_user.id,
+        event_id=event_id
+    ).first()
+    
+    if not review:
+        return jsonify({'error': 'Review not found'}), 404
+    
+    data = request.get_json()
+    
+    if data.get('rating'):
+        rating = int(data['rating'])
+        if rating < 1 or rating > 5:
+            return jsonify({'error': 'Rating must be between 1 and 5'}), 400
+        review.rating = rating
+    
+    if data.get('comment') is not None:
+        review.comment = data['comment'].strip()
+    
+    review.updated_at = datetime.utcnow()
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Review updated successfully',
+        'review': review.to_dict()
+    }), 200
+
+
+@bp.route('/<int:event_id>/reviews/<int:review_id>', methods=['DELETE'])
+@user_required
+def delete_event_review(current_user, event_id, review_id):
+    """Delete review"""
+    from app.models.review import Review
+    
+    review = Review.query.filter_by(
+        id=review_id,
+        user_id=current_user.id,
+        event_id=event_id
+    ).first()
+    
+    if not review:
+        return jsonify({'error': 'Review not found'}), 404
+    
+    db.session.delete(review)
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Review deleted successfully'
     }), 200
 

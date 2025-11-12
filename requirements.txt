@@ -12,13 +12,13 @@ bcrypt==4.1.1
 requests==2.31.0
 python-dateutil==2.8.2
 qrcode==7.4.2
-Pillow==10.1.0
+Pillow==10.4.0
 reportlab==4.0.7
 phonenumbers==8.13.26
 google-auth==2.25.2
 google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
-psycopg2-binary==2.9.9
+# psycopg2-binary==2.9.9  # Commented out - use SQLite for now
 gunicorn==21.2.0
 redis==5.0.1
 celery==5.3.4

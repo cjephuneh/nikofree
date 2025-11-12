@@ -246,3 +246,19 @@ def notify_event_reminder(user, event, hours_before=24):
         send_email=True
     )
 
+
+def notify_payment_completed(booking, payment):
+    """Send notification to partner when payment is completed"""
+    event = booking.event
+    create_notification(
+        partner_id=event.partner_id,
+        title='Payment Received!',
+        message=f'Payment of Ksh {payment.amount:,.2f} received for "{event.title}" booking.',
+        notification_type='payment',
+        event_id=event.id,
+        booking_id=booking.id,
+        action_url=f'/partner/events/{event.id}/attendees',
+        action_text='View Booking',
+        send_email=False
+    )
+

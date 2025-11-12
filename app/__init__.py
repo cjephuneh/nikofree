@@ -30,7 +30,20 @@ def create_app(config_name='default'):
     migrate.init_app(app, db)
     jwt.init_app(app)
     mail.init_app(app)
-    CORS(app, origins=app.config['CORS_ORIGINS'])
+    # Disable strict slashes to prevent redirects (must be before CORS)
+    app.url_map.strict_slashes = False
+    
+    # Configure CORS to handle preflight requests properly
+    CORS(app, 
+         resources={r"/*": {
+             "origins": "*",
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+             "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+             "supports_credentials": False,
+             "max_age": 3600
+         }},
+         supports_credentials=False,
+         automatic_options=True)
     limiter.init_app(app)
     
     # Register blueprints

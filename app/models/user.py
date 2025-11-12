@@ -33,6 +33,10 @@ class User(db.Model):
     keep_logged_in = db.Column(db.Boolean, default=False)
     location = db.Column(db.String(200), nullable=True)
     
+    # Password Reset
+    reset_token = db.Column(db.String(255), nullable=True, unique=True, index=True)
+    reset_token_expires = db.Column(db.DateTime, nullable=True)
+    
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

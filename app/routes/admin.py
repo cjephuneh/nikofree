@@ -5,12 +5,13 @@ from app import db
 from app.models.user import User
 from app.models.partner import Partner
 from app.models.event import Event
-from app.models.booking import Booking
+from app.models.ticket import Booking
 from app.models.payment import Payment, PartnerPayout
 from app.models.category import Category, Location
 from app.models.admin import AdminLog
 from app.utils.decorators import admin_required
 from app.utils.email import send_partner_approval_email, send_event_approval_email
+from app.routes.notifications import notify_event_approved, notify_event_rejected
 
 bp = Blueprint('admin', __name__)
 
@@ -140,10 +141,16 @@ def approve_partner(current_admin, partner_id):
     if partner.status != 'pending':
         return jsonify({'error': 'Partner is not pending approval'}), 400
     
+    # Extract temporary password if stored
+    temp_password = None
+    if partner.rejection_reason and partner.rejection_reason.startswith('TEMP_PASS:'):
+        temp_password = partner.rejection_reason.replace('TEMP_PASS:', '')
+    
     partner.status = 'approved'
     partner.approved_by = current_admin.id
     partner.approved_at = datetime.utcnow()
     partner.is_verified = True
+    partner.rejection_reason = None  # Clear the temp password field
     
     # Log action
     log_admin_action(
@@ -156,11 +163,11 @@ def approve_partner(current_admin, partner_id):
     
     db.session.commit()
     
-    # Send approval email
-    send_partner_approval_email(partner, approved=True)
+    # Send approval email with credentials
+    send_partner_approval_email(partner, approved=True, temp_password=temp_password)
     
     return jsonify({
-        'message': 'Partner approved successfully',
+        'message': 'Partner approved successfully. Credentials sent to partner email.',
         'partner': partner.to_dict()
     }), 200
 
@@ -317,6 +324,9 @@ def approve_event(current_admin, event_id):
     # Send approval email
     send_event_approval_email(event, approved=True)
     
+    # Create notification for partner
+    notify_event_approved(event)
+    
     return jsonify({
         'message': 'Event approved successfully',
         'event': event.to_dict()
@@ -352,6 +362,9 @@ def reject_event(current_admin, event_id):
     
     # Send rejection email
     send_event_approval_email(event, approved=False)
+    
+    # Create notification for partner
+    notify_event_rejected(event, reason)
     
     return jsonify({
         'message': 'Event rejected',

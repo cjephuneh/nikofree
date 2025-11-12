@@ -63,3 +63,6 @@ temp/
 # Apple Private Keys
 *.p8
 
+# Frontend (separate repository)
+niko_free/
+
