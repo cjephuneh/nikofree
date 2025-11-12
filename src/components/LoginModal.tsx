@@ -1,6 +1,8 @@
-import { X, Mail } from 'lucide-react';
+import { X, Mail, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { register, login, forgotPassword } from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -9,12 +11,21 @@ interface LoginModalProps {
 }
 
 export default function LoginModal({ isOpen, onClose, onNavigate }: LoginModalProps) {
+  const { setAuthData } = useAuth();
   const [showEmailModal, setShowEmailModal] = useState(false);
-  const [showSignupForm, setShowSignupForm] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(true); // Toggle between sign up and log in
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [verificationCode, setVerificationCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
 
   if (!isOpen) return null;
 
@@ -29,38 +40,115 @@ export default function LoginModal({ isOpen, onClose, onNavigate }: LoginModalPr
     setShowEmailModal(true);
   };
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Continue with Email:', email);
-    // Send verification code to email
-    setShowEmailModal(false);
-    setShowSignupForm(true);
+    setError('');
+    setIsLoading(true);
+    
+    try {
+      if (isSignUp) {
+        // Sign up validation
+        if (password !== confirmPassword) {
+          setError('Passwords do not match');
+          setIsLoading(false);
+          return;
+        }
+        if (password.length < 8) {
+          setError('Password must be at least 8 characters');
+          setIsLoading(false);
+          return;
+        }
+        
+        // Prepare registration data
+        const registrationData = {
+          email: email.trim().toLowerCase(),
+          password,
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+        };
+        
+        console.log('Sending registration data:', {
+          email: registrationData.email,
+          first_name: registrationData.first_name,
+          last_name: registrationData.last_name,
+        });
+        
+        // Call register API
+        const registerResponse = await register(registrationData);
+        
+        // Update AuthContext
+        if (registerResponse.access_token && registerResponse.user) {
+          setAuthData(registerResponse.user, registerResponse.access_token);
+        }
+        
+        console.log('Registration successful');
+      } else {
+        // Call login API
+        const loginResponse = await login({
+          email: email.trim().toLowerCase(),
+          password,
+        });
+        
+        // Update AuthContext
+        if (loginResponse.access_token && loginResponse.user) {
+          setAuthData(loginResponse.user, loginResponse.access_token);
+        }
+        
+        console.log('Login successful');
+      }
+      
+      // Close modal and navigate to user dashboard
+      setShowEmailModal(false);
+      onClose();
+      // Trigger a custom event to notify navbar
+      window.dispatchEvent(new Event('storage'));
+      onNavigate('user-dashboard');
+    } catch (err: any) {
+      console.error('Auth error:', err);
+      setError(err.message || 'An error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCloseEmailModal = () => {
     setShowEmailModal(false);
     setEmail('');
-  };
-
-  const handleSignupSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('Sign up with:', { email, firstName, lastName, verificationCode });
-    // Handle signup logic here
-    setShowSignupForm(false);
-    onClose();
-    onNavigate('user-dashboard');
-  };
-
-  const handleCancelSignup = () => {
-    setShowSignupForm(false);
     setFirstName('');
     setLastName('');
-    setVerificationCode('');
+    setPassword('');
+    setConfirmPassword('');
+    setError('');
+    setIsLoading(false);
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+
+    try {
+      await forgotPassword(forgotPasswordEmail.trim().toLowerCase());
+      setResetEmailSent(true);
+    } catch (err: any) {
+      console.error('Forgot password error:', err);
+      setError(err.message || 'Failed to send reset email. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCloseForgotPassword = () => {
+    setShowForgotPassword(false);
+    setForgotPasswordEmail('');
+    setError('');
+    setResetEmailSent(false);
+    setIsLoading(false);
   };
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] overflow-y-auto">
-      {!showEmailModal && !showSignupForm && (
+      {!showEmailModal && (
         <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
           {/* Background overlay */}
           <div
@@ -164,7 +252,7 @@ export default function LoginModal({ isOpen, onClose, onNavigate }: LoginModalPr
         </div>
       )}
 
-      {/* Email Modal - Shows on top of Sign In modal */}
+      {/* Email Form Modal - Unified Sign Up / Log In */}
       {showEmailModal && (
         <div className="fixed inset-0 z-[10000] overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
@@ -187,16 +275,63 @@ export default function LoginModal({ isOpen, onClose, onNavigate }: LoginModalPr
               </button>
 
               <div className="bg-white dark:bg-gray-800 px-8 pt-8 pb-8">
+                {/* Toggle Sign Up / Log In */}
+                <div className="flex justify-center mb-6">
+                  <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSignUp(true);
+                        setError('');
+                      }}
+                      className={`px-6 py-2 rounded-md font-medium transition-all ${
+                        isSignUp
+                          ? 'text-white'
+                          : 'text-gray-700 dark:text-gray-300'
+                      }`}
+                      style={isSignUp ? { background: 'linear-gradient(to right, #27aae2, #1a8ec4)' } : {}}
+                    >
+                      Sign Up
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSignUp(false);
+                        setError('');
+                      }}
+                      className={`px-6 py-2 rounded-md font-medium transition-all ${
+                        !isSignUp
+                          ? 'text-white'
+                          : 'text-gray-700 dark:text-gray-300'
+                      }`}
+                      style={!isSignUp ? { background: 'linear-gradient(to right, #27aae2, #1a8ec4)' } : {}}
+                    >
+                      Log In
+                    </button>
+                  </div>
+                </div>
+
                 {/* Title */}
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 text-center">Let's get started</h2>
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 text-center">
+                  {isSignUp ? 'Create Account' : 'Welcome Back'}
+                </h2>
                 
                 {/* Subtitle */}
-                <p className="text-center text-gray-600 dark:text-gray-400 mb-8">
-                  Use email to get started
+                <p className="text-center text-gray-600 dark:text-gray-400 mb-6">
+                  {isSignUp ? 'Sign up to get started' : 'Log in to continue'}
                 </p>
 
-                {/* Email Form */}
-                <form onSubmit={handleEmailSubmit} className="space-y-6">
+                {/* Error Display */}
+                {error && (
+                  <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-xl p-3 flex items-start space-x-2">
+                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+                  </div>
+                )}
+
+                {/* Form */}
+                <form onSubmit={handleEmailSubmit} className="space-y-4">
+                  {/* Email */}
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Email
@@ -204,6 +339,8 @@ export default function LoginModal({ isOpen, onClose, onNavigate }: LoginModalPr
                     <input
                       type="email"
                       id="email"
+                      name="email"
+                      autoComplete="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="Email address"
@@ -220,71 +357,9 @@ export default function LoginModal({ isOpen, onClose, onNavigate }: LoginModalPr
                     />
                   </div>
 
-                  {/* Continue button */}
-                  <button
-                    type="submit"
-                    className="w-full px-4 py-3.5 text-white rounded-xl font-medium hover:shadow-lg transform hover:scale-105 transition-all"
-                    style={{ background: 'linear-gradient(to right, #27aae2, #1a8ec4)' }}
-                  >
-                    Continue
-                  </button>
-                </form>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Signup Form Modal - Shows after email is entered */}
-      {showSignupForm && (
-        <div className="fixed inset-0 z-[10000] overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            {/* Background overlay */}
-            <div
-              className="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-80 backdrop-blur-sm"
-              onClick={handleCancelSignup}
-            ></div>
-
-            {/* Center modal */}
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-
-            <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full relative z-10">
-              {/* Close button */}
-              <button
-                onClick={handleCancelSignup}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors z-10"
-              >
-                <X className="w-6 h-6" />
-              </button>
-
-              <div className="bg-white dark:bg-gray-800 px-8 pt-8 pb-8">
-                {/* Title */}
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 text-center">Welcome</h2>
-                
-                {/* Subtitle */}
-                <p className="text-center text-gray-600 dark:text-gray-400 mb-8">
-                  Let's create your account!
-                </p>
-
-                {/* Signup Form */}
-                <form onSubmit={handleSignupSubmit} className="space-y-4">
-                  {/* Email (read-only) */}
-                  <div>
-                    <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      id="signup-email"
-                      value={email}
-                      readOnly
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 dark:text-white rounded-xl cursor-not-allowed"
-                    />
-                  </div>
-
-                  {/* First Name and Last Name in a row */}
+                  {/* First Name and Last Name - Only for Sign Up */}
+                  {isSignUp && (
                   <div className="flex gap-3">
-                    {/* First Name */}
                     <div className="flex-1">
                       <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         First Name
@@ -292,6 +367,8 @@ export default function LoginModal({ isOpen, onClose, onNavigate }: LoginModalPr
                       <input
                         type="text"
                         id="firstName"
+                          name="firstName"
+                          autoComplete="given-name"
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
                         placeholder="First Name"
@@ -307,8 +384,6 @@ export default function LoginModal({ isOpen, onClose, onNavigate }: LoginModalPr
                         }}
                       />
                     </div>
-
-                    {/* Last Name */}
                     <div className="flex-1">
                       <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Last Name
@@ -316,6 +391,8 @@ export default function LoginModal({ isOpen, onClose, onNavigate }: LoginModalPr
                       <input
                         type="text"
                         id="lastName"
+                          name="lastName"
+                          autoComplete="family-name"
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
                         placeholder="Last Name"
@@ -332,20 +409,24 @@ export default function LoginModal({ isOpen, onClose, onNavigate }: LoginModalPr
                       />
                     </div>
                   </div>
+                  )}
 
-                  {/* Verification Code */}
+                  {/* Password */}
                   <div>
-                    <label htmlFor="verificationCode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Verification Code
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Password
                     </label>
+                    <div className="relative">
                     <input
-                      type="text"
-                      id="verificationCode"
-                      value={verificationCode}
-                      onChange={(e) => setVerificationCode(e.target.value)}
-                      placeholder="Verification Code"
+                        type={showPassword ? 'text' : 'password'}
+                        id="password"
+                        name="password"
+                        autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Password"
                       required
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all"
+                        className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all"
                       onFocus={(e) => {
                         e.target.style.borderColor = '#27aae2';
                         e.target.style.boxShadow = '0 0 0 3px rgba(39, 170, 226, 0.1)';
@@ -355,29 +436,233 @@ export default function LoginModal({ isOpen, onClose, onNavigate }: LoginModalPr
                         e.target.style.boxShadow = 'none';
                       }}
                     />
-                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                      Verification code has been sent to the provided email
-                    </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    {/* Forgot Password Link - Only for Log In */}
+                    {!isSignUp && (
+                      <div className="text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowForgotPassword(true);
+                            setShowEmailModal(false);
+                          }}
+                          className="text-sm font-medium transition-colors"
+                          style={{ color: '#27aae2' }}
+                          onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                          onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                        >
+                          Forgot Password?
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Buttons */}
-                  <div className="flex gap-3 pt-2">
+                  {/* Confirm Password - Only for Sign Up */}
+                  {isSignUp && (
+                    <div>
+                      <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Confirm Password
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          id="confirmPassword"
+                          name="confirmPassword"
+                          autoComplete="new-password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="Confirm Password"
+                          required
+                          className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all"
+                          onFocus={(e) => {
+                            e.target.style.borderColor = '#27aae2';
+                            e.target.style.boxShadow = '0 0 0 3px rgba(39, 170, 226, 0.1)';
+                          }}
+                          onBlur={(e) => {
+                            e.target.style.borderColor = '';
+                            e.target.style.boxShadow = 'none';
+                          }}
+                        />
                     <button
                       type="button"
-                      onClick={handleCancelSignup}
-                      className="flex-1 px-4 py-3.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                     >
-                      Cancel
+                          {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Submit Button */}
                     <button
                       type="submit"
-                      className="flex-1 px-4 py-3.5 text-white rounded-xl font-medium hover:shadow-lg transform hover:scale-105 transition-all"
+                    disabled={isLoading}
+                    className={`w-full px-4 py-3.5 text-white rounded-xl font-medium transition-all mt-6 flex items-center justify-center space-x-2 ${
+                      isLoading ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-lg transform hover:scale-105'
+                    }`}
                       style={{ background: 'linear-gradient(to right, #27aae2, #1a8ec4)' }}
                     >
-                      Sign up
+                    {isLoading ? (
+                      <>
+                        <svg className="animate-spin w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>{isSignUp ? 'Signing up...' : 'Logging in...'}</span>
+                      </>
+                    ) : (
+                      <span>{isSignUp ? 'Sign Up' : 'Log In'}</span>
+                    )}
                     </button>
-                  </div>
                 </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Forgot Password Modal */}
+      {showForgotPassword && (
+        <div className="fixed inset-0 z-[10000] overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            {/* Background overlay */}
+            <div
+              className="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-80 backdrop-blur-sm"
+              onClick={handleCloseForgotPassword}
+            ></div>
+
+            {/* Center modal */}
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+            <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full relative z-10">
+              {/* Close button */}
+              <button
+                onClick={handleCloseForgotPassword}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors z-10"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="bg-white dark:bg-gray-800 px-8 pt-8 pb-8">
+                {!resetEmailSent ? (
+                  <>
+                    {/* Title */}
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 text-center">
+                      Forgot Password?
+                    </h2>
+                    
+                    {/* Subtitle */}
+                    <p className="text-center text-gray-600 dark:text-gray-400 mb-6">
+                      Enter your email and we'll send you a reset link
+                    </p>
+
+                    {/* Error Display */}
+                    {error && (
+                      <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-xl p-3 flex items-start space-x-2 mb-4">
+                        <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+                      </div>
+                    )}
+
+                    {/* Form */}
+                    <form onSubmit={handleForgotPassword} className="space-y-4">
+                      {/* Email */}
+                      <div>
+                        <label htmlFor="forgotEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Email
+                        </label>
+                        <input
+                          type="email"
+                          id="forgotEmail"
+                          name="forgotEmail"
+                          autoComplete="email"
+                          value={forgotPasswordEmail}
+                          onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                          placeholder="Enter your email address"
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all"
+                          onFocus={(e) => {
+                            e.target.style.borderColor = '#27aae2';
+                            e.target.style.boxShadow = '0 0 0 3px rgba(39, 170, 226, 0.1)';
+                          }}
+                          onBlur={(e) => {
+                            e.target.style.borderColor = '';
+                            e.target.style.boxShadow = 'none';
+                          }}
+                        />
+                      </div>
+
+                      {/* Buttons */}
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={handleCloseForgotPassword}
+                          disabled={isLoading}
+                          className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isLoading}
+                          className={`flex-1 px-4 py-3 text-white rounded-xl font-medium transition-all flex items-center justify-center space-x-2 ${
+                            isLoading ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-lg'
+                          }`}
+                          style={{ background: 'linear-gradient(to right, #27aae2, #1a8ec4)' }}
+                        >
+                          {isLoading ? (
+                            <>
+                              <svg className="animate-spin w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              <span>Sending...</span>
+                            </>
+                          ) : (
+                            <span>Send Reset Link</span>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </>
+                ) : (
+                  <>
+                    {/* Success State */}
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
+                      </div>
+                      <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                        Check Your Email
+                      </h2>
+                      <p className="text-gray-600 dark:text-gray-400 mb-6">
+                        We've sent a password reset link to
+                        <br />
+                        <strong>{forgotPasswordEmail}</strong>
+                      </p>
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 rounded-xl p-4 mb-6">
+                        <p className="text-sm text-blue-700 dark:text-blue-400">
+                          The link will expire in 1 hour. If you don't see the email, check your spam folder.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleCloseForgotPassword}
+                        className="w-full px-4 py-3 text-white rounded-xl font-medium hover:shadow-lg transition-all"
+                        style={{ background: 'linear-gradient(to right, #27aae2, #1a8ec4)' }}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>

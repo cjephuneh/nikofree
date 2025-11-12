@@ -1,8 +1,11 @@
 import { Calendar, MapPin, Download, QrCode, Share2, Ticket, Clock, CheckCircle, XCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getUserBookings, getTicketQRCode, downloadTicket } from '../../services/userService';
+import { API_BASE_URL } from '../../config/api';
 
 interface TicketData {
-  id: string;
+  id: number;
+  bookingId: number;
   eventTitle: string;
   eventImage: string;
   date: string;
@@ -20,99 +23,74 @@ interface TicketData {
 export default function MyTickets() {
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'active' | 'used' | 'cancelled'>('all');
   const [selectedTicket, setSelectedTicket] = useState<TicketData | null>(null);
+  const [tickets, setTickets] = useState<TicketData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const tickets: TicketData[] = [
-    {
-      id: '1',
-      eventTitle: 'Nairobi Tech Summit 2025',
-      eventImage: 'https://images.pexels.com/photos/2747449/pexels-photo-2747449.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Sat, Nov 2, 2025',
-      time: '9:00 AM - 6:00 PM',
-      location: 'KICC, Nairobi',
-      ticketId: 'TKT-2025-001',
-      ticketType: 'VIP Pass',
-      price: 'KES 2,500',
-      status: 'active',
-      qrCode: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=TKT-2025-001',
-      orderNumber: 'ORD-20251025-001',
-      purchaseDate: 'Oct 25, 2025'
-    },
-    {
-      id: '2',
-      eventTitle: 'Morning Yoga in the Park',
-      eventImage: 'https://images.pexels.com/photos/3822647/pexels-photo-3822647.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Sun, Nov 3, 2025',
-      time: '6:00 AM - 8:00 AM',
-      location: 'Karura Forest',
-      ticketId: 'TKT-2025-002',
-      ticketType: 'General Admission',
-      price: 'Free',
-      status: 'active',
-      qrCode: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=TKT-2025-002',
-      orderNumber: 'ORD-20251026-002',
-      purchaseDate: 'Oct 26, 2025'
-    },
-    {
-      id: '3',
-      eventTitle: 'Startup Networking Mixer',
-      eventImage: 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Wed, Nov 10, 2025',
-      time: '6:00 PM - 9:00 PM',
-      location: 'iHub Nairobi',
-      ticketId: 'TKT-2025-003',
-      ticketType: 'Early Bird',
-      price: 'KES 1,000',
-      status: 'active',
-      qrCode: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=TKT-2025-003',
-      orderNumber: 'ORD-20251027-003',
-      purchaseDate: 'Oct 27, 2025'
-    },
-    {
-      id: '4',
-      eventTitle: 'Jazz Night Live',
-      eventImage: 'https://images.pexels.com/photos/1481308/pexels-photo-1481308.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Sat, Oct 25, 2025',
-      time: '7:00 PM - 11:00 PM',
-      location: 'Alliance Française',
-      ticketId: 'TKT-2025-004',
-      ticketType: 'Standard',
-      price: 'KES 1,500',
-      status: 'used',
-      qrCode: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=TKT-2025-004',
-      orderNumber: 'ORD-20251020-004',
-      purchaseDate: 'Oct 20, 2025'
-    },
-    {
-      id: '5',
-      eventTitle: 'Food & Wine Tasting',
-      eventImage: 'https://images.pexels.com/photos/1267320/pexels-photo-1267320.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Sun, Oct 15, 2025',
-      time: '12:00 PM - 4:00 PM',
-      location: 'Villa Rosa Kempinski',
-      ticketId: 'TKT-2025-005',
-      ticketType: 'Premium',
-      price: 'KES 3,500',
-      status: 'used',
-      qrCode: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=TKT-2025-005',
-      orderNumber: 'ORD-20251010-005',
-      purchaseDate: 'Oct 10, 2025'
-    },
-    {
-      id: '6',
-      eventTitle: 'Photography Workshop',
-      eventImage: 'https://images.pexels.com/photos/2833392/pexels-photo-2833392.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Sat, Oct 5, 2025',
-      time: '10:00 AM - 2:00 PM',
-      location: 'Nairobi National Park',
-      ticketId: 'TKT-2025-006',
-      ticketType: 'Workshop Pass',
-      price: 'KES 2,000',
-      status: 'cancelled',
-      qrCode: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=TKT-2025-006',
-      orderNumber: 'ORD-20250928-006',
-      purchaseDate: 'Sep 28, 2025'
+  useEffect(() => {
+    fetchTickets();
+  }, [selectedFilter]);
+
+  const fetchTickets = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      
+      const status = selectedFilter === 'all' ? undefined : 
+                    selectedFilter === 'active' ? 'upcoming' :
+                    selectedFilter === 'used' ? 'past' : 'cancelled';
+      
+      const response = await getUserBookings(status);
+      
+      // Transform API data to component format
+      const formattedTickets: TicketData[] = (response.bookings || []).map((booking: any) => {
+        const event = booking.event || {};
+        const firstTicket = booking.tickets?.[0] || {};
+        const ticketType = firstTicket.ticket_type || {};
+        
+        // Determine status
+        let status: 'active' | 'used' | 'cancelled' = 'active';
+        if (booking.status === 'cancelled') {
+          status = 'cancelled';
+        } else if (event.start_date && new Date(event.start_date) < new Date()) {
+          status = 'used';
+        }
+        
+        // Format date
+        const startDate = event.start_date ? new Date(event.start_date) : new Date();
+        const dateStr = startDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+        
+        // Format time
+        const timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const endDate = event.end_date ? new Date(event.end_date) : null;
+        const endTimeStr = endDate ? endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+        const time = endTimeStr ? `${timeStr} - ${endTimeStr}` : timeStr;
+        
+        return {
+          id: firstTicket.id || booking.id,
+          bookingId: booking.id,
+          eventTitle: event.title || 'Event',
+          eventImage: event.poster_image ? `${API_BASE_URL}/uploads/${event.poster_image}` : '',
+          date: dateStr,
+          time: time,
+          location: event.venue_name || event.venue_address || 'Online',
+          ticketId: firstTicket.ticket_number || booking.booking_number || 'N/A',
+          ticketType: ticketType.name || 'General Admission',
+          price: booking.total_amount > 0 ? `KES ${booking.total_amount.toLocaleString()}` : 'Free',
+          status: status,
+          orderNumber: booking.booking_number || `ORD-${booking.id}`,
+          purchaseDate: booking.created_at ? new Date(booking.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
+        };
+      });
+      
+      setTickets(formattedTickets);
+    } catch (err: any) {
+      console.error('Error fetching tickets:', err);
+      setError(err.message || 'Failed to load tickets');
+    } finally {
+      setIsLoading(false);
     }
-  ];
+  };
 
   const filteredTickets = tickets.filter(ticket => {
     if (selectedFilter === 'all') return true;
@@ -147,18 +125,67 @@ export default function MyTickets() {
     }
   };
 
-  const handleDownloadTicket = (ticket: TicketData) => {
-    // In a real app, this would generate a PDF
-    console.log('Downloading ticket:', ticket.ticketId);
-    alert(`Downloading ticket ${ticket.ticketId}`);
+  const handleViewQR = async (ticket: TicketData) => {
+    try {
+      const qrData = await getTicketQRCode(ticket.bookingId);
+      setSelectedTicket({
+        ...ticket,
+        qrCode: qrData.qr_code_url || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${ticket.ticketId}`
+      });
+    } catch (err: any) {
+      console.error('Error fetching QR code:', err);
+      // Fallback to generated QR
+      setSelectedTicket({
+        ...ticket,
+        qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${ticket.ticketId}`
+      });
+    }
+  };
+
+  const handleDownloadTicket = async (ticket: TicketData) => {
+    try {
+      const blob = await downloadTicket(ticket.bookingId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ticket-${ticket.ticketId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err: any) {
+      console.error('Error downloading ticket:', err);
+      alert('Download feature coming soon. Use QR code for entry.');
+    }
   };
 
   const handleShareTicket = (ticket: TicketData) => {
-    // In a real app, this would open a share dialog
     const shareText = `I'm attending ${ticket.eventTitle}! 🎉`;
-    console.log('Sharing:', shareText);
-    alert(`Share: ${shareText}`);
+    const shareUrl = window.location.href;
+    
+    if (navigator.share) {
+      navigator.share({
+        title: ticket.eventTitle,
+        text: shareText,
+        url: shareUrl
+      }).catch(() => {
+        // Fallback to clipboard
+        navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+        alert('Link copied to clipboard!');
+      });
+    } else {
+      navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+      alert('Link copied to clipboard!');
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#27aae2]"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -213,6 +240,13 @@ export default function MyTickets() {
           </button>
         </div>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-xl p-4">
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+        </div>
+      )}
 
       {/* Tickets Grid */}
       {filteredTickets.length === 0 ? (
@@ -273,7 +307,7 @@ export default function MyTickets() {
                 {/* Action Buttons - Mobile Optimized */}
                 <div className="flex gap-1.5 sm:gap-2 pt-2.5 sm:pt-3 border-t border-gray-200 dark:border-gray-700">
                   <button
-                    onClick={() => setSelectedTicket(ticket)}
+                    onClick={() => handleViewQR(ticket)}
                     disabled={ticket.status === 'cancelled'}
                     className={`flex-1 py-1.5 sm:py-2 rounded-md sm:rounded-lg font-semibold text-xs sm:text-sm transition-all flex items-center justify-center space-x-1 sm:space-x-1.5 ${
                       ticket.status === 'cancelled'

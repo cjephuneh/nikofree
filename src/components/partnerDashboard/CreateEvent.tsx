@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   X, 
   MapPin, 
@@ -17,12 +17,17 @@ import {
   Trash2,
   Check,
   Globe,
-  Video
+  Video,
+  AlertCircle
 } from 'lucide-react';
+import { createEvent, getEvent, updateEvent } from '../../services/partnerService';
+import { API_BASE_URL, API_ENDPOINTS } from '../../config/api';
 
 interface CreateEventProps {
   isOpen: boolean;
   onClose: () => void;
+  onEventCreated?: () => void;
+  eventId?: number | null; // If provided, we're editing
 }
 
 interface EventFormData {
@@ -57,8 +62,7 @@ interface EventFormData {
   isFree: boolean;
   ticketTypes: TicketType[];
   
-  // Step 7: Hosts & Promo
-  hosts: Host[];
+  // Step 7: Promo Codes (Hosts removed)
   promoCodes: PromoCode[];
 }
 
@@ -78,13 +82,7 @@ interface TicketType {
   price: number;
   quantity: number;
   vatIncluded: boolean;
-}
-
-interface Host {
-  id: string;
-  username: string;
-  name: string;
-  isVerified: boolean;
+  existingId?: number; // For editing existing tickets
 }
 
 interface PromoCode {
@@ -94,30 +92,18 @@ interface PromoCode {
   discountType: 'percentage' | 'fixed';
   maxUses: number;
   expiryDate: string;
+  existingId?: number; // For editing existing promo codes
 }
 
-const predefinedCategories = [
-  'Explore Kenya',
-  'Sports & Fitness',
-  'Social Activities',
-  'Hobbies & Interests',
-  'Religious',
-  'Autofest',
-  'Health & Wellbeing',
-  'Music & Dance',
-  'Culture',
-  'Pets & Animals',
-  'Coaching & Support',
-  'Business & Networking',
-  'Technology',
-  'Live Plays',
-  'Art & Photography',
-  'Shopping',
-  'Gaming'
-];
+// Categories will be fetched from API
 
-export default function CreateEvent({ isOpen, onClose }: CreateEventProps) {
+export default function CreateEvent({ isOpen, onClose, onEventCreated, eventId }: CreateEventProps) {
   const [currentStep, setCurrentStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingEvent, setIsLoadingEvent] = useState(false);
+  const [error, setError] = useState('');
+  const [categories, setCategories] = useState<any[]>([]);
+  const isEditMode = !!eventId;
   const [formData, setFormData] = useState<EventFormData>({
     locationType: 'physical',
     locationName: '',
@@ -138,11 +124,127 @@ export default function CreateEvent({ isOpen, onClose }: CreateEventProps) {
     isUnlimited: true,
     isFree: true,
     ticketTypes: [],
-    hosts: [],
     promoCodes: []
   });
 
   const totalSteps = 7;
+
+  // Fetch categories on mount
+  useEffect(() => {
+    if (isOpen) {
+      fetchCategories();
+      if (isEditMode && eventId) {
+        fetchEventData(eventId);
+      } else {
+        // Reset form for new event
+        setFormData({
+          locationType: 'physical',
+          locationName: '',
+          coordinates: null,
+          onlineLink: '',
+          linkShareTime: '',
+          startDate: '',
+          startTime: '',
+          endDate: '',
+          endTime: '',
+          closedCategories: [],
+          openInterests: [],
+          eventName: '',
+          eventPhoto: null,
+          photoPreview: '',
+          description: '',
+          attendeeLimit: null,
+          isUnlimited: true,
+          isFree: true,
+          ticketTypes: [],
+          promoCodes: []
+        });
+        setCurrentStep(1);
+      }
+    }
+  }, [isOpen, eventId, isEditMode]);
+
+  const fetchEventData = async (id: number) => {
+    try {
+      setIsLoadingEvent(true);
+      const response = await getEvent(id);
+      const event = response.event || response;
+      
+      // Parse dates
+      const startDate = new Date(event.start_date);
+      const endDate = event.end_date ? new Date(event.end_date) : null;
+      
+      // Determine location type
+      let locationType: 'physical' | 'online' | 'hybrid' = 'physical';
+      if (event.is_online && event.online_link && event.venue_name) {
+        locationType = 'hybrid';
+      } else if (event.is_online && event.online_link) {
+        locationType = 'online';
+      }
+      
+      // Format ticket types
+      const ticketTypes = (event.ticket_types || []).map((tt: any) => ({
+        id: tt.id?.toString() || Date.now().toString(),
+        name: tt.name || '',
+        ticketStructure: 'basic' as const,
+        price: parseFloat(tt.price || 0),
+        quantity: tt.quantity_total || 0,
+        vatIncluded: true,
+        existingId: tt.id // Keep original ID for updates
+      }));
+      
+      // Format promo codes
+      const promoCodes = (event.promo_codes || []).map((pc: any) => ({
+        id: pc.id?.toString() || Date.now().toString(),
+        code: pc.code || '',
+        discount: parseFloat(pc.discount_value || 0),
+        discountType: pc.discount_type || 'percentage' as const,
+        maxUses: pc.max_uses || 0,
+        expiryDate: pc.valid_until ? new Date(pc.valid_until).toISOString().split('T')[0] : '',
+        existingId: pc.id
+      }));
+      
+      setFormData({
+        locationType,
+        locationName: event.venue_name || '',
+        coordinates: event.latitude && event.longitude ? { lat: event.latitude, lng: event.longitude } : null,
+        onlineLink: event.online_link || '',
+        linkShareTime: '',
+        startDate: startDate.toISOString().split('T')[0],
+        startTime: startDate.toTimeString().slice(0, 5),
+        endDate: endDate ? endDate.toISOString().split('T')[0] : '',
+        endTime: endDate ? endDate.toTimeString().slice(0, 5) : '',
+        closedCategories: event.category ? [event.category.id.toString()] : [],
+        openInterests: event.interests || [],
+        eventName: event.title || '',
+        eventPhoto: null,
+        photoPreview: event.poster_image ? (event.poster_image.startsWith('http') ? event.poster_image : `${API_BASE_URL}/${event.poster_image.replace(/^\/+/, '')}`) : '',
+        description: event.description || '',
+        attendeeLimit: null, // Calculate from ticket types if needed
+        isUnlimited: true,
+        isFree: event.is_free !== false,
+        ticketTypes,
+        promoCodes
+      });
+    } catch (err: any) {
+      console.error('Error fetching event:', err);
+      setError(err.message || 'Failed to load event data');
+    } finally {
+      setIsLoadingEvent(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.events.categories}`);
+      const data = await response.json();
+      if (data.categories) {
+        setCategories(data.categories);
+      }
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+    }
+  };
 
   const handleNext = () => {
     if (currentStep < totalSteps) {
@@ -156,14 +258,6 @@ export default function CreateEvent({ isOpen, onClose }: CreateEventProps) {
     }
   };
 
-  const handleCategoryToggle = (category: string) => {
-    setFormData(prev => ({
-      ...prev,
-      closedCategories: prev.closedCategories.includes(category)
-        ? prev.closedCategories.filter(c => c !== category)
-        : [...prev.closedCategories, category]
-    }));
-  };
 
   const handleInterestAdd = (interest: string) => {
     if (formData.openInterests.length < 5 && interest.trim() && !formData.openInterests.includes(interest.trim())) {
@@ -267,41 +361,190 @@ export default function CreateEvent({ isOpen, onClose }: CreateEventProps) {
     }));
   };
 
-  const searchHost = (username: string) => {
-    // Simulate searching for Niko Free members
-    // In production, this would be an API call
-    const mockHosts: Host[] = [
-      { id: '1', username: '@annalane', name: 'Anna Lane', isVerified: true },
-      { id: '2', username: '@victormuli', name: 'Victor Muli', isVerified: true },
-      { id: '3', username: '@johndoe', name: 'John Doe', isVerified: false }
-    ];
-    return mockHosts.filter(h => 
-      h.username.toLowerCase().includes(username.toLowerCase()) ||
-      h.name.toLowerCase().includes(username.toLowerCase())
-    );
-  };
 
-  const addHost = (host: Host) => {
-    if (formData.hosts.length < 2 && !formData.hosts.find(h => h.id === host.id)) {
-      setFormData(prev => ({
-        ...prev,
-        hosts: [...prev.hosts, host]
-      }));
+  const handleSubmit = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+
+      // Validate required fields
+      if (!formData.eventName) {
+        setError('Event name is required');
+        setIsLoading(false);
+        return;
+      }
+      if (!formData.startDate || !formData.startTime) {
+        setError('Start date and time are required');
+        setIsLoading(false);
+        return;
+      }
+      if (formData.closedCategories.length === 0) {
+        setError('Please select at least one category');
+        setIsLoading(false);
+        return;
+      }
+      if (!formData.description) {
+        setError('Event description is required');
+        setIsLoading(false);
+        return;
+      }
+      if (!formData.isFree && formData.ticketTypes.length === 0) {
+        setError('Please add at least one ticket type for paid events');
+        setIsLoading(false);
+        return;
+      }
+
+      // Create FormData
+      const eventFormData = new FormData();
+      
+      // Basic info
+      eventFormData.append('title', formData.eventName);
+      eventFormData.append('description', formData.description);
+      eventFormData.append('category_id', formData.closedCategories[0]); // Use first selected category
+      eventFormData.append('start_date', formData.startDate);
+      eventFormData.append('start_time', formData.startTime);
+      if (formData.endDate) {
+        eventFormData.append('end_date', formData.endDate);
+        eventFormData.append('end_time', formData.endTime || '23:59');
+      }
+      
+      // Location
+      eventFormData.append('location_type', formData.locationType);
+      if (formData.locationName) {
+        eventFormData.append('location_name', formData.locationName);
+        eventFormData.append('venue_name', formData.locationName);
+      }
+      if (formData.onlineLink) {
+        eventFormData.append('online_link', formData.onlineLink);
+      }
+      if (formData.linkShareTime) {
+        eventFormData.append('link_share_time', formData.linkShareTime);
+      }
+      if (formData.coordinates) {
+        eventFormData.append('latitude', formData.coordinates.lat.toString());
+        eventFormData.append('longitude', formData.coordinates.lng.toString());
+      }
+      
+      // Interests
+      if (formData.openInterests.length > 0) {
+        eventFormData.append('interests', JSON.stringify(formData.openInterests));
+      }
+      
+      // Capacity
+      if (!formData.isUnlimited && formData.attendeeLimit) {
+        eventFormData.append('attendee_limit', formData.attendeeLimit.toString());
+      }
+      
+      // Pricing
+      eventFormData.append('is_free', formData.isFree ? 'true' : 'false');
+      
+      // Ticket types
+      if (!formData.isFree && formData.ticketTypes.length > 0) {
+        const ticketTypesData = formData.ticketTypes.map(tt => ({
+          name: tt.name,
+          price: tt.price,
+          quantity: tt.quantity,
+          description: `${tt.ticketStructure}${tt.classType ? ` - ${tt.classType}` : ''}${tt.loyaltyType ? ` - ${tt.loyaltyType}` : ''}${tt.seasonType ? ` - ${tt.seasonType}` : ''}${tt.timeslot ? ` - ${tt.timeslot}` : ''}`
+        }));
+        eventFormData.append('ticket_types', JSON.stringify(ticketTypesData));
+      }
+      
+      // Promo codes
+      if (formData.promoCodes.length > 0) {
+        const promoCodesData = formData.promoCodes.map(promo => ({
+          code: promo.code,
+          discount_type: promo.discountType,
+          discount: promo.discount,
+          max_uses: promo.maxUses,
+          expiry_date: promo.expiryDate
+        }));
+        eventFormData.append('promo_codes', JSON.stringify(promoCodesData));
+      }
+      
+      // Poster image
+      if (formData.eventPhoto) {
+        eventFormData.append('poster_image', formData.eventPhoto);
+      }
+      
+      // Submit
+      if (isEditMode && eventId) {
+        // Include existing IDs for ticket types and promo codes
+        const existingTicketIds = formData.ticketTypes
+          .filter(tt => tt.existingId)
+          .map(tt => tt.existingId);
+        const existingPromoIds = formData.promoCodes
+          .filter(pc => pc.existingId)
+          .map(pc => pc.existingId);
+        
+        if (existingTicketIds.length > 0) {
+          eventFormData.append('existing_ticket_ids', JSON.stringify(existingTicketIds));
+        }
+        if (existingPromoIds.length > 0) {
+          eventFormData.append('existing_promo_ids', JSON.stringify(existingPromoIds));
+        }
+        
+        // Include IDs in ticket types and promo codes data
+        const ticketTypesWithIds = formData.ticketTypes.map(tt => ({
+          ...tt,
+          id: tt.existingId || undefined
+        }));
+        const promoCodesWithIds = formData.promoCodes.map(pc => ({
+          ...pc,
+          id: pc.existingId || undefined
+        }));
+        
+        eventFormData.set('ticket_types', JSON.stringify(ticketTypesWithIds));
+        eventFormData.set('promo_codes', JSON.stringify(promoCodesWithIds));
+        
+        await updateEvent(eventId, eventFormData);
+        alert('Event updated successfully!');
+      } else {
+        await createEvent(eventFormData);
+        alert('Event submitted for approval! You will be notified once it\'s approved.');
+      }
+      
+      // Trigger refresh
+      if (onEventCreated) {
+        onEventCreated();
+      }
+      
+      // Also try to refresh via window function
+      if ((window as any).refreshPartnerEvents) {
+        (window as any).refreshPartnerEvents();
+      }
+      
+      onClose();
+      
+      // Reset form
+      setFormData({
+        locationType: 'physical',
+        locationName: '',
+        coordinates: null,
+        onlineLink: '',
+        linkShareTime: '',
+        startDate: '',
+        startTime: '',
+        endDate: '',
+        endTime: '',
+        closedCategories: [],
+        openInterests: [],
+        eventName: '',
+        eventPhoto: null,
+        photoPreview: '',
+        description: '',
+        attendeeLimit: null,
+        isUnlimited: true,
+        isFree: true,
+        ticketTypes: [],
+        promoCodes: []
+      });
+      setCurrentStep(1);
+    } catch (err: any) {
+      console.error('Error creating event:', err);
+      setError(err.message || 'Failed to create event. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
-  };
-
-  const removeHost = (id: string) => {
-    setFormData(prev => ({
-      ...prev,
-      hosts: prev.hosts.filter(h => h.id !== id)
-    }));
-  };
-
-  const handleSubmit = () => {
-    // Submit event for approval
-    console.log('Event submitted:', formData);
-    alert('Event submitted for approval! You will be notified once it\'s approved.');
-    onClose();
   };
 
   if (!isOpen) return null;
@@ -321,7 +564,7 @@ export default function CreateEvent({ isOpen, onClose }: CreateEventProps) {
           <div className="bg-gradient-to-r from-[#27aae2] to-[#1e8bb8] px-6 py-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-2xl font-bold text-white">Create New Event</h3>
+                <h3 className="text-2xl font-bold text-white">{isEditMode ? 'Edit Event' : 'Create New Event'}</h3>
                 <p className="text-sm text-white/80 mt-1">Step {currentStep} of {totalSteps}</p>
               </div>
               <button
@@ -343,8 +586,26 @@ export default function CreateEvent({ isOpen, onClose }: CreateEventProps) {
 
           {/* Content */}
           <div className="px-6 py-6 max-h-[60vh] overflow-y-auto">
-            {/* Step 1: Location */}
-            {currentStep === 1 && (
+            {/* Loading Event Data */}
+            {isLoadingEvent && (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#27aae2]"></div>
+                <p className="ml-4 text-gray-600 dark:text-gray-400">Loading event data...</p>
+              </div>
+            )}
+            
+            {/* Error Display */}
+            {error && !isLoadingEvent && (
+              <div className="mb-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-xl p-3 flex items-start space-x-2">
+                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+              </div>
+            )}
+            
+            {!isLoadingEvent && (
+              <>
+                {/* Step 1: Location */}
+                {currentStep === 1 && (
               <div className="space-y-6">
                 <div>
                   <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Event Location</h4>
@@ -526,25 +787,37 @@ export default function CreateEvent({ isOpen, onClose }: CreateEventProps) {
                   {/* Closed Categories */}
                   <div className="mb-6">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                      Select Categories (Multiple Choice)
+                      Select Category
                     </label>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {predefinedCategories.map(category => (
-                        <button
-                          key={category}
-                          onClick={() => handleCategoryToggle(category)}
-                          className={`px-4 py-2 rounded-lg border-2 transition-all text-sm font-medium ${
-                            formData.closedCategories.includes(category)
-                              ? 'border-[#27aae2] bg-[#27aae2] text-white'
-                              : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-[#27aae2]'
-                          }`}
-                        >
-                          {formData.closedCategories.includes(category) && (
-                            <Check className="w-4 h-4 inline mr-1" />
-                          )}
-                          {category}
-                        </button>
-                      ))}
+                      {categories.length > 0 ? (
+                        categories.map(category => (
+                          <button
+                            key={category.id}
+                            onClick={() => {
+                              // Only allow one category selection
+                              setFormData(prev => ({
+                                ...prev,
+                                closedCategories: prev.closedCategories.includes(category.id.toString())
+                                  ? []
+                                  : [category.id.toString()]
+                              }));
+                            }}
+                            className={`px-4 py-2 rounded-lg border-2 transition-all text-sm font-medium ${
+                              formData.closedCategories.includes(category.id.toString())
+                                ? 'border-[#27aae2] bg-[#27aae2] text-white'
+                                : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-[#27aae2]'
+                            }`}
+                          >
+                            {formData.closedCategories.includes(category.id.toString()) && (
+                              <Check className="w-4 h-4 inline mr-1" />
+                            )}
+                            {category.name}
+                          </button>
+                        ))
+                      ) : (
+                        <p className="text-gray-500 dark:text-gray-400">Loading categories...</p>
+                      )}
                     </div>
                   </div>
 
@@ -985,124 +1258,13 @@ export default function CreateEvent({ isOpen, onClose }: CreateEventProps) {
               </div>
             )}
 
-            {/* Step 7: Hosts & Promo Codes */}
+            {/* Step 7: Promo Codes */}
             {currentStep === 7 && (
               <div className="space-y-6">
                 <div>
                   <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                    <Users className="w-5 h-5 inline mr-2" />
-                    Hosts & Promotions
+                    Promo Codes
                   </h4>
-
-                  {/* Hosts Section */}
-                  <div className="mb-8">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                      Add Event Hosts (Max 2)
-                    </label>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                      Hosts must be Niko Free members and will receive all RSVPs, bookings, and bucket lists.
-                    </p>
-
-                    {formData.hosts.length < 2 && (
-                      <div className="mb-4">
-                        <input
-                          type="text"
-                          placeholder="Search by username or name..."
-                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#27aae2]"
-                          onChange={(e) => {
-                            // In production, this would trigger a search
-                            if (e.target.value) {
-                              const results = searchHost(e.target.value);
-                              // Show results dropdown (simplified for demo)
-                              console.log('Search results:', results);
-                            }
-                          }}
-                        />
-                        {/* Demo: Add some sample hosts */}
-                        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Suggested hosts:</p>
-                          <div className="space-y-2">
-                            <button
-                              onClick={() => addHost({ id: '1', username: '@annalane', name: 'Anna Lane', isVerified: true })}
-                              className="w-full flex items-center justify-between px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:border-[#27aae2] transition-colors"
-                            >
-                              <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-gradient-to-br from-[#27aae2] to-[#1e8bb8] rounded-full flex items-center justify-center text-white text-sm font-bold">
-                                  AL
-                                </div>
-                                <div className="text-left">
-                                  <p className="text-sm font-medium text-gray-900 dark:text-white">Anna Lane</p>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">@annalane</p>
-                                </div>
-                              </div>
-                              {formData.hosts.find(h => h.id === '1') ? (
-                                <Check className="w-5 h-5 text-green-500" />
-                              ) : (
-                                <Plus className="w-5 h-5 text-[#27aae2]" />
-                              )}
-                            </button>
-
-                            <button
-                              onClick={() => addHost({ id: '2', username: '@victormuli', name: 'Victor Muli', isVerified: true })}
-                              className="w-full flex items-center justify-between px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:border-[#27aae2] transition-colors"
-                            >
-                              <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                                  VM
-                                </div>
-                                <div className="text-left">
-                                  <p className="text-sm font-medium text-gray-900 dark:text-white">Victor Muli</p>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">@victormuli</p>
-                                </div>
-                              </div>
-                              {formData.hosts.find(h => h.id === '2') ? (
-                                <Check className="w-5 h-5 text-green-500" />
-                              ) : (
-                                <Plus className="w-5 h-5 text-[#27aae2]" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Selected Hosts */}
-                    {formData.hosts.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Selected Hosts:</p>
-                        {formData.hosts.map(host => (
-                          <div key={host.id} className="flex items-center justify-between px-4 py-3 bg-[#27aae2]/10 border border-[#27aae2]/30 rounded-lg">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gradient-to-br from-[#27aae2] to-[#1e8bb8] rounded-full flex items-center justify-center text-white font-bold">
-                                {host.name.split(' ').map(n => n[0]).join('')}
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium text-gray-900 dark:text-white">{host.name}</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">{host.username}</p>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => removeHost(host.id)}
-                              className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                            >
-                              <X className="w-5 h-5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Host Preview */}
-                    {formData.hosts.length > 0 && (
-                      <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                        <p className="text-xs text-blue-600 dark:text-blue-400 mb-2">Event will display as:</p>
-                        <p className="font-bold text-gray-900 dark:text-white">{formData.eventName || 'EVENT NAME'}</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Hosted by {formData.hosts.map(h => h.name).join(' & ')}
-                        </p>
-                      </div>
-                    )}
-                  </div>
 
                   {/* Promo Codes Section */}
                   <div>
@@ -1198,6 +1360,8 @@ export default function CreateEvent({ isOpen, onClose }: CreateEventProps) {
                 </div>
               </div>
             )}
+              </>
+            )}
           </div>
 
           {/* Footer */}
@@ -1223,10 +1387,25 @@ export default function CreateEvent({ isOpen, onClose }: CreateEventProps) {
               ) : (
                 <button
                   onClick={handleSubmit}
-                  className="flex items-center gap-2 px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                  disabled={isLoading}
+                  className={`flex items-center gap-2 px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors ${
+                    isLoading ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
                 >
-                  <Check className="w-5 h-5" />
-                  Submit for Approval
+                  {isLoading ? (
+                    <>
+                      <svg className="animate-spin w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-5 h-5" />
+                      <span>{isEditMode ? 'Update Event' : 'Submit for Approval'}</span>
+                    </>
+                  )}
                 </button>
               )}
             </div>

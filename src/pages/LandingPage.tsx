@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, MapPin, ChevronLeft, ChevronRight, Dumbbell, Users, Music, Heart, Dog, Car, Sparkles, Brain, Gamepad2, ShoppingBag, Church, Target, Camera, Calendar, Share2, Briefcase, Theater, Bus, Mountain } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import EventCard from '../components/EventCard';
+import PartnerLoginModal from '../components/PartnerLoginModal';
+import { getFeaturedEvents, getEvents, getCategories } from '../services/eventService';
+import { API_BASE_URL } from '../config/api';
 
 interface LandingPageProps {
   onNavigate: (page: string) => void;
@@ -28,10 +31,16 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
   const [adDismissed, setAdDismissed] = useState(false);
   const [scrollCount, setScrollCount] = useState(0);
   const lastScrollY = React.useRef(0);
+  const [showPartnerLoginModal, setShowPartnerLoginModal] = useState(false);
   const [categoryRotation, setCategoryRotation] = useState(0);
   const [rotationDirection, setRotationDirection] = useState<'left' | 'right'>('right');
   const [searchPlaceholder, setSearchPlaceholder] = useState('Search events...');
   const [heroText, setHeroText] = useState('');
+  const [cantMissEvents, setCantMissEvents] = useState<any[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
 
   // Ad Configuration (This would come from admin panel in production)
   const adConfig = {
@@ -196,175 +205,291 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
     return () => clearInterval(intervalId);
   }, []);
 
-  const featuredEvents = [
-    {
-      id: '1',
-      title: 'Nairobi Tech Summit 2025',
-      image: 'https://images.pexels.com/photos/2747449/pexels-photo-2747449.jpeg?auto=compress&cs=tinysrgb&w=800',
-      description: 'Join industry leaders for innovative tech discussions',
-      date: 'Sat, Nov 2',
-      location: 'KICC, Nairobi'
-    },
-    {
-      id: '2',
-      title: 'Sunset Music Festival',
-      image: 'https://images.pexels.com/photos/1105666/pexels-photo-1105666.jpeg?auto=compress&cs=tinysrgb&w=800',
-      description: 'Live performances under the stars',
-      date: 'Fri, Nov 1',
-      location: 'Uhuru Gardens'
-    },
-    {
-      id: '3',
-      title: 'Mt. Kenya Hiking Adventure',
-      image: 'https://images.pexels.com/photos/618848/pexels-photo-618848.jpeg?auto=compress&cs=tinysrgb&w=800',
-      description: 'Experience breathtaking mountain trails',
-      date: 'Sun, Nov 3',
-      location: 'Mt. Kenya'
-    }
-  ];
 
-  const upcomingEvents = [
-    {
-      id: '4',
-      title: 'Morning Yoga in the Park',
-      image: 'https://images.pexels.com/photos/3822647/pexels-photo-3822647.jpeg?auto=compress&cs=tinysrgb&w=600',
-      date: 'Tomorrow',
-      time: '6:00 AM',
-      location: 'Karura Forest',
-      attendees: 45,
-      category: 'Fitness',
-      price: 'Free'
-    },
-    {
-      id: '5',
-      title: 'Startup Networking Mixer',
-      image: 'https://images.pexels.com/photos/1181406/pexels-photo-1181406.jpeg?auto=compress&cs=tinysrgb&w=600',
-      date: 'Wed, Oct 30',
-      time: '6:00 PM',
-      location: 'iHub Nairobi',
-      attendees: 120,
-      category: 'Technology',
-      price: 'KES 500'
-    },
-    {
-      id: '6',
-      title: 'Weekend Art Exhibition',
-      image: 'https://images.pexels.com/photos/1839919/pexels-photo-1839919.jpeg?auto=compress&cs=tinysrgb&w=600',
-      date: 'Sat, Nov 2',
-      time: '10:00 AM',
-      location: 'National Museum',
-      attendees: 230,
-      category: 'Culture',
-      price: 'KES 300'
-    },
-    {
-      id: '7',
-      title: 'Food Tasting Tour',
-      image: 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=600',
-      date: 'Fri, Nov 1',
-      time: '5:00 PM',
-      location: 'Westlands',
-      attendees: 78,
-      category: 'Social',
-      price: 'KES 1,200'
-    },
-    {
-      id: '8',
-      title: 'Beach Clean-Up Drive',
-      image: 'https://images.pexels.com/photos/2990644/pexels-photo-2990644.jpeg?auto=compress&cs=tinysrgb&w=600',
-      date: 'Sun, Nov 3',
-      time: '7:00 AM',
-      location: 'Diani Beach',
-      attendees: 156,
-      category: 'Social',
-      price: 'Free'
-    },
-    {
-      id: '9',
-      title: 'Jazz Night Live',
-      image: 'https://images.pexels.com/photos/1481308/pexels-photo-1481308.jpeg?auto=compress&cs=tinysrgb&w=600',
-      date: 'Thu, Oct 31',
-      time: '8:00 PM',
-      location: 'Alliance Française',
-      attendees: 189,
-      category: 'Music',
-      price: 'KES 800'
-    }
-  ];
+  // Fetch events by category when category is selected
+  useEffect(() => {
+    if (selectedCategory && selectedCategory !== 'All') {
+      const fetchCategoryEvents = async () => {
+        try {
+          const response = await getEvents({ category: selectedCategory, per_page: 20 });
+          const events = (response.events || []).map((event: any) => {
+            const startDate = event.start_date ? new Date(event.start_date) : new Date();
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const eventDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+            const daysDiff = Math.floor((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+            
+            let dateStr = 'Tomorrow';
+            if (daysDiff === 0) {
+              dateStr = 'Today';
+            } else if (daysDiff > 1) {
+              dateStr = startDate.toLocaleDateString('en-US', { 
+                weekday: 'short', 
+                month: 'short', 
+                day: 'numeric'
+              });
+            }
+            
+            const timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            
+            return {
+              id: event.id.toString(),
+              title: event.title,
+              image: event.poster_image 
+                ? (event.poster_image.startsWith('http') 
+                    ? event.poster_image 
+                    : `${API_BASE_URL}${event.poster_image.startsWith('/') ? '' : '/'}${event.poster_image}`)
+                : 'https://images.pexels.com/photos/3822647/pexels-photo-3822647.jpeg?auto=compress&cs=tinysrgb&w=600',
+              date: dateStr,
+              time: timeStr,
+              location: event.venue_name || event.venue_address || 'Online',
+              attendees: event.attendee_count || 0,
+              category: event.category?.name || 'General',
+              price: event.is_free ? 'Free' : (event.ticket_types?.[0]?.price ? `KES ${parseInt(event.ticket_types[0].price).toLocaleString()}` : 'TBA')
+            };
+          });
+          setUpcomingEvents(events);
+        } catch (err) {
+          console.error('Error fetching category events:', err);
+        }
+      };
 
-  const cantMissEvents = [
-    {
-      id: '10',
-      title: 'Tech Innovation Summit 2025',
-      image: 'https://images.pexels.com/photos/2774556/pexels-photo-2774556.jpeg?auto=compress&cs=tinysrgb&w=800',
-      date: 'Fri, Nov 8',
-      time: '9:00 AM',
-      location: 'Kenyatta Conference Center',
-      attendees: 500,
-      category: 'Technology',
-      price: 'KES 2,000'
-    },
-    {
-      id: '11',
-      title: 'Nairobi Food & Wine Festival',
-      image: 'https://images.pexels.com/photos/1267320/pexels-photo-1267320.jpeg?auto=compress&cs=tinysrgb&w=800',
-      date: 'Sat, Nov 9',
-      time: '12:00 PM',
-      location: 'Ngong Racecourse',
-      attendees: 800,
-      category: 'Social',
-      price: 'KES 1,500'
-    },
-    {
-      id: '12',
-      title: 'Kenya Marathon Championship',
-      image: 'https://images.pexels.com/photos/2526878/pexels-photo-2526878.jpeg?auto=compress&cs=tinysrgb&w=800',
-      date: 'Sun, Nov 10',
-      time: '6:00 AM',
-      location: 'Nairobi CBD',
-      attendees: 2000,
-      category: 'Fitness',
-      price: 'Free'
-    },
-    {
-      id: '13',
-      title: 'Kenya Marathon Championship',
-      image: 'https://images.pexels.com/photos/2526878/pexels-photo-2526878.jpeg?auto=compress&cs=tinysrgb&w=800',
-      date: 'Sun, Nov 10',
-      time: '6:00 AM',
-      location: 'Nairobi CBD',
-      attendees: 2000,
-      category: 'Fitness',
-      price: 'Free'
-    }
-  ];
+      fetchCategoryEvents();
+    } else if (selectedCategory === null) {
+      // Fetch all events when "All" is selected
+      const fetchAllEvents = async () => {
+        try {
+          const response = await getEvents({ per_page: 20 });
+          const events = (response.events || []).map((event: any) => {
+            const startDate = event.start_date ? new Date(event.start_date) : new Date();
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const eventDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+            const daysDiff = Math.floor((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+            
+            let dateStr = 'Tomorrow';
+            if (daysDiff === 0) {
+              dateStr = 'Today';
+            } else if (daysDiff > 1) {
+              dateStr = startDate.toLocaleDateString('en-US', { 
+                weekday: 'short', 
+                month: 'short', 
+                day: 'numeric'
+              });
+            }
+            
+            const timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            
+            return {
+              id: event.id.toString(),
+              title: event.title,
+              image: event.poster_image 
+                ? (event.poster_image.startsWith('http') 
+                    ? event.poster_image 
+                    : `${API_BASE_URL}${event.poster_image.startsWith('/') ? '' : '/'}${event.poster_image}`)
+                : 'https://images.pexels.com/photos/3822647/pexels-photo-3822647.jpeg?auto=compress&cs=tinysrgb&w=600',
+              date: dateStr,
+              time: timeStr,
+              location: event.venue_name || event.venue_address || 'Online',
+              attendees: event.attendee_count || 0,
+              category: event.category?.name || 'General',
+              price: event.is_free ? 'Free' : (event.ticket_types?.[0]?.price ? `KES ${parseInt(event.ticket_types[0].price).toLocaleString()}` : 'TBA')
+            };
+          });
+          setUpcomingEvents(events);
+        } catch (err) {
+          console.error('Error fetching all events:', err);
+        }
+      };
 
-  const categories = React.useMemo(() => [
-    { name: 'All', icon: Users, color: '', count: upcomingEvents.length, iconColor: '#6B7280' },
-    { name: 'Explore-Kenya', displayName: 'Explore- 🇰🇪', icon: Bus, color: 'from-blue-500 to-cyan-500', count: 234, iconColor: '#0EA5E9' },
-    { name: 'Hiking', icon: Mountain, color: 'from-green-600 to-teal-600', count: 156, iconColor: '#059669' },
-    { name: 'Sports & Fitness', icon: Dumbbell, color: 'from-green-500 to-emerald-500', count: 189, iconColor: '#10B981' },
-    { name: 'Social Activities', icon: Users, color: 'from-purple-500 to-pink-500', count: 456, iconColor: '#A855F7' },
-    { name: 'Hobbies & Interests', icon: Sparkles, color: 'from-indigo-500 to-blue-500', count: 278, iconColor: '#F59E0B' },
-    { name: 'Religious', icon: Church, color: 'from-blue-600 to-indigo-600', count: 134, iconColor: '#6366F1' },
-    { name: 'Autofest', icon: Car, color: 'from-gray-600 to-gray-800', count: 145, iconColor: '#FFA500' },
-    { name: 'Health & Wellbeing', icon: Heart, color: 'from-pink-500 to-rose-500', count: 167, iconColor: '#EC4899' },
-    { name: 'Music & Dance', icon: Music, color: 'from-red-500 to-orange-500', count: 312, iconColor: '#EF4444' },
-    { name: 'Culture', icon: Theater, color: 'from-amber-500 to-yellow-500', count: 203, iconColor: '#F59E0B' },
-    { name: 'Pets & Animals', icon: Dog, color: 'from-orange-500 to-amber-500', count: 89, iconColor: '#F97316' },
-    { name: 'Coaching & Support', icon: Target, color: 'from-teal-500 to-cyan-500', count: 123, iconColor: '#14B8A6' },
-    { name: 'Business & Networking', icon: Briefcase, color: 'from-slate-600 to-gray-700', count: 267, iconColor: '#475569' },
-    { name: 'Technology', icon: Brain, color: 'from-violet-500 to-purple-500', count: 298, iconColor: '#8B5CF6' },
-    { name: 'Live Plays', icon: Theater, color: 'from-rose-500 to-pink-500', count: 145, iconColor: '#E11D48' },
-    { name: 'Art & Photography', icon: Camera, color: 'from-emerald-500 to-teal-500', count: 156, iconColor: '#10B981' },
-    { name: 'Shopping', icon: ShoppingBag, color: 'from-fuchsia-500 to-pink-500', count: 167, iconColor: '#D946EF' },
-    { name: 'Gaming', icon: Gamepad2, color: 'from-indigo-600 to-purple-600', count: 201, iconColor: '#7C3AED' }
-  ], [upcomingEvents.length]);
+      fetchAllEvents();
+    }
+  }, [selectedCategory]);
+
+  // Fetch featured events (Can't Miss)
+  useEffect(() => {
+    const fetchFeaturedEvents = async () => {
+      try {
+        setIsLoadingEvents(true);
+        const response = await getFeaturedEvents(10);
+        const events = (response.events || []).map((event: any) => {
+          const startDate = event.start_date ? new Date(event.start_date) : new Date();
+          const dateStr = startDate.toLocaleDateString('en-US', { 
+            weekday: 'short', 
+            month: 'short', 
+            day: 'numeric'
+          });
+          const timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          
+          return {
+            id: event.id.toString(),
+            title: event.title,
+            image: event.poster_image 
+              ? (event.poster_image.startsWith('http') 
+                  ? event.poster_image 
+                  : `${API_BASE_URL}${event.poster_image.startsWith('/') ? '' : '/'}${event.poster_image}`)
+              : 'https://images.pexels.com/photos/2774556/pexels-photo-2774556.jpeg?auto=compress&cs=tinysrgb&w=800',
+            date: dateStr,
+            time: timeStr,
+            location: event.venue_name || event.venue_address || 'Online',
+            attendees: event.attendee_count || 0,
+            category: event.category?.name || 'General',
+            price: event.is_free ? 'Free' : (event.ticket_types?.[0]?.price ? `KES ${parseInt(event.ticket_types[0].price).toLocaleString()}` : 'TBA')
+          };
+        });
+        setCantMissEvents(events);
+      } catch (err) {
+        console.error('Error fetching featured events:', err);
+        // Keep empty array on error
+        setCantMissEvents([]);
+      } finally {
+        setIsLoadingEvents(false);
+      }
+    };
+
+    fetchFeaturedEvents();
+  }, []);
+
+  // Fetch upcoming events for categories section
+  useEffect(() => {
+    const fetchUpcomingEvents = async () => {
+      try {
+        const response = await getEvents({ per_page: 20 });
+        const events = (response.events || []).map((event: any) => {
+          const startDate = event.start_date ? new Date(event.start_date) : new Date();
+          const now = new Date();
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const eventDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+          const daysDiff = Math.floor((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          
+          let dateStr = 'Tomorrow';
+          if (daysDiff === 0) {
+            dateStr = 'Today';
+          } else if (daysDiff > 1) {
+            dateStr = startDate.toLocaleDateString('en-US', { 
+              weekday: 'short', 
+              month: 'short', 
+              day: 'numeric'
+            });
+          }
+          
+          const timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          
+          return {
+            id: event.id.toString(),
+            title: event.title,
+            image: event.poster_image 
+              ? (event.poster_image.startsWith('http') 
+                  ? event.poster_image 
+                  : `${API_BASE_URL}${event.poster_image.startsWith('/') ? '' : '/'}${event.poster_image}`)
+              : 'https://images.pexels.com/photos/3822647/pexels-photo-3822647.jpeg?auto=compress&cs=tinysrgb&w=600',
+            date: dateStr,
+            time: timeStr,
+            location: event.venue_name || event.venue_address || 'Online',
+            attendees: event.attendee_count || 0,
+            category: event.category?.name || 'General',
+            price: event.is_free ? 'Free' : (event.ticket_types?.[0]?.price ? `KES ${parseInt(event.ticket_types[0].price).toLocaleString()}` : 'TBA')
+          };
+        });
+        setUpcomingEvents(events);
+      } catch (err) {
+        console.error('Error fetching upcoming events:', err);
+        setUpcomingEvents([]);
+      }
+    };
+
+    fetchUpcomingEvents();
+  }, []);
+
+  // Fetch categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setIsLoadingCategories(true);
+        const response = await getCategories();
+        const cats = (response.categories || []).map((cat: any) => {
+          // Map category names to icons (keep existing mapping)
+          const iconMap: { [key: string]: any } = {
+            'Travel': Bus,
+            'Hiking': Mountain,
+            'Sports & Fitness': Dumbbell,
+            'Social Activities': Users,
+            'Hobbies & Interests': Sparkles,
+            'Religious': Church,
+            'Autofest': Car,
+            'Health & Wellbeing': Heart,
+            'Music & Dance': Music,
+            'Music & Culture': Music,
+            'Culture': Theater,
+            'Dance': Music,
+            'Pets & Animals': Dog,
+            'Coaching & Support': Target,
+            'Business & Networking': Briefcase,
+            'Technology': Brain,
+            'Live Plays': Theater,
+            'Art & Photography': Camera,
+            'Shopping': ShoppingBag,
+            'Gaming': Gamepad2
+          };
+          
+          return {
+            name: cat.slug || cat.name.toLowerCase().replace(/\s+/g, '-'),
+            displayName: cat.name === 'Travel' ? 'Explore- 🇰🇪' : cat.name,
+            icon: iconMap[cat.name] || Users,
+            count: cat.event_count || 0,
+            iconColor: '#27aae2' // Default color
+          };
+        });
+        
+        // Add "All" category at the beginning
+        setCategories([
+          { name: 'All', icon: Users, count: upcomingEvents.length, iconColor: '#6B7280' },
+          ...cats
+        ]);
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+        // Keep default categories on error
+      } finally {
+        setIsLoadingCategories(false);
+      }
+    };
+
+    fetchCategories();
+  }, [upcomingEvents.length]);
+
+  // Use categories from API, fallback to default if not loaded
+  const displayCategories = React.useMemo(() => {
+    if (categories.length > 0) {
+      return categories;
+    }
+    // Fallback default categories
+    return [
+      { name: 'All', icon: Users, count: upcomingEvents.length, iconColor: '#6B7280' },
+      { name: 'Explore-Kenya', displayName: 'Explore- 🇰🇪', icon: Bus, count: 0, iconColor: '#0EA5E9' },
+      { name: 'Hiking', icon: Mountain, count: 0, iconColor: '#059669' },
+      { name: 'Sports & Fitness', icon: Dumbbell, count: 0, iconColor: '#10B981' },
+      { name: 'Social Activities', icon: Users, count: 0, iconColor: '#A855F7' },
+      { name: 'Hobbies & Interests', icon: Sparkles, count: 0, iconColor: '#F59E0B' },
+      { name: 'Religious', icon: Church, count: 0, iconColor: '#6366F1' },
+      { name: 'Autofest', icon: Car, count: 0, iconColor: '#FFA500' },
+      { name: 'Health & Wellbeing', icon: Heart, count: 0, iconColor: '#EC4899' },
+      { name: 'Music & Dance', icon: Music, count: 0, iconColor: '#EF4444' },
+      { name: 'Culture', icon: Theater, count: 0, iconColor: '#F59E0B' },
+      { name: 'Pets & Animals', icon: Dog, count: 0, iconColor: '#F97316' },
+      { name: 'Coaching & Support', icon: Target, count: 0, iconColor: '#14B8A6' },
+      { name: 'Business & Networking', icon: Briefcase, count: 0, iconColor: '#475569' },
+      { name: 'Technology', icon: Brain, count: 0, iconColor: '#8B5CF6' },
+      { name: 'Live Plays', icon: Theater, count: 0, iconColor: '#E11D48' },
+      { name: 'Art & Photography', icon: Camera, count: 0, iconColor: '#10B981' },
+      { name: 'Shopping', icon: ShoppingBag, count: 0, iconColor: '#D946EF' },
+      { name: 'Gaming', icon: Gamepad2, count: 0, iconColor: '#7C3AED' }
+    ];
+  }, [categories, upcomingEvents.length]);
 
   // Rotate categories while keeping "All" at the first position with random direction
   const rotatedCategories = React.useMemo(() => {
-    const allCategory = categories[0];
-    const otherCategories = categories.slice(1);
+    const allCategory = displayCategories[0];
+    const otherCategories = displayCategories.slice(1);
     
     // Use absolute value for rotation and modulo to keep it in range
     const absRotation = Math.abs(categoryRotation) % otherCategories.length;
@@ -386,7 +511,7 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
     }
     
     return [allCategory, ...rotated];
-  }, [categoryRotation, categories]);
+  }, [categoryRotation, displayCategories]);
 
   const scrollCategories = (direction: 'left' | 'right') => {
     if (!categoriesRef.current) return;
@@ -796,6 +921,15 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
                         Become a Partner
                       </button>
                       <button 
+                        onClick={() => setShowPartnerLoginModal(true)}
+                        className="px-4 sm:px-6 py-2 sm:py-3 bg-white/90 backdrop-blur-md rounded-lg sm:rounded-xl font-bold text-sm sm:text-base transform hover:scale-105 transition-all shadow-xl"
+                        style={{ color: '#27aae2' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)'}
+                      >
+                        Partner Login
+                      </button>
+                      <button 
                         onClick={() => onNavigate('about')}
                         className="px-4 sm:px-6 py-2 sm:py-3 bg-white/20 backdrop-blur-md text-white border-2 border-white/30 rounded-lg sm:rounded-xl font-bold text-sm sm:text-base transition-all shadow-lg"
                         onMouseEnter={(e) => {
@@ -948,9 +1082,18 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
         </div>
 
         <div className="relative">
-          <div ref={cantMissRef} className="overflow-x-auto scrollbar-hide hide-scrollbar snap-x snap-mandatory">
-            <div className="flex gap-3 sm:gap-4 md:gap-6 pb-4">
-              {cantMissEvents.map((event) => (
+          {isLoadingEvents ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#27aae2]"></div>
+            </div>
+          ) : cantMissEvents.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-600 dark:text-gray-400">No featured events available</p>
+            </div>
+          ) : (
+            <div ref={cantMissRef} className="overflow-x-auto scrollbar-hide hide-scrollbar snap-x snap-mandatory">
+              <div className="flex gap-3 sm:gap-4 md:gap-6 pb-4">
+                {cantMissEvents.map((event) => (
                 <div
                   key={event.id}
                   className="flex-shrink-0 snap-start snap-always w-[calc(100vw-2rem)] sm:w-[280px] md:w-[300px] lg:w-[calc(25%-18px)] cursor-pointer group"
@@ -1050,9 +1193,10 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
                     </div>
                   </div>
                 </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Scroll Arrows for Can't Miss */}
           <button
@@ -1111,13 +1255,13 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
 
             {/* Other Categories - Scrollable */}
             <div className="flex-1 overflow-y-auto hide-scrollbar space-y-1.5 pr-0.5">
-              {rotatedCategories.slice(1).map((category) => {
+              {rotatedCategories.slice(1).map((category, idx) => {
                 const Icon = category.icon;
                 const isSelected = selectedCategory === category.name;
                 return (
                   <button
-                    key={`${category.name}-${categoryRotation}`}
-                    onClick={() => setSelectedCategory(category.name)}
+                    key={`${category.name}-${categoryRotation}-${idx}`}
+                    onClick={() => setSelectedCategory(category.name === 'All' ? null : category.name)}
                     className={`w-full flex flex-col items-center rounded-lg px-1 py-2 transition-all duration-200 ${
                       isSelected ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-800/50'
                     }`}
@@ -1244,6 +1388,13 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
       </div>
 
       <Footer />
+      
+      {/* Partner Login Modal */}
+      <PartnerLoginModal
+        isOpen={showPartnerLoginModal}
+        onClose={() => setShowPartnerLoginModal(false)}
+        onNavigate={onNavigate}
+      />
       </div>
     </div>
   );

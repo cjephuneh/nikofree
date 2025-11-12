@@ -1,224 +1,164 @@
-import { TrendingUp, DollarSign, Wallet, ArrowDownRight, Calendar, Users, Eye, Download, ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { TrendingUp, DollarSign, Wallet, ArrowDownRight, Calendar, Users, Eye, Download, ArrowUpRight, ChevronLeft, ChevronRight, X, MapPin, Clock, Tag, Ticket, Sparkles, Globe, Video } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { getPartnerEvents, getPartnerToken } from '../../services/partnerService';
+import { API_BASE_URL, API_ENDPOINTS } from '../../config/api';
+import { createPortal } from 'react-dom';
 
 interface OverviewProps {
   onWithdrawClick?: () => void;
 }
 
+interface EventDetails {
+  id: number;
+  title: string;
+  description: string;
+  poster_image?: string;
+  start_date: string;
+  end_date?: string;
+  venue_name?: string;
+  venue_address?: string;
+  is_online: boolean;
+  online_link?: string;
+  category?: { name: string };
+  interests?: Array<{ name: string }>;
+  ticket_types?: Array<{ name: string; price: number; quantity_sold: number; quantity_total?: number }>;
+  attendee_count: number;
+  total_tickets_sold: number;
+  view_count: number;
+  revenue?: number;
+  status: string;
+}
+
 export default function Overview({ onWithdrawClick }: OverviewProps) {
   const [currentEventsPage, setCurrentEventsPage] = useState(0);
   const [historyEventsPage, setHistoryEventsPage] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentEvents, setCurrentEvents] = useState<any[]>([]);
+  const [eventHistory, setEventHistory] = useState<any[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<EventDetails | null>(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const eventsPerPage = 5;
 
-  // Financial Stats - Net earnings after 7% deduction
+  // Fetch data on mount
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Fetch current events (upcoming + ongoing)
+      const currentResponse = await getPartnerEvents('upcoming');
+      const ongoingResponse = await getPartnerEvents('ongoing');
+      
+      const upcoming = currentResponse.events || [];
+      const ongoing = ongoingResponse.events || [];
+      const allCurrent = [...upcoming, ...ongoing];
+      
+      // Format current events
+      const formattedCurrent = allCurrent.map((event: any) => ({
+        id: event.id,
+        title: event.title,
+        image: event.poster_image 
+          ? (event.poster_image.startsWith('http') ? event.poster_image : `${API_BASE_URL}/${event.poster_image.replace(/^\/+/, '')}`)
+          : 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400&h=300&fit=crop',
+        date: new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        attendees: `${event.attendee_count || 0}/${event.total_tickets_sold || 0}`,
+        ticketsSold: event.total_tickets_sold || 0,
+        totalTickets: event.total_tickets_sold || 0, // Will calculate from ticket types if needed
+        grossRevenue: `Ksh ${((event.revenue || 0) / 0.93).toLocaleString()}`,
+        netEarnings: `Ksh ${(event.revenue || 0).toLocaleString()}`,
+        views: (event.view_count || 0).toLocaleString(),
+        status: 'active',
+        rawEvent: event
+      }));
+      
+      setCurrentEvents(formattedCurrent);
+      
+      // Fetch past events
+      const pastResponse = await getPartnerEvents('past');
+      const pastEvents = pastResponse.events || [];
+      
+      // Format past events
+      const formattedPast = pastEvents.map((event: any) => ({
+        id: event.id,
+        title: event.title,
+        image: event.poster_image 
+          ? (event.poster_image.startsWith('http') ? event.poster_image : `${API_BASE_URL}/${event.poster_image.replace(/^\/+/, '')}`)
+          : 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400&h=300&fit=crop',
+        date: new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        attendees: `${event.attendee_count || 0}`,
+        grossRevenue: `Ksh ${((event.revenue || 0) / 0.93).toLocaleString()}`,
+        netEarnings: `Ksh ${(event.revenue || 0).toLocaleString()}`,
+        views: (event.view_count || 0).toLocaleString(),
+        status: 'completed',
+        rawEvent: event
+      }));
+      
+      setEventHistory(formattedPast);
+    } catch (err) {
+      console.error('Error fetching overview data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleViewDetails = async (event: any) => {
+    try {
+      const token = getPartnerToken();
+      if (!token) return;
+      
+      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.partner.event(event.id)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      const data = await response.json();
+      setSelectedEvent(data.event || data);
+      setIsDetailsModalOpen(true);
+    } catch (err) {
+      console.error('Error fetching event details:', err);
+    }
+  };
+
+  // Financial Stats - Net earnings after 7% deduction (using 0 for now)
   const financialStats = [
     {
       label: 'Net Earnings',
-      value: 'Ksh 186,000',
+      value: 'Ksh 0',
       subtext: 'After 7% deduction',
       icon: TrendingUp,
       color: 'from-green-500 to-emerald-600',
-      change: '+12.5%',
+      change: '+0%',
       isPositive: true
     },
     {
       label: 'Amount Withdrawn',
-      value: 'Ksh 150,000',
+      value: 'Ksh 0',
       subtext: 'Total withdrawals',
       icon: ArrowDownRight,
       color: 'from-blue-500 to-cyan-600',
     },
     {
       label: 'Current Balance',
-      value: 'Ksh 36,000',
+      value: 'Ksh 0',
       subtext: 'Available to withdraw',
       icon: Wallet,
       color: 'from-purple-500 to-pink-600',
     },
     {
       label: 'Gross Revenue',
-      value: 'Ksh 200,000',
+      value: 'Ksh 0',
       subtext: 'Before deductions',
       icon: DollarSign,
       color: 'from-orange-500 to-red-600',
     }
   ];
 
-  // Recent Withdrawals
-  const withdrawals = [
-    {
-      id: '1',
-      method: 'M-Pesa',
-      phone: '+254 712 ***678',
-      amount: 'Ksh 50,000',
-      date: 'Dec 5, 2024',
-      time: '2:45 PM',
-      status: 'Completed',
-      type: 'mpesa'
-    },
-    {
-      id: '2',
-      method: 'Bank Transfer',
-      account: 'Equity Bank ***4567',
-      amount: 'Ksh 100,000',
-      date: 'Dec 1, 2024',
-      time: '10:30 AM',
-      status: 'Completed',
-      type: 'bank'
-    }
-  ];
-
-  // Current Events (Active)
-  const currentEvents = [
-    {
-      id: '1',
-      title: 'Tech Conference 2024',
-      image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400&h=300&fit=crop',
-      date: 'Dec 15, 2024',
-      attendees: '245/300',
-      ticketsSold: 245,
-      totalTickets: 300,
-      grossRevenue: 'Ksh 73,500',
-      netEarnings: 'Ksh 68,355',
-      views: '1,234',
-      status: 'active'
-    },
-    {
-      id: '2',
-      title: 'Startup Meetup',
-      image: 'https://images.unsplash.com/photo-1591115765373-5207764f72e7?w=400&h=300&fit=crop',
-      date: 'Dec 20, 2024',
-      attendees: '89/150',
-      ticketsSold: 89,
-      totalTickets: 150,
-      grossRevenue: 'Ksh 26,700',
-      netEarnings: 'Ksh 24,831',
-      views: '892',
-      status: 'active'
-    },
-    {
-      id: '3',
-      title: 'Innovation Summit',
-      image: 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=400&h=300&fit=crop',
-      date: 'Jan 10, 2025',
-      attendees: '156/200',
-      ticketsSold: 156,
-      totalTickets: 200,
-      grossRevenue: 'Ksh 62,400',
-      netEarnings: 'Ksh 58,032',
-      views: '2,145',
-      status: 'active'
-    },
-    {
-      id: '4',
-      title: 'Digital Marketing Workshop',
-      image: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=400&h=300&fit=crop',
-      date: 'Jan 15, 2025',
-      attendees: '67/100',
-      ticketsSold: 67,
-      totalTickets: 100,
-      grossRevenue: 'Ksh 20,100',
-      netEarnings: 'Ksh 18,693',
-      views: '567',
-      status: 'active'
-    },
-    {
-      id: '5',
-      title: 'AI & Machine Learning Bootcamp',
-      image: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=400&h=300&fit=crop',
-      date: 'Jan 22, 2025',
-      attendees: '123/150',
-      ticketsSold: 123,
-      totalTickets: 150,
-      grossRevenue: 'Ksh 49,200',
-      netEarnings: 'Ksh 45,756',
-      views: '1,678',
-      status: 'active'
-    },
-    {
-      id: '6',
-      title: 'Networking Night',
-      image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?w=400&h=300&fit=crop',
-      date: 'Jan 25, 2025',
-      attendees: '98/120',
-      ticketsSold: 98,
-      totalTickets: 120,
-      grossRevenue: 'Ksh 29,400',
-      netEarnings: 'Ksh 27,342',
-      views: '743',
-      status: 'active'
-    }
-  ];
-
-  // Events History (Completed)
-  const eventHistory = [
-    {
-      id: '1',
-      title: 'Web Development Bootcamp',
-      image: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400&h=300&fit=crop',
-      date: 'Nov 28, 2024',
-      attendees: '187/200',
-      grossRevenue: 'Ksh 74,800',
-      netEarnings: 'Ksh 69,564',
-      views: '2,341',
-      status: 'completed'
-    },
-    {
-      id: '2',
-      title: 'Business Strategy Summit',
-      image: 'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=400&h=300&fit=crop',
-      date: 'Nov 15, 2024',
-      attendees: '234/250',
-      grossRevenue: 'Ksh 93,600',
-      netEarnings: 'Ksh 87,048',
-      views: '3,567',
-      status: 'completed'
-    },
-    {
-      id: '3',
-      title: 'Creative Design Workshop',
-      image: 'https://images.unsplash.com/photo-1542744094-3a31f272c490?w=400&h=300&fit=crop',
-      date: 'Oct 30, 2024',
-      attendees: '145/150',
-      grossRevenue: 'Ksh 58,000',
-      netEarnings: 'Ksh 53,940',
-      views: '1,892',
-      status: 'completed'
-    },
-    {
-      id: '4',
-      title: 'Cybersecurity Conference',
-      image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&h=300&fit=crop',
-      date: 'Oct 12, 2024',
-      attendees: '167/180',
-      grossRevenue: 'Ksh 66,800',
-      netEarnings: 'Ksh 62,124',
-      views: '2,134',
-      status: 'completed'
-    },
-    {
-      id: '5',
-      title: 'Mobile App Development',
-      image: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=400&h=300&fit=crop',
-      date: 'Sep 25, 2024',
-      attendees: '112/120',
-      grossRevenue: 'Ksh 44,800',
-      netEarnings: 'Ksh 41,664',
-      views: '1,456',
-      status: 'completed'
-    },
-    {
-      id: '6',
-      title: 'E-commerce Masterclass',
-      image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop',
-      date: 'Sep 10, 2024',
-      attendees: '198/200',
-      grossRevenue: 'Ksh 79,200',
-      netEarnings: 'Ksh 73,656',
-      views: '2,789',
-      status: 'completed'
-    }
-  ];
+  // Recent Withdrawals (empty for now)
+  const withdrawals: any[] = [];
 
   const currentEventsSlides = [];
   for (let i = 0; i < currentEvents.length; i += eventsPerPage) {
@@ -294,31 +234,39 @@ export default function Overview({ onWithdrawClick }: OverviewProps) {
           <button className="text-[#27aae2] hover:text-[#1e8bb8] font-semibold text-sm">View All</button>
         </div>
         <div className="space-y-3">
-          {withdrawals.map((withdrawal) => (
-            <div key={withdrawal.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-[#27aae2]/10 dark:bg-[#27aae2]/20 rounded-xl flex items-center justify-center">
-                  {withdrawal.type === 'mpesa' ? (
-                    <Wallet className="w-6 h-6 text-[#27aae2]" />
-                  ) : (
-                    <DollarSign className="w-6 h-6 text-[#27aae2]" />
-                  )}
-                </div>
-                <div>
-                  <p className="font-semibold text-gray-900 dark:text-white">{withdrawal.method}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {withdrawal.phone || withdrawal.account} • {withdrawal.date} at {withdrawal.time}
-                  </p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="font-bold text-gray-900 dark:text-white text-lg">{withdrawal.amount}</p>
-                <span className="text-xs px-2 py-1 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 rounded-full font-semibold">
-                  {withdrawal.status}
-                </span>
-              </div>
+          {withdrawals.length === 0 ? (
+            <div className="text-center py-8">
+              <Wallet className="w-12 h-12 text-gray-400 dark:text-gray-600 mx-auto mb-3" />
+              <p className="text-gray-600 dark:text-gray-400">No withdrawals yet</p>
+              <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Your withdrawal history will appear here</p>
             </div>
-          ))}
+          ) : (
+            withdrawals.map((withdrawal) => (
+              <div key={withdrawal.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-[#27aae2]/10 dark:bg-[#27aae2]/20 rounded-xl flex items-center justify-center">
+                    {withdrawal.type === 'mpesa' ? (
+                      <Wallet className="w-6 h-6 text-[#27aae2]" />
+                    ) : (
+                      <DollarSign className="w-6 h-6 text-[#27aae2]" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900 dark:text-white">{withdrawal.method}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {withdrawal.phone || withdrawal.account} • {withdrawal.date} at {withdrawal.time}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-gray-900 dark:text-white text-lg">{withdrawal.amount}</p>
+                  <span className="text-xs px-2 py-1 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 rounded-full font-semibold">
+                    {withdrawal.status}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -355,8 +303,19 @@ export default function Overview({ onWithdrawClick }: OverviewProps) {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {currentEventsSlides[currentEventsPage]?.map((event) => (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#27aae2]"></div>
+          </div>
+        ) : currentEventsSlides.length === 0 ? (
+          <div className="text-center py-12">
+            <Calendar className="w-16 h-16 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
+            <p className="text-gray-600 dark:text-gray-400 text-lg font-semibold">No current events</p>
+            <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Your upcoming and ongoing events will appear here</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            {currentEventsSlides[currentEventsPage]?.map((event) => (
             <div
               key={event.id}
               className="group cursor-pointer bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl overflow-hidden hover:shadow-lg transition-all"
@@ -412,8 +371,9 @@ export default function Overview({ onWithdrawClick }: OverviewProps) {
                 </div>
               </div>
             </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Events History Slideshow */}
@@ -449,8 +409,19 @@ export default function Overview({ onWithdrawClick }: OverviewProps) {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {historyEventsSlides[historyEventsPage]?.map((event) => (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#27aae2]"></div>
+          </div>
+        ) : historyEventsSlides.length === 0 ? (
+          <div className="text-center py-12">
+            <Calendar className="w-16 h-16 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
+            <p className="text-gray-600 dark:text-gray-400 text-lg font-semibold">No past events</p>
+            <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Your completed events will appear here</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            {historyEventsSlides[historyEventsPage]?.map((event) => (
             <div
               key={event.id}
               className="group cursor-pointer bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl overflow-hidden hover:shadow-lg transition-all"
@@ -494,14 +465,18 @@ export default function Overview({ onWithdrawClick }: OverviewProps) {
                     </div>
                     <span className="font-semibold text-gray-900 dark:text-white">{event.views}</span>
                   </div>
-                  <button className="w-full py-2 bg-[#27aae2]/10 dark:bg-[#27aae2]/20 text-[#27aae2] rounded-lg font-semibold hover:bg-[#27aae2]/20 dark:hover:bg-[#27aae2]/30 transition-colors text-xs">
+                  <button 
+                    onClick={() => handleViewDetails(event)}
+                    className="w-full py-2 bg-[#27aae2]/10 dark:bg-[#27aae2]/20 text-[#27aae2] rounded-lg font-semibold hover:bg-[#27aae2]/20 dark:hover:bg-[#27aae2]/30 transition-colors text-xs"
+                  >
                     View Details
                   </button>
                 </div>
               </div>
             </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Financial Note */}
@@ -510,6 +485,216 @@ export default function Overview({ onWithdrawClick }: OverviewProps) {
           💰 <strong>Note:</strong> All earnings shown are net amounts after 7% platform deduction. Withdrawals are processed instantly via M-Pesa Daraja API split payments. Your funds dashboard is updated in real-time for 100% accuracy.
         </p>
       </div>
+
+      {/* Event Details Modal */}
+      {isDetailsModalOpen && selectedEvent && createPortal(
+        <div className="fixed inset-0 z-[9999] overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div
+              className="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-80 backdrop-blur-sm"
+              onClick={() => setIsDetailsModalOpen(false)}
+            ></div>
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+            <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full relative z-10">
+              <button
+                onClick={() => setIsDetailsModalOpen(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors z-10"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              
+              {/* Event Image */}
+              {selectedEvent.poster_image && (
+                <div className="relative h-64 w-full">
+                  <img
+                    src={selectedEvent.poster_image.startsWith('http') ? selectedEvent.poster_image : `${API_BASE_URL}/${selectedEvent.poster_image.replace(/^\/+/, '')}`}
+                    alt={selectedEvent.title}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                  <div className="absolute bottom-4 left-4 right-4">
+                    <h2 className="text-3xl font-bold text-white mb-2">{selectedEvent.title}</h2>
+                    <div className="flex items-center space-x-4 text-white/90 text-sm">
+                      {selectedEvent.category && (
+                        <div className="flex items-center space-x-1">
+                          <Tag className="w-4 h-4" />
+                          <span>{selectedEvent.category.name}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center space-x-1">
+                        <Calendar className="w-4 h-4" />
+                        <span>{new Date(selectedEvent.start_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="px-6 py-6 max-h-[60vh] overflow-y-auto">
+                {!selectedEvent.poster_image && (
+                  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">{selectedEvent.title}</h2>
+                )}
+
+                {/* Event Info Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Clock className="w-5 h-5 text-[#27aae2]" />
+                      <span className="font-semibold text-gray-900 dark:text-white">Date & Time</span>
+                    </div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      {new Date(selectedEvent.start_date).toLocaleString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                    {selectedEvent.end_date && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        Until {new Date(selectedEvent.end_date).toLocaleString('en-US', { 
+                          hour: 'numeric',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    )}
+                  </div>
+
+                  {selectedEvent.is_online ? (
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        {selectedEvent.online_link ? (
+                          <Video className="w-5 h-5 text-[#27aae2]" />
+                        ) : (
+                          <Globe className="w-5 h-5 text-[#27aae2]" />
+                        )}
+                        <span className="font-semibold text-gray-900 dark:text-white">Location</span>
+                      </div>
+                      <p className="text-sm text-gray-700 dark:text-gray-300">Online Event</p>
+                      {selectedEvent.online_link && (
+                        <a 
+                          href={selectedEvent.online_link} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-sm text-[#27aae2] hover:underline mt-1 block"
+                        >
+                          {selectedEvent.online_link}
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <MapPin className="w-5 h-5 text-[#27aae2]" />
+                        <span className="font-semibold text-gray-900 dark:text-white">Venue</span>
+                      </div>
+                      {selectedEvent.venue_name && (
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">{selectedEvent.venue_name}</p>
+                      )}
+                      {selectedEvent.venue_address && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{selectedEvent.venue_address}</p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Users className="w-5 h-5 text-[#27aae2]" />
+                      <span className="font-semibold text-gray-900 dark:text-white">Attendees</span>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{selectedEvent.attendee_count || 0}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      {selectedEvent.total_tickets_sold || 0} tickets sold
+                    </p>
+                  </div>
+
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Eye className="w-5 h-5 text-[#27aae2]" />
+                      <span className="font-semibold text-gray-900 dark:text-white">Views</span>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{(selectedEvent.view_count || 0).toLocaleString()}</p>
+                  </div>
+                </div>
+
+                {/* Description */}
+                {selectedEvent.description && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">About This Event</h3>
+                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{selectedEvent.description}</p>
+                  </div>
+                )}
+
+                {/* Interests */}
+                {selectedEvent.interests && selectedEvent.interests.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Interests & Tags</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedEvent.interests.map((interest: any, idx: number) => (
+                        <span
+                          key={idx}
+                          className="px-3 py-1 bg-[#27aae2]/10 dark:bg-[#27aae2]/20 text-[#27aae2] rounded-full text-sm font-medium flex items-center space-x-1"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          <span>{interest.name || interest}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Ticket Types */}
+                {selectedEvent.ticket_types && selectedEvent.ticket_types.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Ticket Types</h3>
+                    <div className="space-y-2">
+                      {selectedEvent.ticket_types.map((ticket: any, idx: number) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <Ticket className="w-5 h-5 text-[#27aae2]" />
+                            <div>
+                              <p className="font-semibold text-gray-900 dark:text-white">{ticket.name}</p>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                {ticket.quantity_sold || 0} sold
+                                {ticket.quantity_total && ` / ${ticket.quantity_total} total`}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-lg font-bold text-gray-900 dark:text-white">
+                            Ksh {parseFloat(ticket.price || 0).toLocaleString()}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Revenue Stats */}
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Gross Revenue</p>
+                    <p className="text-xl font-bold text-gray-900 dark:text-white">
+                      Ksh {((selectedEvent.revenue || 0) / 0.93).toLocaleString()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Net Earnings</p>
+                    <p className="text-xl font-bold text-green-600 dark:text-green-400">
+                      Ksh {(selectedEvent.revenue || 0).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

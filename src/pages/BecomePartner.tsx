@@ -1,7 +1,8 @@
-import { Upload, CheckCircle, Building2, Mail, Phone, Tag, FileText, ArrowRight, ArrowLeft, MapPin, PenTool, Plus, Minus } from 'lucide-react';
+import { Upload, CheckCircle, Building2, Mail, Phone, Tag, FileText, ArrowRight, ArrowLeft, MapPin, PenTool, Plus, Minus, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { applyAsPartner } from '../services/partnerService';
 
 interface BecomePartnerProps {
   onNavigate: (page: string) => void;
@@ -21,6 +22,8 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
     acceptTerms: false
   });
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]);
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const locationTimeoutRef = useRef<NodeJS.Timeout>();
@@ -32,25 +35,22 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
   const [logoError, setLogoError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Categories matching backend database IDs
   const categories = [
-    { id: 'explore-kenya', name: 'Explore-Kenya' },
-    { id: 'hiking', name: 'Hiking' },
-    { id: 'sports', name: 'Sports & Fitness' },
-    { id: 'social', name: 'Social Activities' },
-    { id: 'hobbies', name: 'Hobbies & Interests' },
-    { id: 'religious', name: 'Religious' },
-    { id: 'autofest', name: 'Autofest' },
-    { id: 'health', name: 'Health & Wellbeing' },
-    { id: 'music', name: 'Music & Dance' },
-    { id: 'culture', name: 'Culture' },
-    { id: 'pets', name: 'Pets & Animals' },
-    { id: 'coaching', name: 'Coaching & Support' },
-    { id: 'business', name: 'Business & Networking' },
-    { id: 'technology', name: 'Technology' },
-    { id: 'plays', name: 'Live Plays' },
-    { id: 'art', name: 'Art & Photography' },
-    { id: 'shopping', name: 'Shopping' },
-    { id: 'gaming', name: 'Gaming' },
+    { id: '1', name: 'Travel' },
+    { id: '2', name: 'Sports & Fitness' },
+    { id: '3', name: 'Social Activities' },
+    { id: '4', name: 'Hobbies & Interests' },
+    { id: '5', name: 'Religious' },
+    { id: '6', name: 'Pets & Animals' },
+    { id: '7', name: 'Autofest' },
+    { id: '8', name: 'Health & Wellbeing' },
+    { id: '9', name: 'Music & Culture' },
+    { id: '10', name: 'Coaching & Support' },
+    { id: '11', name: 'Dance' },
+    { id: '12', name: 'Technology' },
+    { id: '13', name: 'Gaming' },
+    { id: '14', name: 'Shopping' },
   ];
 
   const handleCategoryToggle = (categoryId: string) => {
@@ -70,8 +70,40 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
     setCurrentStep(prev => Math.max(prev - 1, 1));
   };
 
-  const handleSubmit = () => {
-    setSubmitted(true);
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    setSubmitError('');
+
+    try {
+      // Prepare data for API
+      const allInterests = [...customInterests];
+      if (formData.interests.trim()) {
+        allInterests.push(formData.interests.trim());
+      }
+
+      const applicationData = {
+        business_name: formData.businessName,
+        email: formData.email,
+        phone_number: formData.phone,
+        location: formData.location,
+        category_id: formData.categories[0], // Use first selected category as primary
+        interests: allInterests.length > 0 ? JSON.stringify(allInterests) : undefined,
+        signature_name: formData.signature,
+        terms_accepted: 'true',
+        logo: formData.logo || undefined,
+      };
+
+      // Call API
+      await applyAsPartner(applicationData);
+      
+      // Success - show success page
+      setSubmitted(true);
+    } catch (error: any) {
+      console.error('Application submission error:', error);
+      setSubmitError(error.message || 'Failed to submit application. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Auto-detect user's location
@@ -834,17 +866,33 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                 </div>
               </div>
 
+              {/* Error message display */}
+              {submitError && (
+                <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-xl p-4 flex items-start space-x-3 mt-4">
+                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-red-800 dark:text-red-300 mb-1">Submission Failed</p>
+                    <p className="text-sm text-red-700 dark:text-red-400">{submitError}</p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-between pt-4">
                 <button
                   onClick={handlePrevious}
-                  className="px-8 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-bold transition-all flex items-center space-x-2 dark:hover:border-[#27aae2] dark:hover:text-[#27aae2]"
+                  disabled={isSubmitting}
+                  className="px-8 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-bold transition-all flex items-center space-x-2 dark:hover:border-[#27aae2] dark:hover:text-[#27aae2] disabled:opacity-50 disabled:cursor-not-allowed"
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#27aae2';
-                    e.currentTarget.style.color = '#27aae2';
+                    if (!isSubmitting) {
+                      e.currentTarget.style.borderColor = '#27aae2';
+                      e.currentTarget.style.color = '#27aae2';
+                    }
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '';
-                    e.currentTarget.style.color = '';
+                    if (!isSubmitting) {
+                      e.currentTarget.style.borderColor = '';
+                      e.currentTarget.style.color = '';
+                    }
                   }}
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -852,24 +900,36 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={!canProceedStep4}
+                  disabled={!canProceedStep4 || isSubmitting}
                   className={`px-8 py-3 rounded-xl font-bold transition-all flex items-center space-x-2 ${
-                    canProceedStep4
+                    canProceedStep4 && !isSubmitting
                       ? 'text-white'
                       : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                   }`}
-                  style={canProceedStep4 ? { 
+                  style={canProceedStep4 && !isSubmitting ? { 
                     background: 'linear-gradient(to right, #27aae2, #1a8ec4)'
                   } : {}}
                   onMouseEnter={(e) => {
-                    if (canProceedStep4) e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)';
+                    if (canProceedStep4 && !isSubmitting) e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)';
                   }}
                   onMouseLeave={(e) => {
-                    if (canProceedStep4) e.currentTarget.style.boxShadow = '';
+                    if (canProceedStep4 && !isSubmitting) e.currentTarget.style.boxShadow = '';
                   }}
                 >
-                  <CheckCircle className="w-5 h-5" />
-                  <span>Submit Application</span>
+                  {isSubmitting ? (
+                    <>
+                      <svg className="animate-spin w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5" />
+                      <span>Submit Application</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

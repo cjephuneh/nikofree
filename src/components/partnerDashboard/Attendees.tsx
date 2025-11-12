@@ -1,5 +1,6 @@
 import { Search, Download, Users, Mail, Phone, Calendar, FileSpreadsheet, FileText, TrendingUp } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getPartnerAttendees } from '../../services/partnerService';
 
 interface Attendee {
   id: number;
@@ -22,8 +23,49 @@ export default function Attendees() {
   const [filter, setFilter] = useState<string>('all');
   const [selectedEvent, setSelectedEvent] = useState<string>('all');
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const attendees: Attendee[] = [
+  // Fetch attendees on mount
+  useEffect(() => {
+    fetchAttendees();
+  }, []);
+
+  const fetchAttendees = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      const response = await getPartnerAttendees();
+      
+      // Transform API data to component format
+      const formattedAttendees: Attendee[] = (response.attendees || []).map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        email: item.email ? `${item.email.split('@')[0].slice(0, 4)}***@${item.email.split('@')[1]}` : '',
+        phone: item.phone ? `+254${item.phone.slice(-3)}***${item.phone.slice(-3)}` : '',
+        age: item.age || 0,
+        gender: item.gender || 'Other',
+        location: item.location || '',
+        ticketType: item.ticketType || 'Regular',
+        event: item.event || '',
+        eventDate: item.eventDate ? new Date(item.eventDate).toISOString().split('T')[0] : '',
+        bookingDate: item.bookingDate ? new Date(item.bookingDate).toISOString().split('T')[0] : '',
+        status: item.status === 'Confirmed' ? 'Confirmed' : 'Pending',
+        isCurrentEvent: item.isCurrentEvent || false
+      }));
+      
+      setAttendees(formattedAttendees);
+    } catch (err: any) {
+      console.error('Error fetching attendees:', err);
+      setError(err.message || 'Failed to load attendees');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Mock data removed - now using real data from API
+  const mockAttendees: Attendee[] = [
     {
       id: 1,
       name: 'John Kamau',
@@ -146,7 +188,7 @@ export default function Attendees() {
     }
   ];
 
-  const filteredAttendees = attendees.filter(attendee => {
+  const filteredAttendees = (attendees.length > 0 ? attendees : mockAttendees).filter(attendee => {
     const matchesSearch = attendee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          attendee.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          attendee.event.toLowerCase().includes(searchTerm.toLowerCase());
@@ -156,28 +198,29 @@ export default function Attendees() {
   });
 
   // Get unique ticket types for filtering
-  const uniqueTicketTypes = ['all', ...Array.from(new Set(attendees.map(a => a.ticketType)))];
+  const allAttendees = attendees.length > 0 ? attendees : mockAttendees;
+  const uniqueTicketTypes = ['all', ...Array.from(new Set(allAttendees.map(a => a.ticketType)))];
 
   // Calculate demographics
   const demographics = {
-    totalAttendees: attendees.length,
-    currentEvents: attendees.filter(a => a.isCurrentEvent).length,
-    pastEvents: attendees.filter(a => !a.isCurrentEvent).length,
-    averageAge: Math.round(attendees.reduce((sum, a) => sum + a.age, 0) / attendees.length)
+    totalAttendees: allAttendees.length,
+    currentEvents: allAttendees.filter(a => a.isCurrentEvent).length,
+    pastEvents: allAttendees.filter(a => !a.isCurrentEvent).length,
+    averageAge: allAttendees.length > 0 ? Math.round(allAttendees.reduce((sum, a) => sum + a.age, 0) / allAttendees.length) : 0
   };
 
   // Get attendees by event
-  const eventSummary = Array.from(new Set(attendees.map(a => a.event)))
+  const eventSummary = Array.from(new Set(allAttendees.map(a => a.event)))
     .map(event => ({
       event,
-      count: attendees.filter(a => a.event === event).length,
-      date: attendees.find(a => a.event === event)?.eventDate || '',
-      isCurrent: attendees.find(a => a.event === event)?.isCurrentEvent || false
+      count: allAttendees.filter(a => a.event === event).length,
+      date: allAttendees.find(a => a.event === event)?.eventDate || '',
+      isCurrent: allAttendees.find(a => a.event === event)?.isCurrentEvent || false
     }))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   // Get unique events for dropdown
-  const uniqueEvents = ['all', ...Array.from(new Set(attendees.map(a => a.event)))];
+  const uniqueEvents = ['all', ...Array.from(new Set(allAttendees.map(a => a.event)))];
 
   const stats = [
     {
@@ -215,6 +258,14 @@ export default function Attendees() {
     alert(`Exporting ${filteredAttendees.length} attendees to ${format.toUpperCase()}...`);
     setExportMenuOpen(false);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#27aae2]"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -345,6 +396,13 @@ export default function Attendees() {
           </select>
         </div>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-xl p-4">
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+        </div>
+      )}
 
       {/* Attendees Table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">

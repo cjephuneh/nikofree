@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Bell, CreditCard, Shield, Lock, Save } from 'lucide-react';
+import { Bell, CreditCard, Shield, Lock, Save, AlertCircle, CheckCircle } from 'lucide-react';
+import { changePartnerPassword } from '../../services/partnerService';
 
 export default function Settings() {
   const [activeSection, setActiveSection] = useState<'security' | 'notifications' | 'billing'>('security');
@@ -30,6 +31,49 @@ export default function Settings() {
       ...prev,
       [field]: value
     }));
+  };
+
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+
+  const handleChangePassword = async () => {
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    // Validation
+    if (!formData.currentPassword || !formData.newPassword || !formData.confirmPassword) {
+      setPasswordError('All password fields are required');
+      return;
+    }
+
+    if (formData.newPassword !== formData.confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    if (formData.newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters long');
+      return;
+    }
+
+    try {
+      setIsChangingPassword(true);
+      await changePartnerPassword(formData.currentPassword, formData.newPassword);
+      setPasswordSuccess('Password changed successfully!');
+      // Clear form
+      setFormData(prev => ({
+        ...prev,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      }));
+    } catch (err: any) {
+      console.error('Error changing password:', err);
+      setPasswordError(err.message || 'Failed to change password');
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const handleSave = () => {
@@ -100,6 +144,23 @@ export default function Settings() {
                   {/* Change Password */}
                   <div className="mb-6">
                     <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Change Password</h4>
+                    
+                    {/* Error Message */}
+                    {passwordError && (
+                      <div className="mb-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-xl p-3 flex items-start space-x-2">
+                        <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-red-700 dark:text-red-400">{passwordError}</p>
+                      </div>
+                    )}
+
+                    {/* Success Message */}
+                    {passwordSuccess && (
+                      <div className="mb-4 bg-green-50 dark:bg-green-900/20 border-2 border-green-500 rounded-xl p-3 flex items-start space-x-2">
+                        <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-green-700 dark:text-green-400">{passwordSuccess}</p>
+                      </div>
+                    )}
+
                     <div className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -109,8 +170,13 @@ export default function Settings() {
                         <input
                           type="password"
                           value={formData.currentPassword}
-                          onChange={(e) => handleInputChange('currentPassword', e.target.value)}
+                          onChange={(e) => {
+                            handleInputChange('currentPassword', e.target.value);
+                            setPasswordError('');
+                            setPasswordSuccess('');
+                          }}
                           className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#27aae2]"
+                          autoComplete="current-password"
                         />
                       </div>
                       <div>
@@ -120,9 +186,17 @@ export default function Settings() {
                         <input
                           type="password"
                           value={formData.newPassword}
-                          onChange={(e) => handleInputChange('newPassword', e.target.value)}
+                          onChange={(e) => {
+                            handleInputChange('newPassword', e.target.value);
+                            setPasswordError('');
+                            setPasswordSuccess('');
+                          }}
                           className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#27aae2]"
+                          autoComplete="new-password"
                         />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Must be at least 8 characters long
+                        </p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -131,10 +205,39 @@ export default function Settings() {
                         <input
                           type="password"
                           value={formData.confirmPassword}
-                          onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
+                          onChange={(e) => {
+                            handleInputChange('confirmPassword', e.target.value);
+                            setPasswordError('');
+                            setPasswordSuccess('');
+                          }}
                           className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#27aae2]"
+                          autoComplete="new-password"
                         />
                       </div>
+                      <button
+                        onClick={handleChangePassword}
+                        disabled={isChangingPassword || !formData.currentPassword || !formData.newPassword || !formData.confirmPassword}
+                        className={`w-full flex items-center justify-center space-x-2 px-6 py-3 bg-[#27aae2] text-white rounded-lg font-medium hover:bg-[#1e8bb8] transition-colors ${
+                          isChangingPassword || !formData.currentPassword || !formData.newPassword || !formData.confirmPassword
+                            ? 'opacity-70 cursor-not-allowed'
+                            : ''
+                        }`}
+                      >
+                        {isChangingPassword ? (
+                          <>
+                            <svg className="animate-spin w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Changing Password...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-5 h-5" />
+                            <span>Change Password</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
 

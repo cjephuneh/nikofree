@@ -1,11 +1,13 @@
 import { Calendar, Users, Zap, Home, Bell, UserPlus, QrCode, Award, Menu, X, Search, User, Settings as SettingsIcon, LogOut, Moon, Sun } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import Overview from '../components/partnerDashboard/Overview';
 import MyEvents from '../components/partnerDashboard/MyEvents';
 import Attendees from '../components/partnerDashboard/Attendees';
 import BoostEvent from '../components/partnerDashboard/BoostEvent';
 import NotificationSettings from '../components/partnerDashboard/NotificationSettings';
+import Notifications from '../components/partnerDashboard/Notifications';
 import AssignRoles from '../components/partnerDashboard/AssignRoles';
 import TicketScanner from '../components/partnerDashboard/TicketScanner';
 import PartnerVerification from '../components/partnerDashboard/PartnerVerification';
@@ -13,12 +15,14 @@ import Settings from '../components/partnerDashboard/Settings';
 import MyProfile from '../components/partnerDashboard/MyProfile';
 import CreateEvent from '../components/partnerDashboard/CreateEvent';
 import WithdrawFunds from '../components/partnerDashboard/WithdrawFunds';
+import { getPartner, getPartnerProfile, logoutPartner, getPartnerToken } from '../services/partnerService';
 
 interface PartnerDashboardProps {
   onNavigate: (page: string) => void;
 }
 
 export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'overview' | 'events' | 'attendees' | 'boost' | 'notifications' | 'roles' | 'scanner' | 'verification' | 'settings' | 'profile'>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -27,6 +31,49 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
   const [searchQuery, setSearchQuery] = useState('');
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const { isDarkMode, toggleTheme } = useTheme();
+  const [partnerData, setPartnerData] = useState<any>(null);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+
+  // Check authentication on mount
+  useEffect(() => {
+    const token = getPartnerToken();
+    if (!token) {
+      navigate('/');
+      return;
+    }
+    setIsAuthorized(true);
+    
+    const fetchPartnerData = async () => {
+      try {
+        // Get from localStorage first (fast)
+        const cachedPartner = getPartner();
+        if (cachedPartner) {
+          setPartnerData(cachedPartner);
+        }
+
+        // Then fetch fresh data
+        const response = await getPartnerProfile();
+        if (response) {
+          setPartnerData(response.partner || response);
+        }
+      } catch (err: any) {
+        console.error('Error fetching partner data:', err);
+        // If error fetching, might be invalid token, redirect to login
+        if (err?.message?.includes('401') || err?.message?.includes('Unauthorized') || err?.message?.includes('Not authenticated')) {
+          logoutPartner();
+          navigate('/');
+          return;
+        }
+        // Fallback to localStorage if API fails
+        const cachedPartner = getPartner();
+        if (cachedPartner) {
+          setPartnerData(cachedPartner);
+        }
+      }
+    };
+
+    fetchPartnerData();
+  }, [navigate]);
 
   const menuItems = [
     { id: 'overview', label: 'Home', icon: Home },
@@ -55,6 +102,18 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [accountMenuOpen]);
+
+  // Show loading or redirect if not authorized
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#27aae2] mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200 relative">
@@ -183,12 +242,24 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
                       onClick={() => setAccountMenuOpen(!accountMenuOpen)}
                       className="flex items-center space-x-2 sm:space-x-3 p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg sm:rounded-xl transition-colors"
                     >
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 bg-gradient-to-br from-[#27aae2] to-[#1e8bb8] rounded-full flex items-center justify-center">
-                        <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-white" />
-                      </div>
+                      {partnerData?.logo ? (
+                        <img 
+                          src={partnerData.logo.startsWith('http') ? partnerData.logo : `${import.meta.env.VITE_API_URL || 'http://localhost:5005'}/${partnerData.logo.replace(/^\/+/, '')}`}
+                          alt={partnerData.business_name}
+                          className="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600"
+                        />
+                      ) : (
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 bg-gradient-to-br from-[#27aae2] to-[#1e8bb8] rounded-full flex items-center justify-center">
+                          <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-white" />
+                        </div>
+                      )}
                       <div className="hidden lg:block text-left">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white">Tech Hub Africa</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Partner Account</p>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {partnerData?.business_name || 'Partner Account'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {partnerData?.email || 'Loading...'}
+                        </p>
                       </div>
                     </button>
 
@@ -196,8 +267,12 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
                     {accountMenuOpen && (
                       <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
                         <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white">Tech Hub Africa</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">partner@techhub.com</p>
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {partnerData?.business_name || 'Partner Account'}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {partnerData?.email || 'Loading...'}
+                          </p>
                         </div>
                         <button 
                           onClick={() => {
@@ -221,7 +296,10 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
                         </button>
                         <div className="border-t border-gray-100 dark:border-gray-700 mt-2 pt-2">
                           <button 
-                            onClick={() => onNavigate('landing')}
+                            onClick={() => {
+                              logoutPartner();
+                              navigate('/');
+                            }}
                             className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-3"
                           >
                             <LogOut className="w-4 h-4" />
@@ -253,10 +331,15 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
           {/* Content Area */}
           <div className="px-2 sm:px-4 lg:px-8 py-3 sm:py-4 lg:py-6 pt-[7.5rem] sm:pt-32 md:pt-20 lg:pt-24">
             {activeTab === 'overview' && <Overview onWithdrawClick={() => setWithdrawOpen(true)} />}
-            {activeTab === 'events' && <MyEvents onCreateEvent={() => setCreateEventOpen(true)} />}
+            {activeTab === 'events' && (
+              <MyEvents 
+                onCreateEvent={() => setCreateEventOpen(true)}
+                key={activeTab} // Force re-render when tab changes
+              />
+            )}
             {activeTab === 'attendees' && <Attendees />}
             {activeTab === 'boost' && <BoostEvent />}
-            {activeTab === 'notifications' && <NotificationSettings />}
+            {activeTab === 'notifications' && <Notifications />}
             {activeTab === 'roles' && <AssignRoles />}
             {activeTab === 'scanner' && <TicketScanner />}
             {activeTab === 'verification' && <PartnerVerification />}
@@ -268,7 +351,15 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
         {/* Create Event Modal */}
         <CreateEvent 
           isOpen={createEventOpen} 
-          onClose={() => setCreateEventOpen(false)} 
+          onClose={() => setCreateEventOpen(false)}
+          onEventCreated={() => {
+            // Force refresh events by re-mounting the component
+            // This is handled by the key prop on MyEvents
+            if (activeTab === 'events') {
+              // Trigger a re-render
+              setCreateEventOpen(false);
+            }
+          }}
         />
 
         {/* Withdraw Funds Modal */}

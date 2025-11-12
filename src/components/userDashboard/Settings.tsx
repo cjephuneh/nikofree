@@ -1,10 +1,14 @@
-import { Bell, CreditCard, Globe, Shield, Mail, Smartphone, Moon, Sun, Eye, EyeOff } from 'lucide-react';
-import { useState } from 'react';
+import { Bell, CreditCard, Globe, Shield, Mail, Smartphone, Moon, Sun, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
+import { changeUserPassword } from '../../services/userService';
 
 export default function Settings() {
   const { isDarkMode, toggleTheme } = useTheme();
   const [showPassword, setShowPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
   const [settings, setSettings] = useState({
     emailNotifications: true,
     pushNotifications: true,
@@ -23,8 +27,60 @@ export default function Settings() {
     confirm: ''
   });
 
+  useEffect(() => {
+    // Load saved settings from localStorage
+    const savedSettings = localStorage.getItem('user_settings');
+    if (savedSettings) {
+      try {
+        setSettings(JSON.parse(savedSettings));
+      } catch (err) {
+        console.error('Error loading settings:', err);
+      }
+    }
+  }, []);
+
   const handleToggle = (key: keyof typeof settings) => {
-    setSettings({ ...settings, [key]: !settings[key] });
+    const newSettings = { ...settings, [key]: !settings[key] };
+    setSettings(newSettings);
+    localStorage.setItem('user_settings', JSON.stringify(newSettings));
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    // Validation
+    if (!passwords.current || !passwords.new || !passwords.confirm) {
+      setPasswordError('All password fields are required');
+      return;
+    }
+
+    if (passwords.new !== passwords.confirm) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    if (passwords.new.length < 8) {
+      setPasswordError('New password must be at least 8 characters long');
+      return;
+    }
+
+    try {
+      setIsChangingPassword(true);
+      await changeUserPassword(passwords.current, passwords.new);
+      setPasswordSuccess('Password changed successfully!');
+      // Clear form
+      setPasswords({
+        current: '',
+        new: '',
+        confirm: ''
+      });
+    } catch (err: any) {
+      console.error('Error changing password:', err);
+      setPasswordError(err.message || 'Failed to change password');
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   return (
@@ -117,6 +173,23 @@ export default function Settings() {
         {/* Change Password */}
         <div className="mb-6">
           <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Change Password</h3>
+          
+          {/* Error Message */}
+          {passwordError && (
+            <div className="mb-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-xl p-3 flex items-start space-x-2">
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700 dark:text-red-400">{passwordError}</p>
+            </div>
+          )}
+
+          {/* Success Message */}
+          {passwordSuccess && (
+            <div className="mb-4 bg-green-50 dark:bg-green-900/20 border-2 border-green-500 rounded-xl p-3 flex items-start space-x-2">
+              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-green-700 dark:text-green-400">{passwordSuccess}</p>
+            </div>
+          )}
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -126,9 +199,14 @@ export default function Settings() {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={passwords.current}
-                  onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
+                  onChange={(e) => {
+                    setPasswords({ ...passwords, current: e.target.value });
+                    setPasswordError('');
+                    setPasswordSuccess('');
+                  }}
                   className="w-full px-4 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#27aae2] focus:border-transparent"
                   placeholder="Enter current password"
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"
@@ -146,10 +224,16 @@ export default function Settings() {
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={passwords.new}
-                onChange={(e) => setPasswords({ ...passwords, new: e.target.value })}
+                onChange={(e) => {
+                  setPasswords({ ...passwords, new: e.target.value });
+                  setPasswordError('');
+                  setPasswordSuccess('');
+                }}
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#27aae2] focus:border-transparent"
                 placeholder="Enter new password"
+                autoComplete="new-password"
               />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Must be at least 8 characters long</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -158,13 +242,24 @@ export default function Settings() {
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={passwords.confirm}
-                onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
+                onChange={(e) => {
+                  setPasswords({ ...passwords, confirm: e.target.value });
+                  setPasswordError('');
+                  setPasswordSuccess('');
+                }}
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#27aae2] focus:border-transparent"
                 placeholder="Confirm new password"
+                autoComplete="new-password"
               />
             </div>
-            <button className="px-6 py-2 bg-[#27aae2] text-white rounded-lg hover:bg-[#1e8bb8] transition-colors font-semibold">
-              Update Password
+            <button
+              onClick={handleChangePassword}
+              disabled={isChangingPassword || !passwords.current || !passwords.new || !passwords.confirm}
+              className={`px-6 py-2 bg-[#27aae2] text-white rounded-lg hover:bg-[#1e8bb8] transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${
+                isChangingPassword ? 'opacity-70' : ''
+              }`}
+            >
+              {isChangingPassword ? 'Changing Password...' : 'Update Password'}
             </button>
           </div>
         </div>
@@ -192,31 +287,6 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Payment Methods */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <CreditCard className="w-5 h-5 text-[#27aae2]" />
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Payment Methods</h2>
-        </div>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-8 bg-gradient-to-r from-blue-600 to-blue-400 rounded flex items-center justify-center text-white font-bold text-xs">
-                VISA
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900 dark:text-white">•••• 4242</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Expires 12/25</p>
-              </div>
-            </div>
-            <button className="text-red-500 hover:text-red-600 text-sm font-semibold">Remove</button>
-          </div>
-          <button className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-[#27aae2] hover:text-[#27aae2] transition-colors font-semibold">
-            + Add Payment Method
-          </button>
-        </div>
-      </div>
-
       {/* Preferences */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
         <div className="flex items-center gap-3 mb-6">
@@ -230,7 +300,11 @@ export default function Settings() {
             </label>
             <select
               value={settings.language}
-              onChange={(e) => setSettings({ ...settings, language: e.target.value })}
+              onChange={(e) => {
+                const newSettings = { ...settings, language: e.target.value };
+                setSettings(newSettings);
+                localStorage.setItem('user_settings', JSON.stringify(newSettings));
+              }}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#27aae2] focus:border-transparent"
             >
               <option value="en">English</option>
@@ -244,7 +318,11 @@ export default function Settings() {
             </label>
             <select
               value={settings.currency}
-              onChange={(e) => setSettings({ ...settings, currency: e.target.value })}
+              onChange={(e) => {
+                const newSettings = { ...settings, currency: e.target.value };
+                setSettings(newSettings);
+                localStorage.setItem('user_settings', JSON.stringify(newSettings));
+              }}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#27aae2] focus:border-transparent"
             >
               <option value="KES">KES - Kenyan Shilling</option>
@@ -252,22 +330,6 @@ export default function Settings() {
               <option value="EUR">EUR - Euro</option>
               <option value="GBP">GBP - British Pound</option>
             </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Danger Zone */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-red-200 dark:border-red-900 p-6">
-        <h2 className="text-xl font-bold text-red-600 dark:text-red-400 mb-4">Danger Zone</h2>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
-            <div>
-              <p className="font-semibold text-gray-900 dark:text-white">Delete Account</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Permanently delete your account and all data</p>
-            </div>
-            <button className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold">
-              Delete
-            </button>
           </div>
         </div>
       </div>

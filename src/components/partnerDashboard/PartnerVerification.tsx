@@ -1,14 +1,76 @@
-import { Award, CheckCircle, Calendar, Users, Star, TrendingUp, Shield } from 'lucide-react';
+import { Award, CheckCircle, Calendar, Users, Star, TrendingUp, Shield, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { getPartnerVerification, claimVerificationBadge } from '../../services/partnerService';
 
 export default function PartnerVerification() {
-  // Sample progress data
-  const eventsHosted = 7;
-  const totalBookings = 342;
-  const eventsRequired = 10;
-  const bookingsRequired = 500;
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [verificationData, setVerificationData] = useState<any>(null);
+  const [isClaiming, setIsClaiming] = useState(false);
 
-  const eventsProgress = (eventsHosted / eventsRequired) * 100;
-  const bookingsProgress = (totalBookings / bookingsRequired) * 100;
+  useEffect(() => {
+    fetchVerificationData();
+  }, []);
+
+  const fetchVerificationData = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      const data = await getPartnerVerification();
+      setVerificationData(data);
+    } catch (err: any) {
+      console.error('Error fetching verification data:', err);
+      setError(err.message || 'Failed to load verification status');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleClaimBadge = async () => {
+    try {
+      setIsClaiming(true);
+      await claimVerificationBadge();
+      // Refresh data
+      await fetchVerificationData();
+      alert('Congratulations! You are now NIKO VERIFIED! 🎉');
+    } catch (err: any) {
+      console.error('Error claiming badge:', err);
+      alert(err.message || 'Failed to claim verification badge');
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#27aae2]"></div>
+      </div>
+    );
+  }
+
+  if (error && !verificationData) {
+    return (
+      <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-xl p-6">
+        <div className="flex items-start space-x-2">
+          <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Use real data from API
+  const eventsHosted = verificationData?.verification?.events_hosted || 0;
+  const totalBookings = verificationData?.verification?.total_bookings || 0;
+  const eventsRequired = verificationData?.verification?.events_required || 10;
+  const bookingsRequired = verificationData?.verification?.bookings_required || 500;
+  const isEligible = verificationData?.verification?.is_eligible || false;
+  const isVerified = verificationData?.verification?.is_verified || false;
+  const partnerName = verificationData?.partner?.business_name || 'Partner';
+
+  const eventsProgress = verificationData?.verification?.events_progress || 0;
+  const bookingsProgress = verificationData?.verification?.bookings_progress || 0;
 
   const benefits = [
     {
@@ -33,7 +95,6 @@ export default function PartnerVerification() {
     }
   ];
 
-  const isEligible = eventsHosted >= eventsRequired || totalBookings >= bookingsRequired;
 
   return (
     <div className="space-y-6">
@@ -43,7 +104,22 @@ export default function PartnerVerification() {
         <p className="text-gray-600 dark:text-gray-400 mt-1">
           Build trust and credibility with the verified badge
         </p>
+        {partnerName && (
+          <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+            Partner: <span className="font-semibold">{partnerName}</span>
+          </p>
+        )}
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-xl p-4">
+          <div className="flex items-start space-x-2">
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+          </div>
+        </div>
+      )}
 
       {/* Status Card */}
       <div className={`rounded-xl shadow-md p-8 ${
@@ -63,13 +139,31 @@ export default function PartnerVerification() {
           </div>
         </div>
 
-        {isEligible ? (
+        {isVerified ? (
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <CheckCircle className="w-8 h-8" />
+              <p className="text-lg font-semibold">
+                You are NIKO VERIFIED! 🎉
+              </p>
+            </div>
+            <p className="text-sm text-white/90">
+              Your verified badge is now active on all your events and profile.
+            </p>
+          </div>
+        ) : isEligible ? (
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
             <p className="text-lg mb-4">
               You've met the requirements for NIKO VERIFIED status!
             </p>
-            <button className="bg-white text-green-600 px-8 py-3 rounded-xl font-bold hover:bg-gray-100 transition-all">
-              Claim Your Badge
+            <button 
+              onClick={handleClaimBadge}
+              disabled={isClaiming}
+              className={`bg-white text-green-600 px-8 py-3 rounded-xl font-bold hover:bg-gray-100 transition-all ${
+                isClaiming ? 'opacity-70 cursor-not-allowed' : ''
+              }`}
+            >
+              {isClaiming ? 'Claiming...' : 'Claim Your Badge'}
             </button>
           </div>
         ) : (
@@ -215,17 +309,78 @@ export default function PartnerVerification() {
         </h4>
         <div className="space-y-2 text-gray-600 dark:text-gray-400 text-sm">
           <p>
-            <strong>Option 1:</strong> Successfully host and complete 10 events on our platform
+            <strong>Option 1:</strong> Successfully host and complete {eventsRequired} events on our platform
           </p>
           <p className="text-center font-semibold">OR</p>
           <p>
-            <strong>Option 2:</strong> Accumulate 500 total bookings across all your events
+            <strong>Option 2:</strong> Accumulate {bookingsRequired} total bookings across all your events
           </p>
           <p className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             Once you meet either requirement, you can claim your NIKO VERIFIED badge. This badge will appear on all your events and profile, helping build trust with potential attendees.
           </p>
         </div>
       </div>
+
+      {/* Events & Bookings Summary */}
+      {verificationData && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Events List */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center space-x-2">
+              <Calendar className="w-5 h-5 text-[#27aae2]" />
+              <span>Your Events ({verificationData.events?.length || 0})</span>
+            </h3>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {verificationData.events && verificationData.events.length > 0 ? (
+                verificationData.events.slice(0, 10).map((event: any) => (
+                  <div key={event.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <p className="font-semibold text-gray-900 dark:text-white text-sm">{event.title}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      {new Date(event.start_date).toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        year: 'numeric' 
+                      })} • {event.attendee_count || 0} attendees
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-600 dark:text-gray-400">No events yet</p>
+              )}
+            </div>
+          </div>
+
+          {/* Recent Bookings */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center space-x-2">
+              <Users className="w-5 h-5 text-[#27aae2]" />
+              <span>Recent Bookings ({totalBookings} total)</span>
+            </h3>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {verificationData.recent_bookings && verificationData.recent_bookings.length > 0 ? (
+                verificationData.recent_bookings.map((booking: any) => (
+                  <div key={booking.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <p className="font-semibold text-gray-900 dark:text-white text-sm">
+                      {booking.user?.first_name} {booking.user?.last_name}
+                    </p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      {booking.event?.title} • {booking.quantity} ticket{booking.quantity > 1 ? 's' : ''}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                      {new Date(booking.created_at).toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-600 dark:text-gray-400">No bookings yet</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

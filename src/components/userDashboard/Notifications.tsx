@@ -1,95 +1,77 @@
 import { Bell, Calendar, Users, Ticket, X, CheckCheck } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getUserNotifications, markNotificationRead, markAllNotificationsRead } from '../../services/userService';
 
 interface Notification {
-  id: string;
-  type: 'event' | 'social' | 'ticket' | 'system';
+  id: number;
+  type: 'event' | 'social' | 'ticket' | 'system' | 'booking' | 'approval' | 'general';
   title: string;
   message: string;
   time: string;
   read: boolean;
   image?: string;
   actionLabel?: string;
+  actionUrl?: string;
 }
 
 export default function Notifications() {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: '1',
-      type: 'event',
-      title: 'Event Reminder',
-      message: 'Nairobi Tech Summit 2025 starts tomorrow at 9:00 AM',
-      time: '2 hours ago',
-      read: false,
-      image: 'https://images.pexels.com/photos/2747449/pexels-photo-2747449.jpeg?auto=compress&cs=tinysrgb&w=100',
-      actionLabel: 'View Event'
-    },
-    {
-      id: '2',
-      type: 'social',
-      title: 'New Follower',
-      message: 'Sarah Kim started following you',
-      time: '5 hours ago',
-      read: false,
-      image: 'https://i.pravatar.cc/100?img=45'
-    },
-    {
-      id: '3',
-      type: 'ticket',
-      title: 'Ticket Confirmed',
-      message: 'Your ticket for Morning Yoga in the Park has been confirmed',
-      time: '1 day ago',
-      read: true,
-      actionLabel: 'View Ticket'
-    },
-    {
-      id: '4',
-      type: 'event',
-      title: 'Event Update',
-      message: 'Startup Networking Mixer venue has been changed to Nairobi Garage',
-      time: '1 day ago',
-      read: true,
-      image: 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=100'
-    },
-    {
-      id: '5',
-      type: 'social',
-      title: 'Friend Request',
-      message: 'John Doe wants to connect with you',
-      time: '2 days ago',
-      read: false,
-      image: 'https://i.pravatar.cc/100?img=12',
-      actionLabel: 'View Profile'
-    },
-    {
-      id: '6',
-      type: 'system',
-      title: 'New Features',
-      message: 'Check out our new event recommendation system',
-      time: '3 days ago',
-      read: true
-    },
-    {
-      id: '7',
-      type: 'event',
-      title: 'Price Drop Alert',
-      message: 'Sunset Music Festival tickets are now 20% off!',
-      time: '3 days ago',
-      read: true,
-      image: 'https://images.pexels.com/photos/1105666/pexels-photo-1105666.jpeg?auto=compress&cs=tinysrgb&w=100',
-      actionLabel: 'Book Now'
-    },
-    {
-      id: '8',
-      type: 'social',
-      title: 'Event Invitation',
-      message: 'Alex Johnson invited you to Art Gallery Opening',
-      time: '4 days ago',
-      read: true,
-      actionLabel: 'View Event'
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [filter]);
+
+  const fetchNotifications = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      const response = await getUserNotifications(filter === 'unread');
+      
+      // Transform API data to component format
+      const formattedNotifications: Notification[] = (response.notifications || []).map((notif: any) => {
+        // Map notification types
+        let type: Notification['type'] = 'general';
+        if (notif.notification_type === 'booking') type = 'ticket';
+        else if (notif.notification_type === 'approval') type = 'event';
+        else if (notif.notification_type === 'reminder') type = 'event';
+        else if (notif.notification_type === 'payment') type = 'ticket';
+        
+        return {
+          id: notif.id,
+          type: type,
+          title: notif.title || 'Notification',
+          message: notif.message || '',
+          time: notif.created_at ? formatTimeAgo(new Date(notif.created_at)) : 'Recently',
+          read: notif.is_read || false,
+          actionLabel: notif.action_text,
+          actionUrl: notif.action_url
+        };
+      });
+      
+      setNotifications(formattedNotifications);
+      setUnreadCount(response.unread_count || 0);
+    } catch (err: any) {
+      console.error('Error fetching notifications:', err);
+      setError(err.message || 'Failed to load notifications');
+    } finally {
+      setIsLoading(false);
     }
-  ]);
+  };
+
+  const formatTimeAgo = (date: Date): string => {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) return 'just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minute${Math.floor(diffInSeconds / 60) > 1 ? 's' : ''} ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hour${Math.floor(diffInSeconds / 3600) > 1 ? 's' : ''} ago`;
+    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} day${Math.floor(diffInSeconds / 86400) > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -98,33 +80,46 @@ export default function Notifications() {
       case 'social':
         return <Users className="w-4 h-4 sm:w-5 sm:h-5 text-purple-500" />;
       case 'ticket':
+      case 'booking':
         return <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />;
       case 'system':
-        return <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />;
+      case 'general':
       default:
-        return <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />;
+        return <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />;
     }
   };
 
-  const markAsRead = (id: string) => {
-    setNotifications(notifications.map(notif => 
-      notif.id === id ? { ...notif, read: true } : notif
-    ));
+  const handleMarkAsRead = async (id: number) => {
+    try {
+      await markNotificationRead(id);
+      await fetchNotifications(); // Refresh
+    } catch (err: any) {
+      console.error('Error marking notification as read:', err);
+      alert(err.message || 'Failed to mark notification as read');
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(notif => ({ ...notif, read: true })));
-  };
-
-  const deleteNotification = (id: string) => {
-    setNotifications(notifications.filter(notif => notif.id !== id));
+  const handleMarkAllAsRead = async () => {
+    try {
+      await markAllNotificationsRead();
+      await fetchNotifications(); // Refresh
+    } catch (err: any) {
+      console.error('Error marking all as read:', err);
+      alert(err.message || 'Failed to mark all notifications as read');
+    }
   };
 
   const filteredNotifications = notifications.filter(notif => 
     filter === 'all' ? true : !notif.read
   );
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#27aae2]"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -140,7 +135,7 @@ export default function Notifications() {
         {/* Actions */}
         <div className="flex items-center gap-2">
           <button
-            onClick={markAllAsRead}
+            onClick={handleMarkAllAsRead}
             disabled={unreadCount === 0}
             className="px-3 sm:px-4 py-1.5 sm:py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
@@ -150,6 +145,13 @@ export default function Notifications() {
           </button>
         </div>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-xl p-4">
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+        </div>
+      )}
 
       {/* Filter Tabs */}
       <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl p-0.5 sm:p-1 border border-gray-200 dark:border-gray-700 w-fit">
@@ -230,26 +232,24 @@ export default function Notifications() {
                         {notification.time}
                       </span>
                       <div className="flex items-center gap-1.5 sm:gap-2">
-                        {notification.actionLabel && (
-                          <button className="text-xs sm:text-sm font-semibold text-[#27aae2] hover:text-[#1e8bb8] transition-colors">
+                        {notification.actionLabel && notification.actionUrl && (
+                          <a
+                            href={notification.actionUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs sm:text-sm font-semibold text-[#27aae2] hover:text-[#1e8bb8] transition-colors"
+                          >
                             {notification.actionLabel}
-                          </button>
+                          </a>
                         )}
                         {!notification.read && (
                           <button
-                            onClick={() => markAsRead(notification.id)}
+                            onClick={() => handleMarkAsRead(notification.id)}
                             className="text-xs sm:text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
                           >
                             Mark read
                           </button>
                         )}
-                        <button
-                          onClick={() => deleteNotification(notification.id)}
-                          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                          title="Delete"
-                        >
-                          <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        </button>
                       </div>
                     </div>
                   </div>

@@ -1,8 +1,10 @@
 import { Calendar, MapPin, Heart, Search, SlidersHorizontal, Grid3x3, List, DollarSign, AlertCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getBucketlist, addToBucketlist, removeFromBucketlist } from '../../services/userService';
+import { API_BASE_URL } from '../../config/api';
 
 interface Event {
-  id: string;
+  id: number;
   title: string;
   image: string;
   date: string;
@@ -20,123 +22,49 @@ export default function BucketList({ onEventClick }: BucketListProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'available' | 'expired'>('all');
+  const [events, setEvents] = useState<Event[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Extended list of bucket list events
-  const allBucketListEvents: Event[] = [
-    {
-      id: '4',
-      title: 'Sunset Music Festival',
-      image: 'https://images.pexels.com/photos/1105666/pexels-photo-1105666.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Nov 15, 2025',
-      location: 'Uhuru Gardens',
-      price: 'KES 800',
-      isOutdated: false,
-      category: 'Music'
-    },
-    {
-      id: '5',
-      title: 'Mt. Kenya Hiking Adventure',
-      image: 'https://images.pexels.com/photos/618848/pexels-photo-618848.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Oct 20, 2025',
-      location: 'Mt. Kenya',
-      price: 'Free',
-      isOutdated: true,
-      category: 'Adventure'
-    },
-    {
-      id: '6',
-      title: 'Art Gallery Opening',
-      image: 'https://images.pexels.com/photos/1839919/pexels-photo-1839919.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Nov 20, 2025',
-      location: 'Nairobi Gallery',
-      price: 'KES 500',
-      isOutdated: false,
-      category: 'Arts & Culture'
-    },
-    {
-      id: '16',
-      title: 'Safari Weekend Getaway',
-      image: 'https://images.pexels.com/photos/631317/pexels-photo-631317.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Dec 5, 2025',
-      location: 'Maasai Mara',
-      price: 'KES 15,000',
-      isOutdated: false,
-      category: 'Travel'
-    },
-    {
-      id: '17',
-      title: 'Comedy Night Special',
-      image: 'https://images.pexels.com/photos/1587927/pexels-photo-1587927.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Nov 28, 2025',
-      location: 'Carnivore Grounds',
-      price: 'KES 1,200',
-      isOutdated: false,
-      category: 'Entertainment'
-    },
-    {
-      id: '18',
-      title: 'Gourmet Food Festival',
-      image: 'https://images.pexels.com/photos/1267320/pexels-photo-1267320.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Dec 10, 2025',
-      location: 'Two Rivers Mall',
-      price: 'KES 2,000',
-      isOutdated: false,
-      category: 'Food & Drink'
-    },
-    {
-      id: '19',
-      title: 'Charity Run for Kids',
-      image: 'https://images.pexels.com/photos/2531756/pexels-photo-2531756.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Oct 1, 2025',
-      location: 'Karura Forest',
-      price: 'Free',
-      isOutdated: true,
-      category: 'Sports'
-    },
-    {
-      id: '20',
-      title: 'Photography Masterclass',
-      image: 'https://images.pexels.com/photos/2833392/pexels-photo-2833392.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Nov 30, 2025',
-      location: 'Nairobi National Museum',
-      price: 'KES 3,500',
-      isOutdated: false,
-      category: 'Education'
-    },
-    {
-      id: '21',
-      title: 'Beach Bonfire Party',
-      image: 'https://images.pexels.com/photos/1983032/pexels-photo-1983032.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Dec 15, 2025',
-      location: 'Diani Beach',
-      price: 'KES 1,500',
-      isOutdated: false,
-      category: 'Social'
-    },
-    {
-      id: '22',
-      title: 'Classical Orchestra Performance',
-      image: 'https://images.pexels.com/photos/1105666/pexels-photo-1105666.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Dec 20, 2025',
-      location: 'Kenya National Theatre',
-      price: 'KES 2,500',
-      isOutdated: false,
-      category: 'Music'
-    },
-    {
-      id: '23',
-      title: 'Vintage Car Show',
-      image: 'https://images.pexels.com/photos/164634/pexels-photo-164634.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Sep 15, 2025',
-      location: 'Ngong Racecourse',
-      price: 'KES 500',
-      isOutdated: true,
-      category: 'Automotive'
+  useEffect(() => {
+    fetchBucketlist();
+  }, []);
+
+  const fetchBucketlist = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      const response = await getBucketlist();
+      
+      // Transform API data to component format
+      const formattedEvents: Event[] = (response.events || []).map((event: any) => {
+        const startDate = event.start_date ? new Date(event.start_date) : new Date();
+        const now = new Date();
+        const isOutdated = startDate < now;
+        
+        return {
+          id: event.id,
+          title: event.title || 'Event',
+          image: event.poster_image ? `${API_BASE_URL}/uploads/${event.poster_image}` : '',
+          date: startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          location: event.venue_name || event.venue_address || 'Online',
+          price: event.is_free ? 'Free' : (event.ticket_types?.[0]?.price ? `KES ${event.ticket_types[0].price.toLocaleString()}` : 'TBA'),
+          isOutdated: isOutdated,
+          category: event.category?.name || 'General'
+        };
+      });
+      
+      setEvents(formattedEvents);
+    } catch (err: any) {
+      console.error('Error fetching bucketlist:', err);
+      setError(err.message || 'Failed to load bucketlist');
+    } finally {
+      setIsLoading(false);
     }
-  ];
+  };
 
   // Filter events
-  const filteredEvents = allBucketListEvents.filter(event => {
+  const filteredEvents = events.filter(event => {
     const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          event.location.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = 
@@ -147,16 +75,30 @@ export default function BucketList({ onEventClick }: BucketListProps) {
   });
 
   const statusCounts = {
-    all: allBucketListEvents.length,
-    available: allBucketListEvents.filter(e => !e.isOutdated).length,
-    expired: allBucketListEvents.filter(e => e.isOutdated).length
+    all: events.length,
+    available: events.filter(e => !e.isOutdated).length,
+    expired: events.filter(e => e.isOutdated).length
   };
 
-  const handleRemoveFromBucket = (eventId: string, e: React.MouseEvent) => {
+  const handleRemoveFromBucket = async (eventId: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    // Add logic to remove from bucket list
-    console.log('Remove from bucket list:', eventId);
+    try {
+      await removeFromBucketlist(eventId);
+      // Refresh list
+      await fetchBucketlist();
+    } catch (err: any) {
+      console.error('Error removing from bucketlist:', err);
+      alert(err.message || 'Failed to remove from bucketlist');
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#27aae2]"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -236,6 +178,13 @@ export default function BucketList({ onEventClick }: BucketListProps) {
           </button>
         ))}
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-xl p-4">
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+        </div>
+      )}
 
       {/* Events Grid/List */}
       {filteredEvents.length === 0 ? (

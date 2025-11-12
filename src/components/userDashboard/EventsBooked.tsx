@@ -1,8 +1,10 @@
 import { Calendar, QrCode, MapPin, Clock, Search, SlidersHorizontal, Grid3x3, List } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getUserBookings } from '../../services/userService';
+import { API_BASE_URL } from '../../config/api';
 
 interface Event {
-  id: string;
+  id: number;
   title: string;
   image: string;
   date: string;
@@ -21,112 +23,75 @@ export default function EventsBooked({ onEventClick }: EventsBookedProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'upcoming' | 'today' | 'this-week'>('all');
+  const [events, setEvents] = useState<Event[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Extended list of booked events
-  const allBookedEvents: Event[] = [
-    {
-      id: '1',
-      title: 'Nairobi Tech Summit 2025',
-      image: 'https://images.pexels.com/photos/2747449/pexels-photo-2747449.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Sat, Nov 2',
-      time: '9:00 AM',
-      location: 'KICC, Nairobi',
-      ticketId: 'TKT-2025-001',
-      category: 'Technology',
-      status: 'today'
-    },
-    {
-      id: '2',
-      title: 'Morning Yoga in the Park',
-      image: 'https://images.pexels.com/photos/3822647/pexels-photo-3822647.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Tomorrow',
-      time: '6:00 AM',
-      location: 'Karura Forest',
-      ticketId: 'TKT-2025-002',
-      category: 'Health & Wellness',
-      status: 'this-week'
-    },
-    {
-      id: '3',
-      title: 'Startup Networking Mixer',
-      image: 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Nov 10',
-      time: '6:00 PM',
-      location: 'iHub Nairobi',
-      ticketId: 'TKT-2025-003',
-      category: 'Business',
-      status: 'this-week'
-    },
-    {
-      id: '10',
-      title: 'African Art Exhibition',
-      image: 'https://images.pexels.com/photos/1839919/pexels-photo-1839919.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Nov 12, 2025',
-      time: '10:00 AM',
-      location: 'Nairobi National Museum',
-      ticketId: 'TKT-2025-010',
-      category: 'Arts & Culture',
-      status: 'this-week'
-    },
-    {
-      id: '11',
-      title: 'Blockchain Conference Kenya',
-      image: 'https://images.pexels.com/photos/3861969/pexels-photo-3861969.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Nov 15, 2025',
-      time: '8:00 AM',
-      location: 'Radisson Blu Hotel',
-      ticketId: 'TKT-2025-011',
-      category: 'Technology',
-      status: 'upcoming'
-    },
-    {
-      id: '12',
-      title: 'Marathon for Hope 2025',
-      image: 'https://images.pexels.com/photos/2531756/pexels-photo-2531756.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Nov 18, 2025',
-      time: '5:00 AM',
-      location: 'Uhuru Park',
-      ticketId: 'TKT-2025-012',
-      category: 'Sports',
-      status: 'upcoming'
-    },
-    {
-      id: '13',
-      title: 'Live Jazz & Soul Night',
-      image: 'https://images.pexels.com/photos/1481308/pexels-photo-1481308.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Nov 20, 2025',
-      time: '7:00 PM',
-      location: 'Alliance Française',
-      ticketId: 'TKT-2025-013',
-      category: 'Music',
-      status: 'upcoming'
-    },
-    {
-      id: '14',
-      title: 'Digital Marketing Workshop',
-      image: 'https://images.pexels.com/photos/3184292/pexels-photo-3184292.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Nov 22, 2025',
-      time: '2:00 PM',
-      location: 'Nairobi Garage',
-      ticketId: 'TKT-2025-014',
-      category: 'Education',
-      status: 'upcoming'
-    },
-    {
-      id: '15',
-      title: 'Wine & Paint Experience',
-      image: 'https://images.pexels.com/photos/1267320/pexels-photo-1267320.jpeg?auto=compress&cs=tinysrgb&w=400',
-      date: 'Nov 25, 2025',
-      time: '5:00 PM',
-      location: 'The Alchemist',
-      ticketId: 'TKT-2025-015',
-      category: 'Social',
-      status: 'upcoming'
+  useEffect(() => {
+    fetchBookedEvents();
+  }, [filterStatus]);
+
+  const fetchBookedEvents = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      
+      const status = filterStatus === 'all' ? undefined : 
+                    filterStatus === 'upcoming' ? 'upcoming' : 'past';
+      
+      const response = await getUserBookings(status);
+      
+      // Transform API data to component format
+      const formattedEvents: Event[] = (response.bookings || []).map((booking: any) => {
+        const event = booking.event || {};
+        const firstTicket = booking.tickets?.[0] || {};
+        
+        const startDate = event.start_date ? new Date(event.start_date) : new Date();
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const eventDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+        const daysDiff = Math.floor((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        
+        let status: 'upcoming' | 'today' | 'this-week' = 'upcoming';
+        if (daysDiff === 0) {
+          status = 'today';
+        } else if (daysDiff > 0 && daysDiff <= 7) {
+          status = 'this-week';
+        }
+        
+        const dateStr = startDate.toLocaleDateString('en-US', { 
+          weekday: 'short', 
+          month: 'short', 
+          day: 'numeric',
+          ...(startDate.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {})
+        });
+        
+        const timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        
+        return {
+          id: booking.id,
+          title: event.title || 'Event',
+          image: event.poster_image ? `${API_BASE_URL}/uploads/${event.poster_image}` : '',
+          date: dateStr,
+          time: timeStr,
+          location: event.venue_name || event.venue_address || 'Online',
+          ticketId: firstTicket.ticket_number || booking.booking_number || 'N/A',
+          category: event.category?.name || 'General',
+          status: status
+        };
+      });
+      
+      setEvents(formattedEvents);
+    } catch (err: any) {
+      console.error('Error fetching booked events:', err);
+      setError(err.message || 'Failed to load booked events');
+    } finally {
+      setIsLoading(false);
     }
-  ];
+  };
 
   // Filter events
-  const filteredEvents = allBookedEvents.filter(event => {
+  const filteredEvents = events.filter(event => {
     const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          event.location.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = filterStatus === 'all' || event.status === filterStatus;
@@ -134,11 +99,19 @@ export default function EventsBooked({ onEventClick }: EventsBookedProps) {
   });
 
   const statusCounts = {
-    all: allBookedEvents.length,
-    today: allBookedEvents.filter(e => e.status === 'today').length,
-    'this-week': allBookedEvents.filter(e => e.status === 'this-week').length,
-    upcoming: allBookedEvents.filter(e => e.status === 'upcoming').length
+    all: events.length,
+    today: events.filter(e => e.status === 'today').length,
+    'this-week': events.filter(e => e.status === 'this-week').length,
+    upcoming: events.filter(e => e.status === 'upcoming').length
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#27aae2]"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -218,6 +191,13 @@ export default function EventsBooked({ onEventClick }: EventsBookedProps) {
           </button>
         ))}
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-xl p-4">
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+        </div>
+      )}
 
       {/* Events Grid/List */}
       {filteredEvents.length === 0 ? (

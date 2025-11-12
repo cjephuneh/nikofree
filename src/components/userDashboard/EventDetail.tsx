@@ -1,9 +1,12 @@
-import { Calendar, MapPin, Clock, Users, Share2, Heart, Download, ArrowLeft, Ticket as TicketIcon, Star } from 'lucide-react';
-import { useState } from 'react';
+import { Calendar, MapPin, Clock, Users, Share2, Heart, Download, ArrowLeft, Ticket as TicketIcon, Star, Plus, MessageSquare, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { addToBucketlist, removeFromBucketlist, getBucketlist, getEventReviews, addEventReview, updateEventReview, deleteEventReview } from '../../services/userService';
+import { API_BASE_URL, API_ENDPOINTS } from '../../config/api';
+import { getAuthHeaders } from '../../services/authService';
 
 interface EventDetailProps {
   event: {
-    id: string;
+    id: number | string;
     title: string;
     image: string;
     date: string;
@@ -26,23 +29,119 @@ interface EventDetailProps {
 export default function EventDetail({ event, onBack }: EventDetailProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [eventData, setEventData] = useState(event);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [averageRating, setAverageRating] = useState(0);
+  const [userReview, setUserReview] = useState<any>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
-  // Default values
-  const eventData = {
-    ...event,
-    time: event.time || 'TBA',
-    description: event.description || 'Join us for an amazing event experience! This is a great opportunity to connect with like-minded individuals and enjoy a memorable time together.',
-    category: event.category || 'General',
-    attendees: event.attendees || 234,
-    rating: event.rating || 4.8,
-    organizer: event.organizer || {
-      name: 'Event Organizer',
-      avatar: 'https://i.pravatar.cc/100?img=25'
+  useEffect(() => {
+    checkBucketlistStatus();
+    fetchEventDetails();
+    fetchReviews();
+  }, [event.id]);
+
+  const checkBucketlistStatus = async () => {
+    try {
+      const response = await getBucketlist();
+      const isInBucketlist = response.events?.some((e: any) => e.id === Number(event.id));
+      setIsLiked(isInBucketlist);
+    } catch (err) {
+      console.error('Error checking bucketlist:', err);
     }
   };
 
+  const fetchEventDetails = async () => {
+    try {
+      const eventId = Number(event.id);
+      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.events.detail(eventId)}`, {
+        headers: getAuthHeaders()
+      });
+      const data = await response.json();
+      
+      if (response.ok && data.event) {
+        const evt = data.event;
+        setEventData({
+          ...event,
+          title: evt.title || event.title,
+          description: evt.description || event.description,
+          image: evt.poster_image ? `${API_BASE_URL}/uploads/${evt.poster_image}` : event.image,
+          category: evt.category?.name || event.category,
+          attendees: evt.attendee_count || event.attendees,
+          organizer: evt.partner ? {
+            name: evt.partner.business_name || 'Event Organizer',
+            avatar: evt.partner.logo ? `${API_BASE_URL}/uploads/${evt.partner.logo}` : ''
+          } : event.organizer
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching event details:', err);
+    }
+  };
+
+  const fetchReviews = async () => {
+    try {
+      const eventId = Number(event.id);
+      const response = await getEventReviews(eventId);
+      setReviews(response.reviews || []);
+      setAverageRating(response.average_rating || 0);
+      
+      // Check if user has a review
+      const token = localStorage.getItem('niko_free_token');
+      if (token) {
+        try {
+          const userResponse = await fetch(`${API_BASE_URL}/api/users/profile`, {
+            headers: getAuthHeaders()
+          });
+          if (userResponse.ok) {
+            const userData = await userResponse.json();
+            const userRev = response.reviews?.find((r: any) => r.user?.id === userData.id);
+            if (userRev) {
+              setUserReview(userRev);
+              setReviewRating(userRev.rating);
+              setReviewComment(userRev.comment || '');
+            }
+          }
+        } catch (err) {
+          // User not logged in or error
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching reviews:', err);
+    }
+  };
+
+  const handleToggleLike = async () => {
+    try {
+      const eventId = Number(event.id);
+      if (isLiked) {
+        await removeFromBucketlist(eventId);
+        setIsLiked(false);
+      } else {
+        await addToBucketlist(eventId);
+        setIsLiked(true);
+      }
+    } catch (err: any) {
+      console.error('Error toggling bucketlist:', err);
+      alert(err.message || 'Failed to update bucketlist');
+    }
+  };
+
+  const handleAddToCalendar = () => {
+    // Create calendar event
+    const startDate = new Date(event.date);
+    const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000); // 2 hours later
+    
+    const calendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(eventData.title)}&dates=${startDate.toISOString().replace(/[-:]/g, '').split('.')[0]}Z/${endDate.toISOString().replace(/[-:]/g, '').split('.')[0]}Z&details=${encodeURIComponent(eventData.description || '')}&location=${encodeURIComponent(eventData.location)}`;
+    
+    window.open(calendarUrl, '_blank');
+  };
+
   const handleShare = (platform: string) => {
-    const eventUrl = window.location.href;
+    const eventUrl = `${window.location.origin}/event/${event.id}`;
     const shareText = `Check out this event: ${eventData.title}`;
 
     switch (platform) {
@@ -52,12 +151,64 @@ export default function EventDetail({ event, onBack }: EventDetailProps) {
       case 'linkedin':
         window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(eventUrl)}`, '_blank');
         break;
+      case 'facebook':
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(eventUrl)}`, '_blank');
+        break;
+      case 'twitter':
+        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(eventUrl)}`, '_blank');
+        break;
       case 'copy':
         navigator.clipboard.writeText(eventUrl);
         alert('Link copied to clipboard!');
         break;
     }
     setShowShareMenu(false);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!reviewRating) {
+      alert('Please select a rating');
+      return;
+    }
+
+    try {
+      setIsSubmittingReview(true);
+      const eventId = Number(event.id);
+      
+      if (userReview) {
+        // Update existing review
+        await updateEventReview(eventId, userReview.id, reviewRating, reviewComment);
+      } else {
+        // Create new review
+        await addEventReview(eventId, reviewRating, reviewComment);
+      }
+      
+      setShowReviewModal(false);
+      await fetchReviews();
+      setReviewComment('');
+    } catch (err: any) {
+      console.error('Error submitting review:', err);
+      alert(err.message || 'Failed to submit review');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  const handleDeleteReview = async () => {
+    if (!userReview || !window.confirm('Are you sure you want to delete your review?')) {
+      return;
+    }
+
+    try {
+      const eventId = Number(event.id);
+      await deleteEventReview(eventId, userReview.id);
+      setUserReview(null);
+      setReviewComment('');
+      await fetchReviews();
+    } catch (err: any) {
+      console.error('Error deleting review:', err);
+      alert(err.message || 'Failed to delete review');
+    }
   };
 
   return (
@@ -83,14 +234,14 @@ export default function EventDetail({ event, onBack }: EventDetailProps) {
         {/* Category Badge */}
         <div className="absolute top-4 left-4">
           <span className="px-3 py-1 bg-[#27aae2] text-white text-xs sm:text-sm font-semibold rounded-full">
-            {eventData.category}
+            {eventData.category || 'General'}
           </span>
         </div>
 
         {/* Action Buttons */}
         <div className="absolute top-4 right-4 flex gap-2">
           <button
-            onClick={() => setIsLiked(!isLiked)}
+            onClick={handleToggleLike}
             className="p-2 sm:p-2.5 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-full hover:scale-110 transition-transform"
           >
             <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${isLiked ? 'fill-red-500 text-red-500' : 'text-gray-700 dark:text-gray-300'}`} />
@@ -111,6 +262,18 @@ export default function EventDetail({ event, onBack }: EventDetailProps) {
                   className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
                   Share on WhatsApp
+                </button>
+                <button
+                  onClick={() => handleShare('facebook')}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Share on Facebook
+                </button>
+                <button
+                  onClick={() => handleShare('twitter')}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Share on Twitter
                 </button>
                 <button
                   onClick={() => handleShare('linkedin')}
@@ -137,11 +300,11 @@ export default function EventDetail({ event, onBack }: EventDetailProps) {
           <div className="flex items-center gap-4 text-white/90">
             <div className="flex items-center gap-1">
               <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-              <span className="text-sm font-semibold">{eventData.rating}</span>
+              <span className="text-sm font-semibold">{averageRating > 0 ? averageRating.toFixed(1) : 'N/A'}</span>
             </div>
             <div className="flex items-center gap-1">
               <Users className="w-4 h-4" />
-              <span className="text-sm">{eventData.attendees} attending</span>
+              <span className="text-sm">{eventData.attendees || 0} attending</span>
             </div>
           </div>
         </div>
@@ -170,7 +333,7 @@ export default function EventDetail({ event, onBack }: EventDetailProps) {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">Time</p>
-                  <p className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">{eventData.time}</p>
+                  <p className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">{eventData.time || 'TBA'}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3 sm:gap-4">
@@ -182,6 +345,13 @@ export default function EventDetail({ event, onBack }: EventDetailProps) {
                   <p className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">{eventData.location}</p>
                 </div>
               </div>
+              <button
+                onClick={handleAddToCalendar}
+                className="w-full mt-4 py-2.5 bg-[#27aae2] text-white rounded-lg font-semibold hover:bg-[#1e8bb8] transition-colors flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add to Calendar</span>
+              </button>
             </div>
           </div>
 
@@ -189,24 +359,79 @@ export default function EventDetail({ event, onBack }: EventDetailProps) {
           <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-4">About This Event</h2>
             <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 leading-relaxed">
-              {eventData.description}
+              {eventData.description || 'Join us for an amazing event experience! This is a great opportunity to connect with like-minded individuals and enjoy a memorable time together.'}
             </p>
           </div>
 
           {/* Organizer */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-4">Organized By</h2>
-            <div className="flex items-center gap-4">
-              <img
-                src={eventData.organizer.avatar}
-                alt={eventData.organizer.name}
-                className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover"
-              />
-              <div>
-                <p className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">{eventData.organizer.name}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Event Organizer</p>
+          {eventData.organizer && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-4">Organized By</h2>
+              <div className="flex items-center gap-4">
+                <img
+                  src={eventData.organizer.avatar}
+                  alt={eventData.organizer.name}
+                  className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover"
+                />
+                <div>
+                  <p className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">{eventData.organizer.name}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Event Organizer</p>
+                </div>
               </div>
             </div>
+          )}
+
+          {/* Reviews Section */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Reviews</h2>
+              <button
+                onClick={() => setShowReviewModal(true)}
+                className="px-4 py-2 bg-[#27aae2] text-white rounded-lg text-sm font-semibold hover:bg-[#1e8bb8] transition-colors flex items-center gap-2"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>{userReview ? 'Edit Review' : 'Add Review'}</span>
+              </button>
+            </div>
+
+            {reviews.length === 0 ? (
+              <p className="text-gray-500 dark:text-gray-400 text-center py-8">No reviews yet. Be the first to review!</p>
+            ) : (
+              <div className="space-y-4">
+                {reviews.map((review) => (
+                  <div key={review.id} className="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-0">
+                    <div className="flex items-start gap-3 mb-2">
+                      <div className="w-10 h-10 rounded-full bg-[#27aae2]/10 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[#27aae2] font-bold">
+                          {review.user?.first_name?.[0] || 'U'}
+                        </span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="font-semibold text-gray-900 dark:text-white">
+                            {review.user?.first_name} {review.user?.last_name}
+                          </p>
+                          <div className="flex items-center gap-0.5">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`w-4 h-4 ${i < review.rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        {review.comment && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{review.comment}</p>
+                        )}
+                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                          {new Date(review.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -268,6 +493,76 @@ export default function EventDetail({ event, onBack }: EventDetailProps) {
           </div>
         </div>
       </div>
+
+      {/* Review Modal */}
+      {showReviewModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowReviewModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">{userReview ? 'Edit Review' : 'Add Review'}</h3>
+              <button onClick={() => setShowReviewModal(false)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Rating</label>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((rating) => (
+                    <button
+                      key={rating}
+                      onClick={() => setReviewRating(rating)}
+                      className={`p-2 rounded-lg transition-colors ${
+                        rating <= reviewRating
+                          ? 'bg-yellow-100 dark:bg-yellow-900/30'
+                          : 'bg-gray-100 dark:bg-gray-700'
+                      }`}
+                    >
+                      <Star className={`w-6 h-6 ${rating <= reviewRating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Comment (Optional)</label>
+                <textarea
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  rows={4}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#27aae2] focus:border-transparent resize-none"
+                  placeholder="Share your experience..."
+                />
+              </div>
+
+              <div className="flex gap-2">
+                {userReview && (
+                  <button
+                    onClick={handleDeleteReview}
+                    className="flex-1 px-4 py-2 border-2 border-red-500 text-red-500 rounded-lg font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  >
+                    Delete
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowReviewModal(false)}
+                  className="flex-1 px-4 py-2 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitReview}
+                  disabled={isSubmittingReview}
+                  className="flex-1 px-4 py-2 bg-[#27aae2] text-white rounded-lg font-semibold hover:bg-[#1e8bb8] transition-colors disabled:opacity-50"
+                >
+                  {isSubmittingReview ? 'Submitting...' : 'Submit'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -197,16 +197,16 @@ export default function TicketSelector({
       )}
 
       {/* Uniform Ticket (Single Price) */}
-      {ticketType === 'uniform' && (
+      {ticketType === 'uniform' && tickets.uniform && tickets.uniform.length > 0 && (
         <div className="mb-6">
           <div className="flex items-baseline justify-between mb-2">
             <span className="text-3xl font-bold text-gray-900 dark:text-white">
-              KES {tickets.uniform[0].price.toLocaleString()}
+              {tickets.uniform[0].price === 0 ? 'Free' : `KES ${tickets.uniform[0].price.toLocaleString()}`}
             </span>
             <span className="text-sm text-gray-600 dark:text-gray-400">per ticket</span>
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            {tickets.uniform[0].available} tickets available
+            {tickets.uniform[0].available || 'Unlimited'} tickets available
           </p>
         </div>
       )}

@@ -1,8 +1,10 @@
-import { Menu, X, LogIn, Moon, Sun } from 'lucide-react';
-import { useState } from 'react';
+import { Menu, X, LogIn, Moon, Sun, User } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import LoginModal from './LoginModal';
 import logo from '../images/Niko Free Logo.png';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { getUser } from '../services/authService';
 
 interface NavbarProps {
   onNavigate: (page: string) => void;
@@ -13,6 +15,33 @@ export default function Navbar({ onNavigate, currentPage = 'landing' }: NavbarPr
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const { isDarkMode, toggleTheme } = useTheme();
+  const { isAuthenticated, logout } = useAuth();
+  const [user, setUser] = useState<any>(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  useEffect(() => {
+    // Update user when isAuthenticated changes
+    if (isAuthenticated) {
+      const userData = getUser();
+      setUser(userData);
+    } else {
+      setUser(null);
+    }
+  }, [isAuthenticated]);
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showUserMenu && !(event.target as Element).closest('.user-menu-container')) {
+        setShowUserMenu(false);
+      }
+    };
+
+    if (showUserMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showUserMenu]);
 
   return (
     <nav className={`sticky top-0 z-50 transition-all duration-200 ${
@@ -168,6 +197,53 @@ export default function Navbar({ onNavigate, currentPage = 'landing' }: NavbarPr
               <span className="hidden lg:inline">Become a Partner</span>
               <span className="lg:hidden">Partner</span>
             </button>
+            {isAuthenticated && user ? (
+              <div className="relative user-menu-container">
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center space-x-1 md:space-x-2 px-2 md:px-3 lg:px-4 py-1 md:py-1.5 lg:py-2 rounded-lg font-medium transition-all"
+                  style={{ 
+                    background: currentPage === 'landing' ? 'rgba(255, 255, 255, 0.2)' : '#e6f7ff',
+                    color: currentPage === 'landing' ? '#ffffff' : '#27aae2'
+                  }}
+                >
+                  <User className="w-3 h-3 md:w-4 md:h-4 lg:w-5 lg:h-5" />
+                  <span className="hidden lg:inline text-xs md:text-sm">
+                    {user.first_name || user.email?.split('@')[0] || 'User'}
+                  </span>
+                </button>
+                {showUserMenu && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50 user-menu-container">
+                    <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {user.first_name} {user.last_name}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {user.email}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        onNavigate('user-dashboard');
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      Dashboard
+                    </button>
+                    <button
+                      onClick={() => {
+                        logout();
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
             <button
               onClick={() => setLoginModalOpen(true)}
               className="flex items-center space-x-1 md:space-x-1.5 lg:space-x-2 px-2 md:px-3 lg:px-6 py-1 md:py-1.5 lg:py-2.5 text-[10px] md:text-xs lg:text-sm text-white rounded-lg font-medium hover:shadow-lg transform hover:scale-105 transition-all"
@@ -176,6 +252,7 @@ export default function Navbar({ onNavigate, currentPage = 'landing' }: NavbarPr
               <LogIn className="w-3 h-3 md:w-3.5 md:h-3.5 lg:w-4 lg:h-4" />
               <span>Sign In</span>
             </button>
+            )}
           </div>
 
           <button
@@ -272,6 +349,36 @@ export default function Navbar({ onNavigate, currentPage = 'landing' }: NavbarPr
             >
               Become a Partner
             </button>
+            {isAuthenticated && user ? (
+              <>
+                <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {user.first_name} {user.last_name}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {user.email}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    onNavigate('user-dashboard');
+                    setMobileMenuOpen(false);
+                  }}
+                  className="block w-full px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 font-medium text-left"
+                >
+                  Dashboard
+                </button>
+                <button
+                  onClick={() => {
+                    logout();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="block w-full px-4 py-2.5 text-red-600 dark:text-red-400 rounded-lg font-medium text-left hover:bg-gray-100 dark:hover:bg-gray-800"
+                >
+                  Sign Out
+                </button>
+              </>
+            ) : (
             <button
               onClick={() => { setLoginModalOpen(true); setMobileMenuOpen(false); }}
               className="block w-full px-4 py-2.5 text-white rounded-lg font-medium"
@@ -279,6 +386,7 @@ export default function Navbar({ onNavigate, currentPage = 'landing' }: NavbarPr
             >
               Sign In
             </button>
+            )}
           </div>
         </div>
       )}
