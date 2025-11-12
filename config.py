@@ -1,0 +1,111 @@
+import os
+from datetime import timedelta
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+class Config:
+    """Base configuration"""
+    # Flask
+    SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+    DEBUG = False
+    TESTING = False
+    
+    # Database
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///nikofree.db')
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+    }
+    
+    # JWT
+    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
+    JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
+    JWT_TOKEN_LOCATION = ['headers']
+    JWT_HEADER_NAME = 'Authorization'
+    JWT_HEADER_TYPE = 'Bearer'
+    
+    # CORS
+    CORS_ORIGINS = os.getenv('FRONTEND_URL', 'http://localhost:3000').split(',')
+    
+    # File Upload
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
+    UPLOAD_FOLDER = 'uploads'
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}
+    
+    # Email
+    MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
+    MAIL_PORT = int(os.getenv('MAIL_PORT', 587))
+    MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'True') == 'True'
+    MAIL_USERNAME = os.getenv('MAIL_USERNAME')
+    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
+    MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', 'noreply@nikofree.com')
+    
+    # OAuth
+    GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
+    GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
+    GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI')
+    
+    APPLE_CLIENT_ID = os.getenv('APPLE_CLIENT_ID')
+    APPLE_TEAM_ID = os.getenv('APPLE_TEAM_ID')
+    APPLE_KEY_ID = os.getenv('APPLE_KEY_ID')
+    APPLE_PRIVATE_KEY_PATH = os.getenv('APPLE_PRIVATE_KEY_PATH')
+    
+    # MPesa
+    MPESA_CONSUMER_KEY = os.getenv('MPESA_CONSUMER_KEY')
+    MPESA_CONSUMER_SECRET = os.getenv('MPESA_CONSUMER_SECRET')
+    MPESA_PASSKEY = os.getenv('MPESA_PASSKEY')
+    MPESA_SHORTCODE = os.getenv('MPESA_SHORTCODE', '174379')
+    MPESA_ENVIRONMENT = os.getenv('MPESA_ENVIRONMENT', 'sandbox')
+    MPESA_CALLBACK_URL = os.getenv('MPESA_CALLBACK_URL')
+    
+    # Redis
+    REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+    
+    # AWS S3
+    AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+    AWS_S3_BUCKET = os.getenv('AWS_S3_BUCKET', 'nikofree-uploads')
+    AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
+    
+    # Business Logic
+    PLATFORM_COMMISSION_RATE = float(os.getenv('PLATFORM_COMMISSION_RATE', '0.07'))
+    PARTNER_APPROVAL_TIME = '24 hours'
+    MAX_HOSTS_PER_EVENT = 2
+    MAX_INTERESTS_PER_EVENT = 5
+    PROMOTION_PRICE_PER_DAY = 400  # KES
+    
+    # Pagination
+    ITEMS_PER_PAGE = 20
+    MAX_ITEMS_PER_PAGE = 100
+
+
+class DevelopmentConfig(Config):
+    """Development configuration"""
+    DEBUG = True
+    SQLALCHEMY_ECHO = True
+
+
+class ProductionConfig(Config):
+    """Production configuration"""
+    DEBUG = False
+    TESTING = False
+
+
+class TestingConfig(Config):
+    """Testing configuration"""
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///test.db'
+    WTF_CSRF_ENABLED = False
+
+
+config = {
+    'development': DevelopmentConfig,
+    'production': ProductionConfig,
+    'testing': TestingConfig,
+    'default': DevelopmentConfig
+}
+
