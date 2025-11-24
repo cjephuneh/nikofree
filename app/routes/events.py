@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 from sqlalchemy import or_, and_
-from app import db
+from app import db, limiter
 from app.models.event import Event, EventHost, EventInterest, EventPromotion
 from app.models.category import Category, Location
 from app.models.user import User
@@ -15,6 +15,7 @@ bp = Blueprint('events', __name__)
 @bp.route('/', methods=['GET'])
 @bp.route('', methods=['GET'])  # Also handle without trailing slash
 @optional_user
+@limiter.exempt
 def get_events(current_user):
     """Get all events with filters"""
     # Query parameters

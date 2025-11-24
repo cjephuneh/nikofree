@@ -66,6 +66,9 @@ class Partner(db.Model):
     events = db.relationship('Event', backref='organizer', lazy='dynamic', cascade='all, delete-orphan')
     payouts = db.relationship('PartnerPayout', backref='partner', lazy='dynamic', cascade='all, delete-orphan')
     category = db.relationship('Category', backref='partners')
+    # New relationships
+    support_requests = db.relationship('PartnerSupportRequest', backref='partner', lazy='dynamic', cascade='all, delete-orphan')
+    team_members = db.relationship('PartnerTeamMember', backref='partner', lazy='dynamic', cascade='all, delete-orphan')
     
     def set_password(self, password):
         """Hash and set password"""
@@ -108,4 +111,65 @@ class Partner(db.Model):
     
     def __repr__(self):
         return f'<Partner {self.business_name}>'
+
+
+class PartnerSupportRequest(db.Model):
+    """Support requests created by partners"""
+    __tablename__ = 'partner_support_requests'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    partner_id = db.Column(db.Integer, db.ForeignKey('partners.id', ondelete='CASCADE'), nullable=False)
+    subject = db.Column(db.String(255), nullable=True)
+    message = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), default='open')  # open, in_progress, resolved
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'partner_id': self.partner_id,
+            'subject': self.subject,
+            'message': self.message,
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class PartnerTeamMember(db.Model):
+    """Team members / managers that help manage partner events"""
+    __tablename__ = 'partner_team_members'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    partner_id = db.Column(db.Integer, db.ForeignKey('partners.id', ondelete='CASCADE'), nullable=False)
+    name = db.Column(db.String(200), nullable=False)
+    email = db.Column(db.String(255), nullable=False)
+    phone = db.Column(db.String(50), nullable=True)
+    role = db.Column(db.String(50), default='Manager')
+    permissions = db.Column(db.Text, nullable=True)  # JSON-encoded list of permissions
+    is_active = db.Column(db.Boolean, default=True)
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        import json as _json
+        perms: list[str] = []
+        if self.permissions:
+            try:
+                perms = _json.loads(self.permissions)
+            except Exception:
+                # Fallback if stored as comma-separated string
+                perms = [p.strip() for p in self.permissions.split(',') if p.strip()]
+        
+        return {
+            'id': self.id,
+            'partner_id': self.partner_id,
+            'name': self.name,
+            'email': self.email,
+            'phone': self.phone,
+            'role': self.role,
+            'permissions': perms,
+            'is_active': self.is_active,
+            'added_at': self.added_at.isoformat() if self.added_at else None,
+        }
 

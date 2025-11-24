@@ -2,8 +2,8 @@ from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime
 from sqlalchemy import func
 import json
-from app import db
-from app.models.partner import Partner
+from app import db, limiter
+from app.models.partner import Partner, PartnerSupportRequest, PartnerTeamMember
 from app.models.event import Event, EventHost, EventInterest, EventPromotion
 from app.models.ticket import TicketType, PromoCode, Booking
 from app.models.payment import PartnerPayout
@@ -48,6 +48,85 @@ def get_dashboard(current_partner):
             'withdrawn_earnings': float(current_partner.withdrawn_earnings)
         },
         'recent_bookings': [booking.to_dict() for booking in recent_bookings]
+    }), 200
+
+
+@bp.route('/analytics', methods=['GET'])
+@partner_required
+def get_partner_analytics(current_partner):
+    """More detailed analytics for partner (used by Analytics page)"""
+    from datetime import timedelta
+    days = request.args.get('days', 30, type=int)
+    now = datetime.utcnow()
+    start_period = now - timedelta(days=days)
+    start_7d = now - timedelta(days=7)
+    start_1d = now - timedelta(days=1)
+    
+    # Base confirmed bookings query for this partner
+    base_bookings = Booking.query.join(Event).filter(
+        Event.partner_id == current_partner.id,
+        Booking.status == 'confirmed'
+    )
+    
+    # All-time stats
+    total_bookings = base_bookings.count()
+    total_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
+        Event.partner_id == current_partner.id,
+        Booking.status == 'confirmed'
+    ).scalar() or 0
+    
+    # Period stats (last N days)
+    period_bookings = base_bookings.filter(Booking.created_at >= start_period).count()
+    period_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
+        Event.partner_id == current_partner.id,
+        Booking.status == 'confirmed',
+        Booking.created_at >= start_period
+    ).scalar() or 0
+    
+    # Last 7 days
+    last_7d_bookings = base_bookings.filter(Booking.created_at >= start_7d).count()
+    last_7d_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
+        Event.partner_id == current_partner.id,
+        Booking.status == 'confirmed',
+        Booking.created_at >= start_7d
+    ).scalar() or 0
+    
+    # Last 24 hours
+    last_1d_bookings = base_bookings.filter(Booking.created_at >= start_1d).count()
+    last_1d_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
+        Event.partner_id == current_partner.id,
+        Booking.status == 'confirmed',
+        Booking.created_at >= start_1d
+    ).scalar() or 0
+    
+    # Event stats
+    total_events = Event.query.filter_by(partner_id=current_partner.id).count()
+    active_events = Event.query.filter(
+        Event.partner_id == current_partner.id,
+        Event.start_date > now,
+        Event.status == 'approved'
+    ).count()
+    
+    return jsonify({
+        'summary': {
+            'total_bookings': total_bookings,
+            'total_events': total_events,
+            'active_events': active_events,
+            'total_revenue': float(total_revenue),
+        },
+        'period': {
+            'days': days,
+            'bookings': period_bookings,
+            'revenue': float(period_revenue),
+        },
+        'last_7_days': {
+            'bookings': last_7d_bookings,
+            'revenue': float(last_7d_revenue),
+        },
+        'last_24_hours': {
+            'bookings': last_1d_bookings,
+            'revenue': float(last_1d_revenue),
+        },
     }), 200
 
 
@@ -175,6 +254,7 @@ def upload_logo(current_partner):
 # ============ EVENT MANAGEMENT ============
 
 @bp.route('/events', methods=['GET'])
+@limiter.exempt
 @partner_required
 def get_partner_events(current_partner):
     """Get all events for this partner"""
@@ -651,6 +731,102 @@ def delete_event(current_partner, event_id):
     db.session.commit()
     
     return jsonify({'message': 'Event deleted successfully'}), 200
+
+
+# ============ SUPPORT & TEAM MANAGEMENT ============
+
+
+@bp.route('/support', methods=['POST'])
+@partner_required
+def create_support_request(current_partner):
+    """Create a support request from partner"""
+    data = request.get_json() or {}
+    message = (data.get('message') or '').strip()
+    subject = (data.get('subject') or '').strip()
+    
+    if not message:
+        return jsonify({'error': 'Message is required'}), 400
+    
+    support_request = PartnerSupportRequest(
+        partner_id=current_partner.id,
+        subject=subject or None,
+        message=message
+    )
+    
+    db.session.add(support_request)
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Support request sent',
+        'request': support_request.to_dict()
+    }), 201
+
+
+@bp.route('/team', methods=['GET'])
+@partner_required
+def get_team_members(current_partner):
+    """Get active team members for this partner"""
+    members = PartnerTeamMember.query.filter_by(
+        partner_id=current_partner.id,
+        is_active=True
+    ).order_by(PartnerTeamMember.added_at.desc()).all()
+    
+    return jsonify({
+        'members': [m.to_dict() for m in members]
+    }), 200
+
+
+@bp.route('/team', methods=['POST'])
+@partner_required
+def add_team_member(current_partner):
+    """Add a team member / fellow manager"""
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    email = (data.get('email') or '').strip().lower()
+    phone = (data.get('phone') or '').strip()
+    role = (data.get('role') or 'Manager').strip()
+    permissions = data.get('permissions') or []
+    
+    if not name or not email:
+        return jsonify({'error': 'Name and email are required'}), 400
+    
+    member = PartnerTeamMember(
+        partner_id=current_partner.id,
+        name=name,
+        email=email,
+        phone=phone or None,
+        role=role,
+        permissions=json.dumps(permissions) if permissions else None
+    )
+    
+    db.session.add(member)
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Team member added',
+        'member': member.to_dict()
+    }), 201
+
+
+@bp.route('/team/<int:member_id>', methods=['DELETE'])
+@partner_required
+def remove_team_member(current_partner, member_id):
+    """Soft-delete a team member"""
+    member = PartnerTeamMember.query.filter_by(
+        id=member_id,
+        partner_id=current_partner.id,
+        is_active=True
+    ).first()
+    
+    if not member:
+        return jsonify({'error': 'Team member not found'}), 404
+    
+    member.is_active = False
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Team member removed'
+    }), 200
 
 
 @bp.route('/events/<int:event_id>/poster', methods=['POST'])
