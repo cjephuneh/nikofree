@@ -1,0 +1,12 @@
+{
+  "name": "nikofree-server",
+  "version": "1.0.0",
+  "description": "Flask backend API for Niko Free - an event management and ticketing platform for Kenya.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "keywords": []
+}

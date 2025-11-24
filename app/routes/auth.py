@@ -279,7 +279,9 @@ def apple_login():
     }), 501
 
 
+#
 # ============ PARTNER AUTHENTICATION ============
+#
 
 @bp.route('/partner/apply', methods=['POST'])
 @limiter.limit("3 per hour")
@@ -480,6 +482,55 @@ def partner_login():
     return jsonify({
         'message': 'Login successful',
         'partner': partner.to_dict(include_sensitive=True),
+        'access_token': access_token,
+        'refresh_token': refresh_token
+    }), 200
+
+
+# ============ ADMIN AUTHENTICATION ============
+
+@bp.route('/admin/login', methods=['POST'])
+@limiter.limit("10 per hour")
+def admin_login():
+    """Admin login using admin email from configuration"""
+    data = request.get_json()
+
+    if not data.get('email') or not data.get('password'):
+        return jsonify({'error': 'Email and password are required'}), 400
+
+    email = data['email'].lower().strip()
+
+    # Find user
+    user = User.query.filter_by(email=email).first()
+
+    if not user or not user.check_password(data['password']):
+        return jsonify({'error': 'Invalid email or password'}), 401
+
+    if not user.is_active:
+        return jsonify({'error': 'Account is deactivated'}), 403
+
+    # Check if this user is allowed to be admin
+    from flask import current_app
+    admin_email = current_app.config.get('ADMIN_EMAIL')
+    if not admin_email or user.email.lower() != admin_email.lower():
+        return jsonify({'error': 'Admin access required'}), 403
+
+    # Update last login
+    user.last_login = datetime.utcnow()
+    db.session.commit()
+
+    # Generate tokens (reuse user JWTs)
+    expires_delta = timedelta(days=30) if data.get('keep_logged_in') else None
+    access_token = create_access_token(identity=user.id, expires_delta=expires_delta)
+    refresh_token = create_refresh_token(identity=user.id)
+
+    # Build response user object with is_admin flag for frontend
+    user_data = user.to_dict(include_sensitive=True)
+    user_data['is_admin'] = True
+
+    return jsonify({
+        'message': 'Login successful',
+        'user': user_data,
         'access_token': access_token,
         'refresh_token': refresh_token
     }), 200

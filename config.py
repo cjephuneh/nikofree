@@ -12,6 +12,10 @@ class Config:
     DEBUG = False
     TESTING = False
     
+    # Admin
+    # Email address that is treated as the platform admin account
+    ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'admin@nikofree.com')
+    
     # Database
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///nikofree.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
