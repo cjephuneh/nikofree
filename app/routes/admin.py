@@ -36,105 +36,134 @@ def log_admin_action(admin, action, resource_type, resource_id, description=None
 @admin_required
 def get_dashboard(current_admin):
     """Get admin dashboard overview"""
-    # Get stats
-    total_users = User.query.count()
-    total_partners = Partner.query.filter_by(status='approved').count()
-    total_events = Event.query.filter_by(status='approved').count()
-    total_bookings = Booking.query.count()
-    
-    # Pending approvals - get details
-    pending_partners_list = Partner.query.filter_by(status='pending').order_by(Partner.created_at.desc()).limit(5).all()
-    pending_events_list = Event.query.filter_by(status='pending').order_by(Event.created_at.desc()).limit(5).all()
-    
-    pending_partners_count = Partner.query.filter_by(status='pending').count()
-    pending_events_count = Event.query.filter_by(status='pending').count()
-    
-    # Revenue
-    total_revenue = db.session.query(func.sum(Payment.amount)).filter(
-        Payment.status == 'completed'
-    ).scalar() or 0
-    
-    platform_fees = db.session.query(func.sum(Payment.platform_fee)).filter(
-        Payment.status == 'completed'
-    ).scalar() or 0
-    
-    # Recent activity - get recent users, partners, events
-    recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
-    recent_partners = Partner.query.order_by(Partner.created_at.desc()).limit(5).all()
-    recent_events = Event.query.order_by(Event.created_at.desc()).limit(5).all()
-    
-    # Recent admin activity logs
-    recent_admin_logs = AdminLog.query.order_by(AdminLog.created_at.desc()).limit(10).all()
-    
-    # Calculate month-over-month changes (simplified - last 30 days vs previous 30 days)
-    from datetime import timedelta
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-    sixty_days_ago = datetime.utcnow() - timedelta(days=60)
-    
-    users_this_month = User.query.filter(User.created_at >= thirty_days_ago).count()
-    users_last_month = User.query.filter(
-        User.created_at >= sixty_days_ago,
-        User.created_at < thirty_days_ago
-    ).count()
-    users_change = ((users_this_month - users_last_month) / users_last_month * 100) if users_last_month > 0 else 0
-    
-    partners_this_month = Partner.query.filter(
-        Partner.created_at >= thirty_days_ago,
-        Partner.status == 'approved'
-    ).count()
-    partners_last_month = Partner.query.filter(
-        Partner.created_at >= sixty_days_ago,
-        Partner.created_at < thirty_days_ago,
-        Partner.status == 'approved'
-    ).count()
-    partners_change = ((partners_this_month - partners_last_month) / partners_last_month * 100) if partners_last_month > 0 else 0
-    
-    events_this_month = Event.query.filter(
-        Event.created_at >= thirty_days_ago,
-        Event.status == 'approved'
-    ).count()
-    events_last_month = Event.query.filter(
-        Event.created_at >= sixty_days_ago,
-        Event.created_at < thirty_days_ago,
-        Event.status == 'approved'
-    ).count()
-    events_change = events_this_month - events_last_month
-    
-    return jsonify({
-        'stats': {
-            'total_users': total_users,
-            'total_partners': total_partners,
-            'total_events': total_events,
-            'total_bookings': total_bookings,
-            'pending_partners': pending_partners_count,
-            'pending_events': pending_events_count,
-            'total_revenue': float(total_revenue),
-            'platform_fees': float(platform_fees),
-            'users_change': round(users_change, 1),
-            'partners_change': round(partners_change, 1),
-            'events_change': events_change
-        },
-        'pending_partners': [{
-            'id': p.id,
-            'name': p.business_name,
-            'email': p.email,
-            'category': p.category.name if p.category else 'N/A',
-            'submittedDate': p.created_at.isoformat(),
-            'status': p.status
-        } for p in pending_partners_list],
-        'pending_events': [{
-            'id': e.id,
-            'title': e.title,
-            'partner': e.partner.business_name if e.partner else 'N/A',
-            'category': e.category.name if e.category else 'N/A',
-            'date': e.start_date.isoformat() if e.start_date else None,
-            'status': e.status
-        } for e in pending_events_list],
-        'recent_users': [user.to_dict() for user in recent_users],
-        'recent_partners': [partner.to_dict() for partner in recent_partners],
-        'recent_events': [event.to_dict() for event in recent_events],
-        'recent_activity': [log.to_dict() for log in recent_admin_logs]
-    }), 200
+    try:
+        # Get stats
+        total_users = User.query.count()
+        total_partners = Partner.query.filter_by(status='approved').count()
+        total_events = Event.query.filter_by(status='approved').count()
+        total_bookings = Booking.query.count()
+        
+        # Pending approvals - get details
+        pending_partners_list = Partner.query.filter_by(status='pending').order_by(Partner.created_at.desc()).limit(5).all()
+        pending_events_list = Event.query.filter_by(status='pending').order_by(Event.created_at.desc()).limit(5).all()
+        
+        pending_partners_count = Partner.query.filter_by(status='pending').count()
+        pending_events_count = Event.query.filter_by(status='pending').count()
+        
+        # Revenue
+        total_revenue = db.session.query(func.sum(Payment.amount)).filter(
+            Payment.status == 'completed'
+        ).scalar() or 0
+        
+        platform_fees = db.session.query(func.sum(Payment.platform_fee)).filter(
+            Payment.status == 'completed'
+        ).scalar() or 0
+        
+        # Recent activity - get recent users, partners, events
+        recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
+        recent_partners = Partner.query.order_by(Partner.created_at.desc()).limit(5).all()
+        recent_events = Event.query.order_by(Event.created_at.desc()).limit(5).all()
+        
+        # Recent admin activity logs
+        recent_admin_logs = AdminLog.query.order_by(AdminLog.created_at.desc()).limit(10).all()
+        
+        # Calculate month-over-month changes (simplified - last 30 days vs previous 30 days)
+        from datetime import timedelta
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        sixty_days_ago = datetime.utcnow() - timedelta(days=60)
+        
+        users_this_month = User.query.filter(User.created_at >= thirty_days_ago).count()
+        users_last_month = User.query.filter(
+            User.created_at >= sixty_days_ago,
+            User.created_at < thirty_days_ago
+        ).count()
+        users_change = ((users_this_month - users_last_month) / users_last_month * 100) if users_last_month > 0 else 0
+        
+        partners_this_month = Partner.query.filter(
+            Partner.created_at >= thirty_days_ago,
+            Partner.status == 'approved'
+        ).count()
+        partners_last_month = Partner.query.filter(
+            Partner.created_at >= sixty_days_ago,
+            Partner.created_at < thirty_days_ago,
+            Partner.status == 'approved'
+        ).count()
+        partners_change = ((partners_this_month - partners_last_month) / partners_last_month * 100) if partners_last_month > 0 else 0
+        
+        events_this_month = Event.query.filter(
+            Event.created_at >= thirty_days_ago,
+            Event.status == 'approved'
+        ).count()
+        events_last_month = Event.query.filter(
+            Event.created_at >= sixty_days_ago,
+            Event.created_at < thirty_days_ago,
+            Event.status == 'approved'
+        ).count()
+        events_change = events_this_month - events_last_month
+        
+        # Safely get category and partner names
+        pending_partners_data = []
+        for p in pending_partners_list:
+            try:
+                category_name = p.category.name if p.category else 'N/A'
+            except:
+                category_name = 'N/A'
+            pending_partners_data.append({
+                'id': p.id,
+                'name': p.business_name,
+                'email': p.email,
+                'category': category_name,
+                'submittedDate': p.created_at.isoformat() if p.created_at else '',
+                'status': p.status
+            })
+        
+        pending_events_data = []
+        for e in pending_events_list:
+            try:
+                partner_name = e.organizer.business_name if e.organizer else 'N/A'
+            except:
+                partner_name = 'N/A'
+            try:
+                category_name = e.category.name if e.category else 'N/A'
+            except:
+                category_name = 'N/A'
+            pending_events_data.append({
+                'id': e.id,
+                'title': e.title,
+                'partner': partner_name,
+                'category': category_name,
+                'date': e.start_date.isoformat() if e.start_date else None,
+                'status': e.status
+            })
+        
+        response = jsonify({
+            'stats': {
+                'total_users': total_users,
+                'total_partners': total_partners,
+                'total_events': total_events,
+                'total_bookings': total_bookings,
+                'pending_partners': pending_partners_count,
+                'pending_events': pending_events_count,
+                'total_revenue': float(total_revenue),
+                'platform_fees': float(platform_fees),
+                'users_change': round(users_change, 1),
+                'partners_change': round(partners_change, 1),
+                'events_change': events_change
+            },
+            'pending_partners': pending_partners_data,
+            'pending_events': pending_events_data,
+            'recent_users': [user.to_dict() for user in recent_users],
+            'recent_partners': [partner.to_dict() for partner in recent_partners],
+            'recent_events': [event.to_dict() for event in recent_events],
+            'recent_activity': [log.to_dict() for log in recent_admin_logs]
+        })
+        return response, 200
+    except Exception as e:
+        import traceback
+        error_msg = str(e)
+        traceback.print_exc()
+        response = jsonify({'error': f'Internal server error: {error_msg}'})
+        return response, 500
 
 
 # ============ PARTNER MANAGEMENT ============
@@ -682,20 +711,26 @@ def get_analytics(current_admin):
         Payment.status == 'completed'
     ).scalar() or 0
     
-    # Top categories
+    # Top categories - be explicit about join conditions to avoid ambiguity
     top_categories = db.session.query(
         Category.name,
         func.count(Event.id).label('event_count')
-    ).join(Event).group_by(Category.id).order_by(desc('event_count')).limit(10).all()
+    ).select_from(Category).join(
+        Event, Event.category_id == Category.id
+    ).group_by(Category.id, Category.name).order_by(desc('event_count')).limit(10).all()
     
-    # Top partners
+    # Top partners - explicit joins: Partner -> Event -> Booking
     top_partners = db.session.query(
         Partner.business_name,
         func.count(Booking.id).label('booking_count'),
         func.sum(Booking.partner_amount).label('earnings')
-    ).join(Event).join(Booking).filter(
+    ).select_from(Partner).join(
+        Event, Event.partner_id == Partner.id
+    ).join(
+        Booking, Booking.event_id == Event.id
+    ).filter(
         Booking.status == 'confirmed'
-    ).group_by(Partner.id).order_by(desc('booking_count')).limit(10).all()
+    ).group_by(Partner.id, Partner.business_name).order_by(desc('booking_count')).limit(10).all()
     
     return jsonify({
         'period_days': days,
