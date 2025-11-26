@@ -7,7 +7,7 @@ from app.models.payment import Payment
 from app.utils.decorators import user_required, partner_required
 from app.utils.qrcode_generator import generate_qr_code
 from app.utils.email import send_booking_confirmation_email
-from app.routes.notifications import notify_new_booking
+from app.routes.notifications import notify_new_booking, create_notification
 
 bp = Blueprint('tickets', __name__)
 
@@ -65,8 +65,8 @@ def book_event(current_user):
     data = request.get_json()
     
     # Validate required fields
-    if not data.get('event_id') or not data.get('ticket_type_id'):
-        return jsonify({'error': 'event_id and ticket_type_id are required'}), 400
+    if not data.get('event_id'):
+        return jsonify({'error': 'event_id is required'}), 400
     
     quantity = data.get('quantity', 1)
     
@@ -85,12 +85,65 @@ def book_event(current_user):
     if event.start_date < datetime.utcnow():
         return jsonify({'error': 'Cannot book past events'}), 400
     
-    # Get ticket type
-    ticket_type = TicketType.query.filter_by(
-        id=data['ticket_type_id'],
-        event_id=event.id,
-        is_active=True
+    # Check if user has already booked this event (prevent duplicate bookings)
+    existing_booking = Booking.query.filter_by(
+        user_id=current_user.id,
+        event_id=event.id
+    ).filter(
+        Booking.status != 'cancelled'
     ).first()
+    
+    if existing_booking:
+        if existing_booking.status == 'confirmed':
+            return jsonify({
+                'error': 'You have already booked tickets for this event',
+                'booking_id': existing_booking.id,
+                'booking_number': existing_booking.booking_number
+            }), 409  # 409 Conflict
+        elif existing_booking.status == 'pending':
+            return jsonify({
+                'error': 'You have a pending booking for this event. Please complete the payment or cancel the existing booking.',
+                'booking_id': existing_booking.id,
+                'booking_number': existing_booking.booking_number
+            }), 409  # 409 Conflict
+    
+    # Get ticket type - for free events, create default if none exists
+    ticket_type = None
+    if data.get('ticket_type_id'):
+        ticket_type = TicketType.query.filter_by(
+            id=data['ticket_type_id'],
+            event_id=event.id,
+            is_active=True
+        ).first()
+    
+    # For free events without ticket types, create a default one
+    if event.is_free and not ticket_type:
+        # Check if a default free ticket type exists
+        ticket_type = TicketType.query.filter_by(
+            event_id=event.id,
+            name='Free Admission',
+            is_active=True
+        ).first()
+        
+        if not ticket_type:
+            # Create default free ticket type
+            ticket_type = TicketType(
+                event_id=event.id,
+                name='Free Admission',
+                price=0.00,
+                quantity_total=None,  # None = unlimited
+                quantity_available=None,  # None = unlimited
+                quantity_sold=0,
+                min_per_order=1,
+                max_per_order=10,
+                is_active=True
+            )
+            db.session.add(ticket_type)
+            db.session.flush()
+    
+    # For paid events, ticket type is required
+    if not event.is_free and not ticket_type:
+        return jsonify({'error': 'Ticket type is required for paid events'}), 400
     
     if not ticket_type:
         return jsonify({'error': 'Ticket type not found'}), 404
@@ -203,6 +256,19 @@ def book_event(current_user):
         
         # Send confirmation email
         send_booking_confirmation_email(booking, tickets)
+        
+        # Notify user of successful booking
+        create_notification(
+            user_id=current_user.id,
+            title='Booking Confirmed! 🎉',
+            message=f'Your booking for "{event.title}" has been confirmed. {quantity} ticket(s) reserved.',
+            notification_type='booking',
+            event_id=event.id,
+            booking_id=booking.id,
+            action_url=f'/bookings/{booking.id}',
+            action_text='View Booking',
+            send_email=False  # Email already sent above
+        )
         
         # Notify partner of new booking
         notify_new_booking(event, booking)

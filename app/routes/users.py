@@ -152,11 +152,9 @@ def get_bucketlist(current_user):
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     
-    # Get wishlist events
-    events = current_user.bucketlist.filter(
-        Event.is_published == True,
-        Event.status == 'approved'
-    ).order_by(Event.start_date).paginate(
+    # Get all wishlist events (don't filter by published/approved so users can see all their liked events)
+    # Users should be able to see events they liked even if they're pending or unpublished
+    events = current_user.bucketlist.order_by(Event.start_date).paginate(
         page=page, per_page=per_page, error_out=False
     )
     

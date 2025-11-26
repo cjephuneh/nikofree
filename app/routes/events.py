@@ -86,8 +86,19 @@ def get_events(current_user):
     # Paginate
     events = query.paginate(page=page, per_page=per_page, error_out=False)
     
+    # Build events list with bucketlist status
+    events_list = []
+    for event in events.items:
+        event_dict = event.to_dict()
+        # Check if event is in user's bucketlist
+        if current_user:
+            event_dict['in_bucketlist'] = event in current_user.bucketlist
+        else:
+            event_dict['in_bucketlist'] = False
+        events_list.append(event_dict)
+    
     return jsonify({
-        'events': [event.to_dict() for event in events.items],
+        'events': events_list,
         'total': events.total,
         'page': events.page,
         'pages': events.pages,

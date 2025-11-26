@@ -58,6 +58,17 @@ def create_app(config_name='default'):
     app.register_blueprint(payments.bp, url_prefix='/api/payments')
     app.register_blueprint(notifications.bp, url_prefix='/api/notifications')
     
+    # Serve static files from uploads folder
+    from flask import send_from_directory
+    import os
+    
+    @app.route('/uploads/<path:filename>')
+    def uploaded_file(filename):
+        """Serve uploaded files"""
+        upload_folder = app.config.get('UPLOAD_FOLDER', 'uploads')
+        # Handle nested paths like events/filename.jpg
+        return send_from_directory(upload_folder, filename)
+    
     # Health check endpoint
     @app.route('/health')
     def health_check():
