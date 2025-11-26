@@ -11,6 +11,7 @@ class Notification(db.Model):
     # Recipient
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
     partner_id = db.Column(db.Integer, db.ForeignKey('partners.id', ondelete='CASCADE'), nullable=True)
+    admin_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True)  # Admin user ID
     
     # Content
     title = db.Column(db.String(200), nullable=False)

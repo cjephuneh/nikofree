@@ -521,6 +521,71 @@ def get_users(current_admin):
     }), 200
 
 
+@bp.route('/users/<int:user_id>', methods=['GET'])
+@admin_required
+def get_user(current_admin, user_id):
+    """Get user details with bookings and tickets"""
+    user = User.query.get(user_id)
+    
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    # Get user's bookings
+    bookings = Booking.query.filter_by(user_id=user_id).order_by(Booking.created_at.desc()).all()
+    
+    # Get all tickets for this user
+    tickets = []
+    events_booked = []
+    
+    for booking in bookings:
+        # Get event details
+        event = Event.query.get(booking.event_id)
+        if event:
+            events_booked.append({
+                'id': event.id,
+                'title': event.title,
+                'date': event.start_date.isoformat() if event.start_date else None,
+                'location': event.venue_name or event.venue_address or 'Location TBA',
+                'booking_id': booking.id,
+                'booking_number': booking.booking_number,
+                'quantity': booking.quantity,
+                'status': booking.status,
+                'payment_status': booking.payment_status,
+                'total_amount': float(booking.total_amount) if booking.total_amount else 0
+            })
+        
+        # Get tickets for this booking
+        booking_tickets = booking.tickets.all()
+        for ticket in booking_tickets:
+            ticket_type = ticket.ticket_type
+            tickets.append({
+                'id': ticket.id,
+                'ticket_number': ticket.ticket_number,
+                'event_id': event.id if event else None,
+                'event_title': event.title if event else 'Unknown Event',
+                'ticket_type': ticket_type.name if ticket_type else 'N/A',
+                'price': float(ticket_type.price) if ticket_type and ticket_type.price else 0,
+                'booking_id': booking.id,
+                'booking_number': booking.booking_number,
+                'status': booking.payment_status,
+                'is_valid': ticket.is_valid,
+                'is_scanned': ticket.is_scanned,  # Ticket has is_scanned, not is_checked_in
+                'is_checked_in': booking.is_checked_in,  # Check-in status is on booking
+                'scanned_at': ticket.scanned_at.isoformat() if ticket.scanned_at else None,
+                'created_at': ticket.created_at.isoformat() if ticket.created_at else None
+            })
+    
+    return jsonify({
+        'user': user.to_dict(include_sensitive=True),
+        'bookings': events_booked,
+        'tickets': tickets,
+        'total_bookings': len(bookings),
+        'total_tickets': len(tickets),
+        'confirmed_bookings': len([b for b in bookings if b.status == 'confirmed']),
+        'total_spent': float(sum([b.total_amount for b in bookings if b.payment_status == 'paid' and b.total_amount])) or 0
+    }), 200
+
+
 # ============ CATEGORY & LOCATION MANAGEMENT ============
 
 @bp.route('/categories', methods=['GET'])

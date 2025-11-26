@@ -45,7 +45,8 @@ class User(db.Model):
     # Relationships
     bookings = db.relationship('Booking', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     bucketlist = db.relationship('Event', secondary='bucketlist', backref='wishlist_users', lazy='dynamic')
-    notifications = db.relationship('Notification', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+    notifications = db.relationship('Notification', foreign_keys='Notification.user_id', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+    admin_notifications = db.relationship('Notification', foreign_keys='Notification.admin_id', backref='admin_user', lazy='dynamic', cascade='all, delete-orphan')
     
     def set_password(self, password):
         """Hash and set password"""

@@ -4,18 +4,19 @@ from app import db
 from app.models.notification import Notification
 from app.models.user import User
 from app.models.partner import Partner
-from app.utils.decorators import user_required, partner_required
+from app.utils.decorators import user_required, partner_required, admin_required
 
 bp = Blueprint('notifications', __name__)
 
 
-def create_notification(user_id=None, partner_id=None, title=None, message=None,
+def create_notification(user_id=None, partner_id=None, admin_id=None, title=None, message=None,
                        notification_type='general', event_id=None, booking_id=None,
                        action_url=None, action_text=None, send_email=False):
     """Helper function to create notification"""
     notification = Notification(
         user_id=user_id,
         partner_id=partner_id,
+        admin_id=admin_id,
         title=title,
         message=message,
         notification_type=notification_type,
@@ -132,6 +133,54 @@ def mark_all_partner_read(current_partner):
     """Mark all partner notifications as read"""
     Notification.query.filter_by(
         partner_id=current_partner.id,
+        is_read=False
+    ).update({
+        'is_read': True,
+        'read_at': datetime.utcnow()
+    })
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'All notifications marked as read'
+    }), 200
+
+
+@bp.route('/admin', methods=['GET'])
+@admin_required
+def get_admin_notifications(current_admin):
+    """Get admin notifications"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    unread_only = request.args.get('unread_only', 'false').lower() == 'true'
+    
+    query = Notification.query.filter_by(admin_id=current_admin.id)
+    
+    if unread_only:
+        query = query.filter_by(is_read=False)
+    
+    notifications = query.order_by(Notification.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    return jsonify({
+        'notifications': [notif.to_dict() for notif in notifications.items],
+        'total': notifications.total,
+        'unread_count': Notification.query.filter_by(
+            admin_id=current_admin.id,
+            is_read=False
+        ).count(),
+        'page': notifications.page,
+        'pages': notifications.pages
+    }), 200
+
+
+@bp.route('/admin/read-all', methods=['PUT'])
+@admin_required
+def mark_all_admin_read(current_admin):
+    """Mark all admin notifications as read"""
+    Notification.query.filter_by(
+        admin_id=current_admin.id,
         is_read=False
     ).update({
         'is_read': True,
