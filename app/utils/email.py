@@ -304,3 +304,76 @@ def send_event_approval_email(event, approved=True):
     
     send_email(subject, partner.email, html_body)
 
+
+def send_payment_confirmation_email(booking, payment, tickets):
+    """Send payment confirmation email to user"""
+    user = booking.user
+    event = booking.event
+    
+    subject = f"Payment Confirmed: {event.title}"
+    
+    tickets_html = ""
+    for ticket in tickets:
+        qr_url = ticket.qr_code if ticket.qr_code else ""
+        tickets_html += f"""
+        <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px; background-color: #f9f9f9;">
+            <p><strong>Ticket #{ticket.ticket_number}</strong></p>
+            <p>Type: {ticket.ticket_type.name if ticket.ticket_type else 'General Admission'}</p>
+            {f'<img src="{qr_url}" alt="QR Code" style="max-width: 200px; margin-top: 10px;">' if qr_url else ''}
+        </div>
+        """
+    
+    html_body = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #4CAF50;">Payment Confirmed! ✅</h2>
+                <p>Hi {user.first_name},</p>
+                <p>Your payment for <strong>{event.title}</strong> has been successfully processed!</p>
+                
+                <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                    <h3 style="margin-top: 0;">Payment Details</h3>
+                    <p><strong>Transaction ID:</strong> {payment.transaction_id}</p>
+                    <p><strong>MPesa Receipt:</strong> {payment.mpesa_receipt_number or 'Processing...'}</p>
+                    <p><strong>Amount Paid:</strong> KES {payment.amount:,.2f}</p>
+                    <p><strong>Payment Date:</strong> {payment.completed_at.strftime('%B %d, %Y at %I:%M %p') if payment.completed_at else 'N/A'}</p>
+                </div>
+                
+                <div style="background-color: #e8f5e9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                    <h3 style="margin-top: 0;">Event Details</h3>
+                    <p><strong>Event:</strong> {event.title}</p>
+                    <p><strong>Date:</strong> {event.start_date.strftime('%B %d, %Y at %I:%M %p')}</p>
+                    <p><strong>Venue:</strong> {event.venue_name or event.venue_address or 'Online'}</p>
+                    <p><strong>Booking Number:</strong> {booking.booking_number}</p>
+                    <p><strong>Quantity:</strong> {booking.quantity} ticket(s)</p>
+                </div>
+                
+                <h3>Your Tickets</h3>
+                {tickets_html}
+                
+                <p style="margin-top: 30px;">
+                    <strong>📱 Important:</strong> Please present your QR code at the event entrance for check-in.
+                </p>
+                
+                <a href="{current_app.config.get('FRONTEND_URL', 'http://localhost:5173')}/bookings/{booking.id}" 
+                   style="display: inline-block; padding: 12px 30px; background-color: #4CAF50; 
+                          color: white; text-decoration: none; border-radius: 5px; margin-top: 20px;">
+                    View Booking Details
+                </a>
+                
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <p style="font-size: 14px; color: #666;">
+                        If you have any questions or concerns, please contact our support team.
+                    </p>
+                </div>
+                
+                <p style="margin-top: 30px; font-size: 12px; color: #999;">
+                    Best regards,<br>
+                    The Niko Free Team
+                </p>
+            </div>
+        </body>
+    </html>
+    """
+    send_email(subject, user.email, html_body)
+

@@ -8,8 +8,8 @@ from app.models.event import EventPromotion
 from app.utils.decorators import user_required
 from app.utils.mpesa import MPesaClient, format_phone_number
 from app.utils.qrcode_generator import generate_qr_code
-from app.utils.email import send_booking_confirmation_email
-from app.routes.notifications import notify_new_booking, notify_payment_completed
+from app.utils.email import send_booking_confirmation_email, send_payment_confirmation_email
+from app.routes.notifications import notify_new_booking, notify_payment_completed, create_notification
 
 bp = Blueprint('payments', __name__)
 
@@ -189,8 +189,24 @@ def mpesa_callback():
             
             db.session.commit()
             
-            # Send confirmation email
+            # Send payment confirmation email to user
+            send_payment_confirmation_email(booking, payment, tickets)
+            
+            # Send booking confirmation email (includes tickets)
             send_booking_confirmation_email(booking, tickets)
+            
+            # Notify user of successful payment
+            create_notification(
+                user_id=booking.user_id,
+                title='Payment Successful!',
+                message=f'Your payment of KES {payment.amount:,.2f} for "{event.title}" has been confirmed.',
+                notification_type='payment',
+                event_id=event.id,
+                booking_id=booking.id,
+                action_url=f'/bookings/{booking.id}',
+                action_text='View Booking',
+                send_email=False  # Already sent email above
+            )
             
             # Notify partner of new booking and payment
             notify_new_booking(event, booking)
