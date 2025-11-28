@@ -122,7 +122,7 @@ def get_bookings(current_user):
     bookings = query.paginate(page=page, per_page=per_page, error_out=False)
     
     return jsonify({
-        'bookings': [booking.to_dict() for booking in bookings.items],
+        'bookings': [booking.to_dict(include_event_stats=True) for booking in bookings.items],
         'total': bookings.total,
         'page': bookings.page,
         'pages': bookings.pages,
@@ -159,7 +159,7 @@ def get_bucketlist(current_user):
     )
     
     return jsonify({
-        'events': [event.to_dict() for event in events.items],
+        'events': [event.to_dict(include_stats=True) for event in events.items],
         'total': events.total,
         'page': events.page,
         'pages': events.pages

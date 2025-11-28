@@ -107,6 +107,16 @@ class Event(db.Model):
             data['attendee_count'] = self.attendee_count
             data['total_tickets_sold'] = self.total_tickets_sold
             data['revenue'] = float(self.revenue)
+            # Add bucketlist count (likes) - query the bucketlist table directly
+            from app.models.user import bucketlist
+            from sqlalchemy import func
+            bucketlist_count = db.session.query(func.count(bucketlist.c.user_id)).filter(
+                bucketlist.c.event_id == self.id
+            ).scalar() or 0
+            data['bucketlist_count'] = bucketlist_count
+            # Add actual bookings count (people going)
+            bookings_count = self.bookings.filter_by(status='confirmed').count()
+            data['bookings_count'] = bookings_count
             
         return data
     

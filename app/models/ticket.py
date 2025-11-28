@@ -99,12 +99,12 @@ class Booking(db.Model):
         """Generate unique booking number"""
         return f"NF-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
     
-    def to_dict(self):
+    def to_dict(self, include_event_stats=False):
         return {
             'id': self.id,
             'booking_number': self.booking_number,
             'user': self.user.to_dict() if self.user else None,
-            'event': self.event.to_dict() if self.event else None,
+            'event': self.event.to_dict(include_stats=include_event_stats) if self.event else None,
             'quantity': self.quantity,
             'total_amount': float(self.total_amount),
             'discount_amount': float(self.discount_amount),

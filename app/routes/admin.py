@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, desc
 from app import db
 from app.models.user import User
-from app.models.partner import Partner
+from app.models.partner import Partner, PartnerSupportRequest
 from app.models.event import Event
 from app.models.ticket import Booking
 from app.models.payment import Payment, PartnerPayout
@@ -926,5 +926,71 @@ def get_admin_logs(current_admin):
         'total': logs.total,
         'page': logs.page,
         'pages': logs.pages
+    }), 200
+
+
+@bp.route('/support', methods=['GET'])
+@admin_required
+def get_support_requests(current_admin):
+    """Get all partner support requests"""
+    status = request.args.get('status')  # open, in_progress, resolved, all
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    
+    query = PartnerSupportRequest.query
+    
+    if status and status != 'all':
+        query = query.filter_by(status=status)
+    
+    support_requests = query.order_by(PartnerSupportRequest.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    # Include partner information for each request
+    requests_data = []
+    for req in support_requests.items:
+        partner = Partner.query.get(req.partner_id)
+        req_dict = req.to_dict()
+        req_dict['partner'] = partner.to_dict() if partner else None
+        requests_data.append(req_dict)
+    
+    return jsonify({
+        'support_requests': requests_data,
+        'total': support_requests.total,
+        'page': support_requests.page,
+        'pages': support_requests.pages
+    }), 200
+
+
+@bp.route('/support/<int:request_id>/status', methods=['PUT'])
+@admin_required
+def update_support_status(current_admin, request_id):
+    """Update support request status"""
+    data = request.get_json() or {}
+    new_status = data.get('status')
+    
+    if not new_status or new_status not in ['open', 'in_progress', 'resolved']:
+        return jsonify({'error': 'Invalid status. Must be: open, in_progress, or resolved'}), 400
+    
+    support_request = PartnerSupportRequest.query.get(request_id)
+    if not support_request:
+        return jsonify({'error': 'Support request not found'}), 404
+    
+    support_request.status = new_status
+    support_request.updated_at = datetime.utcnow()
+    
+    db.session.commit()
+    
+    log_admin_action(
+        current_admin,
+        'update_support_status',
+        'support_request',
+        request_id,
+        f'Updated support request status to {new_status}'
+    )
+    
+    return jsonify({
+        'message': 'Support request status updated',
+        'support_request': support_request.to_dict()
     }), 200
 
