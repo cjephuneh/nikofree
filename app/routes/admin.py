@@ -11,7 +11,8 @@ from app.models.category import Category, Location
 from app.models.admin import AdminLog
 from app.utils.decorators import admin_required
 from app.utils.email import send_partner_approval_email, send_event_approval_email
-from app.routes.notifications import notify_event_approved, notify_event_rejected
+from app.routes.notifications import notify_event_approved, notify_event_rejected, notify_partner_approved, notify_partner_rejected
+from app.utils.sms import send_partner_suspension_sms, send_partner_activation_sms, send_payout_approval_sms
 
 bp = Blueprint('admin', __name__)
 
@@ -255,6 +256,9 @@ def approve_partner(current_admin, partner_id):
     # Send approval email with credentials
     send_partner_approval_email(partner, approved=True, temp_password=temp_password)
     
+    # Send approval notification (includes SMS)
+    notify_partner_approved(partner)
+    
     return jsonify({
         'message': 'Partner approved successfully. Credentials sent to partner email.',
         'partner': partner.to_dict()
@@ -290,6 +294,9 @@ def reject_partner(current_admin, partner_id):
     # Send rejection email
     send_partner_approval_email(partner, approved=False)
     
+    # Send rejection notification (includes SMS)
+    notify_partner_rejected(partner, reason)
+    
     return jsonify({
         'message': 'Partner rejected',
         'partner': partner.to_dict()
@@ -321,6 +328,10 @@ def suspend_partner(current_admin, partner_id):
     
     db.session.commit()
     
+    # Send suspension SMS to partner
+    reason = data.get('reason')
+    send_partner_suspension_sms(partner, reason)
+    
     return jsonify({
         'message': 'Partner suspended successfully'
     }), 200
@@ -348,6 +359,9 @@ def activate_partner(current_admin, partner_id):
     )
     
     db.session.commit()
+    
+    # Send activation SMS to partner
+    send_partner_activation_sms(partner)
     
     return jsonify({
         'message': 'Partner activated successfully'
@@ -452,7 +466,7 @@ def reject_event(current_admin, event_id):
     # Send rejection email
     send_event_approval_email(event, approved=False)
     
-    # Create notification for partner
+    # Notify partner (includes SMS)
     notify_event_rejected(event, reason)
     
     return jsonify({
@@ -868,6 +882,11 @@ def approve_payout(current_admin, payout_id):
     )
     
     db.session.commit()
+    
+    # Send payout approval SMS to partner
+    partner = payout.partner
+    if partner:
+        send_payout_approval_sms(partner, payout)
     
     # TODO: Initiate actual payout via MPesa B2C
     

@@ -68,11 +68,17 @@ class Event(db.Model):
     
     def to_dict(self, include_stats=False):
         """Convert event to dictionary"""
+        # Filter out base64 data URIs from poster_image (they shouldn't be in DB, but handle if they are)
+        poster_image = self.poster_image
+        if poster_image and poster_image.startswith('data:image'):
+            # If somehow a base64 string got stored, return None so frontend can handle it
+            poster_image = None
+        
         data = {
             'id': self.id,
             'title': self.title,
             'description': self.description,
-            'poster_image': self.poster_image,
+            'poster_image': poster_image,
             'partner': self.organizer.to_dict() if self.organizer else None,
             'category': self.category.to_dict() if self.category else None,
             'start_date': self.start_date.isoformat(),

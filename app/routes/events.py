@@ -143,20 +143,30 @@ def get_event(current_user, event_id):
 @bp.route('/promoted', methods=['GET'])
 def get_promoted_events():
     """Get promoted events (Can't Miss banner)"""
-    # Get active promotions
+    # Get active promotions (both free and paid)
     now = datetime.utcnow()
     
     promotions = EventPromotion.query.filter(
         EventPromotion.is_active == True,
-        EventPromotion.is_paid == True,
         EventPromotion.start_date <= now,
         EventPromotion.end_date >= now
+    ).order_by(
+        EventPromotion.is_paid.desc(),  # Paid promotions first
+        EventPromotion.created_at.desc()  # Then by creation date
     ).limit(10).all()
     
     events = []
     for promo in promotions:
         if promo.event and promo.event.is_published and promo.event.status == 'approved':
-            events.append(promo.event.to_dict())
+            event_dict = promo.event.to_dict()
+            # Include promotion info
+            event_dict['promotion'] = {
+                'is_paid': promo.is_paid,
+                'days_count': promo.days_count,
+                'start_date': promo.start_date.isoformat(),
+                'end_date': promo.end_date.isoformat()
+            }
+            events.append(event_dict)
     
     return jsonify({
         'events': events,

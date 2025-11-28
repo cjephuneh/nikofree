@@ -36,14 +36,23 @@ def create_app(config_name='default'):
     # Configure CORS to handle preflight requests properly
     CORS(app, 
          resources={r"/*": {
-             "origins": "*",
+             "origins": ["http://localhost:5173", "http://127.0.0.1:5173", "*"],
              "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
              "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
              "supports_credentials": False,
-             "max_age": 3600
+             "max_age": 3600,
+             "expose_headers": ["Content-Type", "Authorization"]
          }},
          supports_credentials=False,
          automatic_options=True)
+    
+    # Add CORS headers to error responses
+    @app.after_request
+    def after_request(response):
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+        return response
     limiter.init_app(app)
     
     # Register blueprints

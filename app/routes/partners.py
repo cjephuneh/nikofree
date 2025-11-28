@@ -6,7 +6,7 @@ from app import db, limiter
 from app.models.partner import Partner, PartnerSupportRequest, PartnerTeamMember
 from app.models.event import Event, EventHost, EventInterest, EventPromotion
 from app.models.ticket import TicketType, PromoCode, Booking
-from app.models.payment import PartnerPayout
+from app.models.payment import PartnerPayout, Payment
 from app.models.user import User
 from app.utils.decorators import partner_required
 from app.utils.file_upload import upload_file
@@ -314,6 +314,9 @@ def create_event(current_partner):
     if request.is_json:
         data = request.get_json()
         poster_file = None
+        # Check if poster_image is a base64 string in JSON (should not be allowed)
+        if data.get('poster_image') and data['poster_image'].startswith('data:image'):
+            return jsonify({'error': 'Please upload image as a file, not as base64 data URI'}), 400
     else:
         # Form data
         data = {}
@@ -328,6 +331,9 @@ def create_event(current_partner):
                 data[key] = request.form[key]
         
         poster_file = request.files.get('poster_image')
+        # Check if poster_image was sent as form field with base64 (should not be allowed)
+        if 'poster_image' in request.form and request.form['poster_image'].startswith('data:image'):
+            return jsonify({'error': 'Please upload image as a file, not as base64 data URI'}), 400
     
     # Validate required fields
     required_fields = ['title', 'description', 'category_id', 'start_date']
@@ -495,6 +501,9 @@ def update_event(current_partner, event_id):
     if request.is_json:
         data = request.get_json()
         poster_file = None
+        # Check if poster_image is a base64 string in JSON (should not be allowed)
+        if data.get('poster_image') and isinstance(data.get('poster_image'), str) and data['poster_image'].startswith('data:image'):
+            return jsonify({'error': 'Please upload image as a file, not as base64 data URI'}), 400
     else:
         # Form data
         data = {}
@@ -509,6 +518,9 @@ def update_event(current_partner, event_id):
                 data[key] = request.form[key]
         
         poster_file = request.files.get('poster_image')
+        # Check if poster_image was sent as form field with base64 (should not be allowed)
+        if 'poster_image' in request.form and isinstance(request.form['poster_image'], str) and request.form['poster_image'].startswith('data:image'):
+            return jsonify({'error': 'Please upload image as a file, not as base64 data URI'}), 400
     
     # Update basic fields
     if data.get('title'):
@@ -1335,4 +1347,161 @@ def request_payout(current_partner):
         'message': 'Payout request submitted successfully',
         'payout': payout.to_dict()
     }), 201
+
+
+# ============ EVENT PROMOTION ============
+
+@bp.route('/events/<int:event_id>/promote', methods=['POST'])
+@partner_required
+def promote_event(current_partner, event_id):
+    """Promote event to Can't Miss section"""
+    data = request.get_json()
+    
+    # Get event
+    event = Event.query.filter_by(
+        id=event_id,
+        partner_id=current_partner.id
+    ).first()
+    
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    
+    # Validate event status
+    if event.status != 'approved':
+        return jsonify({'error': 'Event must be approved before promotion'}), 400
+    
+    if not event.is_published:
+        return jsonify({'error': 'Event must be published before promotion'}), 400
+    
+    # Get promotion details
+    days_count = data.get('days_count', 7)  # Default 7 days
+    is_free = data.get('is_free', False)  # Free promotion for testing
+    
+    if days_count < 1 or days_count > 30:
+        return jsonify({'error': 'Promotion period must be between 1 and 30 days'}), 400
+    
+    # Calculate dates
+    start_date = datetime.utcnow()
+    from datetime import timedelta
+    end_date = start_date + timedelta(days=days_count)
+    
+    # Calculate cost (KES 400 per day for paid, 0 for free)
+    cost_per_day = 400
+    total_cost = 0 if is_free else days_count * cost_per_day
+    
+    # Check if there's an existing active promotion
+    existing_promo = EventPromotion.query.filter_by(
+        event_id=event_id,
+        is_active=True
+    ).first()
+    
+    if existing_promo:
+        # Check if existing promotion is still valid
+        if existing_promo.end_date > datetime.utcnow():
+            return jsonify({
+                'error': 'Event already has an active promotion',
+                'promotion': existing_promo.to_dict()
+            }), 400
+    
+    # Create promotion record
+    promotion = EventPromotion(
+        event_id=event_id,
+        start_date=start_date,
+        end_date=end_date,
+        days_count=days_count,
+        total_cost=total_cost,
+        is_active=True,
+        is_paid=not is_free  # Free promotions are not paid
+    )
+    
+    db.session.add(promotion)
+    db.session.flush()
+    
+    # Handle payment for paid promotions
+    payment = None
+    if not is_free:
+        phone_number = data.get('phone_number')
+        if not phone_number:
+            db.session.rollback()
+            return jsonify({'error': 'Phone number is required for paid promotion'}), 400
+        
+        # Format phone number
+        from app.utils.mpesa import format_phone_number, MPesaClient
+        phone = format_phone_number(phone_number)
+        
+        # Generate transaction ID
+        import uuid
+        transaction_id = f"PROMO-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+        
+        # Create payment record
+        payment = Payment(
+            transaction_id=transaction_id,
+            partner_id=current_partner.id,
+            event_id=event_id,
+            amount=total_cost,
+            platform_fee=0.00,
+            partner_amount=0.00,  # Platform keeps all promotion fees
+            payment_method='mpesa',
+            payment_provider='daraja',
+            phone_number=phone,
+            description=f"Event promotion for {event.title} ({days_count} days)",
+            payment_type='promotion',
+            status='pending'
+        )
+        
+        db.session.add(payment)
+        db.session.flush()
+        
+        # Link payment to promotion
+        promotion.payment_id = payment.id
+        
+        # Initiate MPesa STK Push
+        mpesa = MPesaClient()
+        response = mpesa.stk_push(
+            phone_number=phone,
+            amount=float(total_cost),
+            account_reference=f"PROMO-{event.id}",
+            transaction_desc=f"Promotion for {event.title}"
+        )
+        
+        # Save response
+        payment.provider_response = response
+        
+        if response.get('ResponseCode') == '0':
+            # Success - STK push sent
+            payment.payment_metadata = {
+                'CheckoutRequestID': response.get('CheckoutRequestID'),
+                'MerchantRequestID': response.get('MerchantRequestID')
+            }
+            db.session.commit()
+            
+            return jsonify({
+                'message': 'Payment initiated. Please check your phone to complete payment.',
+                'promotion': promotion.to_dict(),
+                'payment_id': payment.id,
+                'transaction_id': transaction_id,
+                'checkout_request_id': response.get('CheckoutRequestID')
+            }), 200
+        else:
+            # Failed
+            payment.status = 'failed'
+            payment.error_message = response.get('errorMessage') or response.get('ResponseDescription')
+            promotion.is_paid = False
+            promotion.is_active = False
+            db.session.commit()
+            
+            return jsonify({
+                'error': 'Failed to initiate payment',
+                'message': payment.error_message
+            }), 400
+    else:
+        # Free promotion - activate immediately
+        promotion.is_paid = False
+        promotion.is_active = True
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Event promoted successfully (free promotion)',
+            'promotion': promotion.to_dict()
+        }), 200
 

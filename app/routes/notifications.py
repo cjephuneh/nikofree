@@ -5,6 +5,14 @@ from app.models.notification import Notification
 from app.models.user import User
 from app.models.partner import Partner
 from app.utils.decorators import user_required, partner_required, admin_required
+from app.utils.sms import (
+    send_partner_approval_sms, 
+    send_event_approval_sms, 
+    send_event_notification_sms,
+    send_event_rejection_sms,
+    send_partner_rejection_sms,
+    send_new_booking_sms_to_partner
+)
 
 bp = Blueprint('notifications', __name__)
 
@@ -66,29 +74,50 @@ def get_user_notifications(current_user):
 @partner_required
 def get_partner_notifications(current_partner):
     """Get partner notifications"""
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
-    unread_only = request.args.get('unread_only', 'false').lower() == 'true'
-    
-    query = Notification.query.filter_by(partner_id=current_partner.id)
-    
-    if unread_only:
-        query = query.filter_by(is_read=False)
-    
-    notifications = query.order_by(Notification.created_at.desc()).paginate(
-        page=page, per_page=per_page, error_out=False
-    )
-    
-    return jsonify({
-        'notifications': [notif.to_dict() for notif in notifications.items],
-        'total': notifications.total,
-        'unread_count': Notification.query.filter_by(
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        unread_only = request.args.get('unread_only', 'false').lower() == 'true'
+        
+        query = Notification.query.filter_by(partner_id=current_partner.id)
+        
+        if unread_only:
+            query = query.filter_by(is_read=False)
+        
+        notifications = query.order_by(Notification.created_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        # Safely convert notifications to dict
+        notifications_list = []
+        for notif in notifications.items:
+            try:
+                notifications_list.append(notif.to_dict())
+            except Exception as e:
+                # Skip notifications that can't be serialized
+                print(f"Error serializing notification {notif.id}: {str(e)}")
+                continue
+        
+        unread_count = Notification.query.filter_by(
             partner_id=current_partner.id,
             is_read=False
-        ).count(),
-        'page': notifications.page,
-        'pages': notifications.pages
-    }), 200
+        ).count()
+        
+        return jsonify({
+            'notifications': notifications_list,
+            'total': notifications.total,
+            'unread_count': unread_count,
+            'page': notifications.page,
+            'pages': notifications.pages
+        }), 200
+    except Exception as e:
+        print(f"Error fetching partner notifications: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': 'Failed to fetch notifications',
+            'message': str(e)
+        }), 500
 
 
 @bp.route('/<int:notification_id>/read', methods=['PUT'])
@@ -238,6 +267,23 @@ def notify_partner_approved(partner):
         action_text='Go to Dashboard',
         send_email=True
     )
+    # Send SMS notification
+    send_partner_approval_sms(partner)
+
+
+def notify_partner_rejected(partner, reason):
+    """Send notification when partner is rejected"""
+    create_notification(
+        partner_id=partner.id,
+        title='Application Update',
+        message=f'Your partner application needs revision. Reason: {reason}',
+        notification_type='rejection',
+        action_url='/partner/apply',
+        action_text='Reapply',
+        send_email=True
+    )
+    # Send SMS notification
+    send_partner_rejection_sms(partner, reason)
 
 
 def notify_event_approved(event):
@@ -252,6 +298,10 @@ def notify_event_approved(event):
         action_text='View Event',
         send_email=True
     )
+    # Send SMS notification to partner
+    partner = event.organizer
+    if partner:
+        send_event_approval_sms(partner, event)
 
 
 def notify_event_rejected(event, reason):
@@ -266,6 +316,10 @@ def notify_event_rejected(event, reason):
         action_text='Edit Event',
         send_email=True
     )
+    # Send SMS notification to partner
+    partner = event.organizer
+    if partner:
+        send_event_rejection_sms(partner, event, reason)
 
 
 def notify_new_booking(event, booking):
@@ -280,6 +334,10 @@ def notify_new_booking(event, booking):
         action_url=f'/partner/events/{event.id}/attendees',
         action_text='View Attendees'
     )
+    # Send SMS notification to partner
+    partner = event.organizer
+    if partner:
+        send_new_booking_sms_to_partner(partner, booking, event)
 
 
 def notify_event_reminder(user, event, hours_before=24):
@@ -294,6 +352,8 @@ def notify_event_reminder(user, event, hours_before=24):
         action_text='View Event',
         send_email=True
     )
+    # Send SMS reminder
+    send_event_notification_sms(user, event, 'reminder')
 
 
 def notify_payment_completed(booking, payment):

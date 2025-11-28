@@ -8,6 +8,7 @@ from app.models.user import User
 from app.models.partner import Partner
 from app.utils.validators import validate_email, validate_phone, validate_password
 from app.utils.email import send_welcome_email, send_password_reset_email
+from app.utils.sms import send_welcome_sms, send_partner_welcome_sms, send_password_reset_sms
 import secrets
 
 bp = Blueprint('auth', __name__)
@@ -71,6 +72,10 @@ def register():
     
     # Send welcome email
     send_welcome_email(user)
+    
+    # Send welcome SMS if phone number provided
+    if user.phone_number:
+        send_welcome_sms(user)
     
     # Generate tokens
     access_token = create_access_token(identity=user.id)
@@ -152,6 +157,10 @@ def forgot_password():
     
     # Send password reset email
     send_password_reset_email(user, reset_token)
+    
+    # Send password reset SMS if phone number provided
+    if user.phone_number:
+        send_password_reset_sms(user, reset_token)
     
     return jsonify({'message': 'If an account with that email exists, a password reset link has been sent'}), 200
 
@@ -386,6 +395,9 @@ def partner_apply():
     db.session.add(partner)
     db.session.commit()
     
+    # Send welcome SMS to partner
+    send_partner_welcome_sms(partner)
+    
     return jsonify({
         'message': 'Application submitted successfully! You will receive an email within 24 hours with login credentials if approved.',
         'application_id': partner.id,
@@ -444,6 +456,9 @@ def partner_register():
     
     db.session.add(partner)
     db.session.commit()
+    
+    # Send welcome SMS to partner
+    send_partner_welcome_sms(partner)
     
     return jsonify({
         'message': 'Partner registration submitted. Please wait for admin approval (within 24 hours).',

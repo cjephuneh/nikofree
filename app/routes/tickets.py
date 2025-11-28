@@ -7,6 +7,11 @@ from app.models.payment import Payment
 from app.utils.decorators import user_required, partner_required
 from app.utils.qrcode_generator import generate_qr_code
 from app.utils.email import send_booking_confirmation_email
+from app.utils.sms import (
+    send_booking_confirmation_sms,
+    send_booking_cancellation_sms,
+    send_booking_cancellation_to_partner_sms
+)
 from app.routes.notifications import notify_new_booking, create_notification
 
 bp = Blueprint('tickets', __name__)
@@ -257,6 +262,9 @@ def book_event(current_user):
         # Send confirmation email
         send_booking_confirmation_email(booking, tickets)
         
+        # Send confirmation SMS
+        send_booking_confirmation_sms(booking, tickets)
+        
         # Notify user of successful booking
         create_notification(
             user_id=current_user.id,
@@ -330,6 +338,14 @@ def cancel_booking(current_user, booking_id):
     # TODO: Process refund if paid
     
     db.session.commit()
+    
+    # Send cancellation SMS to user
+    send_booking_cancellation_sms(current_user, booking, booking.event)
+    
+    # Send cancellation SMS to partner
+    partner = booking.event.organizer
+    if partner:
+        send_booking_cancellation_to_partner_sms(partner, booking, booking.event)
     
     return jsonify({
         'message': 'Booking cancelled successfully'

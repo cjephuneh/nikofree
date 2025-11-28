@@ -5,10 +5,17 @@ from app.models.payment import Payment
 from app.models.ticket import Booking
 from app.models.ticket import Ticket
 from app.models.event import EventPromotion
+from app.models.partner import Partner
 from app.utils.decorators import user_required
 from app.utils.mpesa import MPesaClient, format_phone_number
 from app.utils.qrcode_generator import generate_qr_code
 from app.utils.email import send_booking_confirmation_email, send_payment_confirmation_email
+from app.utils.sms import (
+    send_payment_confirmation_sms, 
+    send_booking_confirmation_sms,
+    send_payment_failed_sms,
+    send_promotion_payment_success_sms
+)
 from app.routes.notifications import notify_new_booking, notify_payment_completed, create_notification
 
 bp = Blueprint('payments', __name__)
@@ -142,6 +149,31 @@ def mpesa_callback():
         payment.completed_at = datetime.utcnow()
         payment.mpesa_receipt_number = mpesa_receipt
         
+        # Handle promotion payments
+        if payment.payment_type == 'promotion':
+            promotion = EventPromotion.query.filter_by(payment_id=payment.id).first()
+            if promotion:
+                promotion.is_paid = True
+                promotion.is_active = True
+                db.session.commit()
+                
+                # Notify partner
+                partner = Partner.query.get(payment.partner_id)
+                if partner:
+                    create_notification(
+                        partner_id=partner.id,
+                        title='Promotion Payment Successful!',
+                        message=f'Your event "{promotion.event.title}" is now promoted in the Can\'t Miss section.',
+                        notification_type='promotion',
+                        event_id=promotion.event_id,
+                        action_url=f'/events/{promotion.event_id}',
+                        action_text='View Event'
+                    )
+                    # Send promotion success SMS
+                    send_promotion_payment_success_sms(partner, promotion.event)
+                
+                return jsonify({'message': 'Payment processed'}), 200
+        
         # Update booking
         booking = payment.booking
         if booking:
@@ -195,6 +227,12 @@ def mpesa_callback():
             # Send booking confirmation email (includes tickets)
             send_booking_confirmation_email(booking, tickets)
             
+            # Send payment confirmation SMS
+            send_payment_confirmation_sms(booking, payment)
+            
+            # Send booking confirmation SMS
+            send_booking_confirmation_sms(booking, tickets)
+            
             # Notify user of successful payment
             create_notification(
                 user_id=booking.user_id,
@@ -219,6 +257,11 @@ def mpesa_callback():
         
         if payment.booking:
             payment.booking.payment_status = 'failed'
+            # Send payment failed SMS to user
+            user = payment.booking.user
+            event = payment.booking.event
+            if user and event:
+                send_payment_failed_sms(user, payment, event)
         
         db.session.commit()
     

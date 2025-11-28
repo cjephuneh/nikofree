@@ -49,6 +49,9 @@ class Config:
     MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', 'noreply@nikofree.com')
     MAIL_SUPPRESS_SEND = os.getenv('MAIL_SUPPRESS_SEND', 'True') == 'True'  # Disable emails in dev
     
+    # SMS Configuration
+    SMS_SUPPRESS_SEND = os.getenv('SMS_SUPPRESS_SEND', 'True') == 'True'  # Disable SMS in dev
+    
     # OAuth
     GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
     GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
