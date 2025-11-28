@@ -55,79 +55,83 @@ def get_dashboard(current_partner):
 @partner_required
 def get_partner_analytics(current_partner):
     """More detailed analytics for partner (used by Analytics page)"""
-    from datetime import timedelta
-    days = request.args.get('days', 30, type=int)
-    now = datetime.utcnow()
-    start_period = now - timedelta(days=days)
-    start_7d = now - timedelta(days=7)
-    start_1d = now - timedelta(days=1)
-    
-    # Base confirmed bookings query for this partner
-    base_bookings = Booking.query.join(Event).filter(
-        Event.partner_id == current_partner.id,
-        Booking.status == 'confirmed'
-    )
-    
-    # All-time stats
-    total_bookings = base_bookings.count()
-    total_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
-        Event.partner_id == current_partner.id,
-        Booking.status == 'confirmed'
-    ).scalar() or 0
-    
-    # Period stats (last N days)
-    period_bookings = base_bookings.filter(Booking.created_at >= start_period).count()
-    period_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
-        Event.partner_id == current_partner.id,
-        Booking.status == 'confirmed',
-        Booking.created_at >= start_period
-    ).scalar() or 0
-    
-    # Last 7 days
-    last_7d_bookings = base_bookings.filter(Booking.created_at >= start_7d).count()
-    last_7d_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
-        Event.partner_id == current_partner.id,
-        Booking.status == 'confirmed',
-        Booking.created_at >= start_7d
-    ).scalar() or 0
-    
-    # Last 24 hours
-    last_1d_bookings = base_bookings.filter(Booking.created_at >= start_1d).count()
-    last_1d_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
-        Event.partner_id == current_partner.id,
-        Booking.status == 'confirmed',
-        Booking.created_at >= start_1d
-    ).scalar() or 0
-    
-    # Event stats
-    total_events = Event.query.filter_by(partner_id=current_partner.id).count()
-    active_events = Event.query.filter(
-        Event.partner_id == current_partner.id,
-        Event.start_date > now,
-        Event.status == 'approved'
-    ).count()
-    
-    return jsonify({
-        'summary': {
-            'total_bookings': total_bookings,
-            'total_events': total_events,
-            'active_events': active_events,
-            'total_revenue': float(total_revenue),
-        },
-        'period': {
-            'days': days,
-            'bookings': period_bookings,
-            'revenue': float(period_revenue),
-        },
-        'last_7_days': {
-            'bookings': last_7d_bookings,
-            'revenue': float(last_7d_revenue),
-        },
-        'last_24_hours': {
-            'bookings': last_1d_bookings,
-            'revenue': float(last_1d_revenue),
-        },
-    }), 200
+    try:
+        from datetime import timedelta
+        days = request.args.get('days', 30, type=int)
+        now = datetime.utcnow()
+        start_period = now - timedelta(days=days)
+        start_7d = now - timedelta(days=7)
+        start_1d = now - timedelta(days=1)
+        
+        # Base confirmed bookings query for this partner
+        base_bookings = Booking.query.join(Event).filter(
+            Event.partner_id == current_partner.id,
+            Booking.status == 'confirmed'
+        )
+        
+        # All-time stats
+        total_bookings = base_bookings.count()
+        total_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
+            Event.partner_id == current_partner.id,
+            Booking.status == 'confirmed'
+        ).scalar() or 0
+        
+        # Period stats (last N days)
+        period_bookings = base_bookings.filter(Booking.created_at >= start_period).count()
+        period_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
+            Event.partner_id == current_partner.id,
+            Booking.status == 'confirmed',
+            Booking.created_at >= start_period
+        ).scalar() or 0
+        
+        # Last 7 days
+        last_7d_bookings = base_bookings.filter(Booking.created_at >= start_7d).count()
+        last_7d_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
+            Event.partner_id == current_partner.id,
+            Booking.status == 'confirmed',
+            Booking.created_at >= start_7d
+        ).scalar() or 0
+        
+        # Last 24 hours
+        last_1d_bookings = base_bookings.filter(Booking.created_at >= start_1d).count()
+        last_1d_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
+            Event.partner_id == current_partner.id,
+            Booking.status == 'confirmed',
+            Booking.created_at >= start_1d
+        ).scalar() or 0
+        
+        # Event stats
+        total_events = Event.query.filter_by(partner_id=current_partner.id).count()
+        active_events = Event.query.filter(
+            Event.partner_id == current_partner.id,
+            Event.start_date > now,
+            Event.status == 'approved'
+        ).count()
+        
+        return jsonify({
+            'summary': {
+                'total_bookings': total_bookings,
+                'total_events': total_events,
+                'active_events': active_events,
+                'total_revenue': float(total_revenue),
+            },
+            'period': {
+                'days': days,
+                'bookings': period_bookings,
+                'revenue': float(period_revenue),
+            },
+            'last_7_days': {
+                'bookings': last_7d_bookings,
+                'revenue': float(last_7d_revenue),
+            },
+            'last_24_hours': {
+                'bookings': last_1d_bookings,
+                'revenue': float(last_1d_revenue),
+            },
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f'Error fetching partner analytics: {str(e)}', exc_info=True)
+        return jsonify({'error': f'Failed to fetch analytics: {str(e)}'}), 500
 
 
 @bp.route('/profile', methods=['GET'])
