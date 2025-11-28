@@ -80,12 +80,18 @@ class Partner(db.Model):
     
     def to_dict(self, include_sensitive=False):
         """Convert partner to dictionary"""
+        # Filter out base64 data URIs from logo (they shouldn't be in DB, but handle if they are)
+        logo = self.logo
+        if logo and logo.startswith('data:image'):
+            # If somehow a base64 string got stored, return None so frontend can handle it
+            logo = None
+        
         data = {
             'id': self.id,
             'email': self.email,
             'phone_number': self.phone_number,
             'business_name': self.business_name,
-            'logo': self.logo,
+            'logo': logo,
             'category': self.category.to_dict() if self.category else None,
             'contact_person': self.contact_person,
             'address': self.address,

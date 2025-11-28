@@ -68,15 +68,37 @@ def create_app(config_name='default'):
     app.register_blueprint(notifications.bp, url_prefix='/api/notifications')
     
     # Serve static files from uploads folder
-    from flask import send_from_directory
+    from flask import send_file, abort
     import os
     
     @app.route('/uploads/<path:filename>')
     def uploaded_file(filename):
         """Serve uploaded files"""
-        upload_folder = app.config.get('UPLOAD_FOLDER', 'uploads')
+        # Get upload folder from config (default: 'uploads')
+        upload_folder_name = app.config.get('UPLOAD_FOLDER', 'uploads')
+        
+        # Resolve the upload folder path relative to the project root (not app directory)
+        # Flask app.root_path points to the app directory, so we need to go up one level
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        upload_folder = os.path.join(project_root, upload_folder_name)
+        
         # Handle nested paths like events/filename.jpg
-        return send_from_directory(upload_folder, filename)
+        # filename will be something like "events/1H5A3558_b3e59fa0.JPG"
+        file_path = os.path.join(upload_folder, filename)
+        
+        # Security: Ensure the path is within uploads folder (prevent directory traversal)
+        upload_folder_abs = os.path.abspath(upload_folder)
+        file_path_abs = os.path.abspath(file_path)
+        
+        if not file_path_abs.startswith(upload_folder_abs):
+            abort(403)  # Forbidden
+        
+        # Check if file exists
+        if not os.path.exists(file_path) or not os.path.isfile(file_path):
+            abort(404)  # Not found
+        
+        # Use send_file for nested paths
+        return send_file(file_path)
     
     # Health check endpoint
     @app.route('/health')

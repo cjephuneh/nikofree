@@ -24,6 +24,10 @@ def upload_file(file, folder='general'):
     if not file or file.filename == '':
         return None
     
+    # Check if filename is actually a base64 data URI (shouldn't happen, but prevent it)
+    if file.filename and file.filename.startswith('data:image'):
+        raise ValueError('Base64 data URIs are not allowed. Please upload an actual image file.')
+    
     if not allowed_file(file.filename):
         raise ValueError('File type not allowed')
     

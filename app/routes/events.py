@@ -413,25 +413,47 @@ def get_event_reviews(current_user, event_id):
 @bp.route('/<int:event_id>/reviews', methods=['POST'])
 @user_required
 def add_event_review(current_user, event_id):
-    """Add review to event"""
+    """Add review to event - only for past events that user has booked"""
+    from app.models.review import Review
+    from app.models.ticket import Booking
+    
     event = Event.query.get(event_id)
     if not event:
         return jsonify({'error': 'Event not found'}), 404
     
-    # Check if event is published and approved (users can only review published events)
+    # Check if event is published and approved
     if not event.is_published or event.status != 'approved':
         return jsonify({'error': 'Event not available for review'}), 403
     
+    # Check if user has booked this event
+    booking = Booking.query.filter_by(
+        user_id=current_user.id,
+        event_id=event_id,
+        status='confirmed'
+    ).first()
+    
+    if not booking:
+        return jsonify({
+            'error': 'You can only review events you have booked and attended'
+        }), 403
+    
+    # Check if event has ended (user can only review past events)
+    now = datetime.utcnow()
+    event_end_date = event.end_date if event.end_date else event.start_date
+    
+    if event_end_date > now:
+        return jsonify({
+            'error': 'You can only review events that have ended. Please wait until after the event.'
+        }), 403
+    
     data = request.get_json()
     
-    if not data.get('rating'):
+    if not data or not data.get('rating'):
         return jsonify({'error': 'Rating is required'}), 400
     
     rating = int(data['rating'])
     if rating < 1 or rating > 5:
         return jsonify({'error': 'Rating must be between 1 and 5'}), 400
-    
-    from app.models.review import Review
     
     # Check if user already reviewed this event
     existing_review = Review.query.filter_by(
@@ -447,7 +469,7 @@ def add_event_review(current_user, event_id):
         user_id=current_user.id,
         event_id=event_id,
         rating=rating,
-        comment=data.get('comment', '').strip()
+        comment=data.get('comment', '').strip() if data.get('comment') else ''
     )
     
     db.session.add(review)

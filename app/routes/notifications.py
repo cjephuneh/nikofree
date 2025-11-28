@@ -299,9 +299,14 @@ def notify_event_approved(event):
         send_email=True
     )
     # Send SMS notification to partner
-    partner = event.organizer
+    # Get partner using partner_id directly (more reliable than relationship)
+    from app.models.partner import Partner
+    partner = Partner.query.get(event.partner_id)
     if partner:
+        print(f"📱 Sending event approval SMS to partner {partner.id} ({partner.business_name})")
         send_event_approval_sms(partner, event)
+    else:
+        print(f"⚠️ Partner not found for event {event.id} (partner_id: {event.partner_id})")
 
 
 def notify_event_rejected(event, reason):

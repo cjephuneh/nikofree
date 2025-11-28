@@ -150,6 +150,15 @@ def update_profile(current_partner):
     if data.get('contact_person'):
         current_partner.contact_person = data['contact_person'].strip()
     
+    # Validate logo if provided - prevent base64 data URIs
+    if data.get('logo'):
+        logo_value = data['logo']
+        if isinstance(logo_value, str) and logo_value.startswith('data:image'):
+            return jsonify({'error': 'Base64 data URIs are not allowed. Please use the /logo endpoint to upload an actual image file.'}), 400
+        # Only update if it's a valid file path
+        if logo_value and not logo_value.startswith('data:image'):
+            current_partner.logo = logo_value
+    
     if data.get('phone_number'):
         current_partner.phone_number = data['phone_number']
     
@@ -231,6 +240,10 @@ def upload_logo(current_partner):
         return jsonify({'error': 'No file provided'}), 400
     
     file = request.files['file']
+    
+    # Check if file is actually a base64 data URI (shouldn't happen, but prevent it)
+    if file.filename and file.filename.startswith('data:image'):
+        return jsonify({'error': 'Base64 data URIs are not allowed. Please upload an actual image file.'}), 400
     
     try:
         file_path = upload_file(file, folder='logos')
@@ -418,7 +431,20 @@ def create_event(current_partner):
         if isinstance(ticket_types_data, str):
             ticket_types_data = json.loads(ticket_types_data)
         
+        # Remove duplicates by name to prevent multiple tickets with same name
+        seen_names = set()
+        unique_ticket_types = []
         for tt_data in ticket_types_data:
+            name = tt_data.get('name', '').strip()
+            if name and name not in seen_names:
+                seen_names.add(name)
+                unique_ticket_types.append(tt_data)
+        
+        for tt_data in unique_ticket_types:
+            # Skip if name is empty
+            if not tt_data.get('name', '').strip():
+                continue
+                
             ticket_type = TicketType(
                 event_id=event.id,
                 name=tt_data.get('name', '').strip(),
@@ -667,47 +693,119 @@ def update_event(current_partner, event_id):
         if isinstance(promo_codes_data, str):
             promo_codes_data = json.loads(promo_codes_data)
         
+        # Get all existing promo codes for this event
+        existing_promo_codes = PromoCode.query.filter_by(event_id=event.id).all()
+        existing_promo_codes_by_id = {pc.id: pc for pc in existing_promo_codes}
+        existing_promo_codes_by_code = {pc.code.upper(): pc for pc in existing_promo_codes}
+        
+        # Extract IDs from promo_data (handle both 'id' and 'existingId' fields from frontend)
+        promo_ids_to_keep = []
+        for promo_data in promo_codes_data:
+            if promo_data.get('code'):
+                # Check for existing ID in various formats
+                promo_id = None
+                if promo_data.get('id'):
+                    # Handle string IDs like "existing-123" or numeric IDs
+                    promo_id_str = str(promo_data['id'])
+                    if promo_id_str.startswith('existing-'):
+                        promo_id = int(promo_id_str.replace('existing-', ''))
+                    else:
+                        try:
+                            promo_id = int(promo_data['id'])
+                        except (ValueError, TypeError):
+                            pass
+                elif promo_data.get('existingId'):
+                    promo_id = int(promo_data['existingId'])
+                
+                if promo_id and promo_id in existing_promo_codes_by_id:
+                    promo_ids_to_keep.append(promo_id)
+        
         # Delete promo codes not in the update list
-        if existing_promo_ids:
+        if promo_ids_to_keep:
             PromoCode.query.filter(
                 PromoCode.event_id == event.id,
-                ~PromoCode.id.in_(existing_promo_ids)
+                ~PromoCode.id.in_(promo_ids_to_keep)
             ).delete(synchronize_session=False)
+        else:
+            # If no IDs to keep, delete all existing promo codes for this event
+            PromoCode.query.filter_by(event_id=event.id).delete()
         
         # Update or create promo codes
         for promo_data in promo_codes_data:
-            if promo_data.get('code'):
-                if promo_data.get('id') and promo_data['id'] in existing_promo_ids:
-                    # Update existing
-                    promo_code = PromoCode.query.get(promo_data['id'])
-                    if promo_code and promo_code.event_id == event.id:
-                        promo_code.code = promo_data['code'].upper().strip()
-                        promo_code.discount_type = promo_data.get('discount_type', 'percentage')
-                        promo_code.discount_value = float(promo_data.get('discount', 0))
-                        promo_code.max_uses = int(promo_data.get('max_uses', 0)) if promo_data.get('max_uses') else None
-                        if promo_data.get('expiry_date'):
-                            try:
-                                promo_code.valid_until = datetime.strptime(promo_data['expiry_date'], "%Y-%m-%d")
-                            except:
-                                pass
+            if not promo_data.get('code'):
+                continue
+                
+            code = promo_data['code'].upper().strip()
+            if not code:
+                continue
+            
+            # Check for existing ID in various formats
+            promo_id = None
+            if promo_data.get('id'):
+                promo_id_str = str(promo_data['id'])
+                if promo_id_str.startswith('existing-'):
+                    try:
+                        promo_id = int(promo_id_str.replace('existing-', ''))
+                    except (ValueError, TypeError):
+                        pass
                 else:
-                    # Create new
-                    promo_code = PromoCode(
-                        code=promo_data['code'].upper().strip(),
-                        event_id=event.id,
-                        discount_type=promo_data.get('discount_type', 'percentage'),
-                        discount_value=float(promo_data.get('discount', 0)),
-                        max_uses=int(promo_data.get('max_uses', 0)) if promo_data.get('max_uses') else None,
-                        created_by=current_partner.id
-                    )
-                    
-                    if promo_data.get('expiry_date'):
-                        try:
-                            promo_code.valid_until = datetime.strptime(promo_data['expiry_date'], "%Y-%m-%d")
-                        except:
-                            pass
-                    
-                    db.session.add(promo_code)
+                    try:
+                        promo_id = int(promo_data['id'])
+                    except (ValueError, TypeError):
+                        pass
+            elif promo_data.get('existingId'):
+                try:
+                    promo_id = int(promo_data['existingId'])
+                except (ValueError, TypeError):
+                    pass
+            
+            # Check if this is an existing promo code to update
+            if promo_id and promo_id in existing_promo_codes_by_id:
+                # Update existing promo code
+                promo_code = existing_promo_codes_by_id[promo_id]
+                # Only update code if it's different and doesn't conflict
+                new_code = code
+                if promo_code.code.upper() != new_code:
+                    # Check if new code already exists (for a different promo code)
+                    existing_with_code = PromoCode.query.filter_by(code=new_code).first()
+                    if existing_with_code and existing_with_code.id != promo_id:
+                        # Code already exists for another promo code, skip updating this one
+                        current_app.logger.warning(f'Promo code {new_code} already exists, skipping update for promo {promo_id}')
+                        continue
+                    promo_code.code = new_code
+                
+                promo_code.discount_type = promo_data.get('discount_type', 'percentage')
+                promo_code.discount_value = float(promo_data.get('discount', 0))
+                promo_code.max_uses = int(promo_data.get('max_uses', 0)) if promo_data.get('max_uses') else None
+                if promo_data.get('expiry_date'):
+                    try:
+                        promo_code.valid_until = datetime.strptime(promo_data['expiry_date'], "%Y-%m-%d")
+                    except:
+                        pass
+            else:
+                # Create new - but check if code already exists
+                existing_with_code = PromoCode.query.filter_by(code=code).first()
+                if existing_with_code:
+                    # Code already exists, skip creating duplicate
+                    current_app.logger.warning(f'Promo code {code} already exists, skipping creation')
+                    continue
+                
+                promo_code = PromoCode(
+                    code=code,
+                    event_id=event.id,
+                    discount_type=promo_data.get('discount_type', 'percentage'),
+                    discount_value=float(promo_data.get('discount', 0)),
+                    max_uses=int(promo_data.get('max_uses', 0)) if promo_data.get('max_uses') else None,
+                    created_by=current_partner.id
+                )
+                
+                if promo_data.get('expiry_date'):
+                    try:
+                        promo_code.valid_until = datetime.strptime(promo_data['expiry_date'], "%Y-%m-%d")
+                    except:
+                        pass
+                
+                db.session.add(promo_code)
     
     # Reset status to pending if it was rejected
     if event.status == 'rejected':

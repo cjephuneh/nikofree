@@ -15,11 +15,12 @@ CELCOM_SHORTCODE = "TEXTME"
 
 def send_sms_async(app, phone_number, message):
     """Send SMS asynchronously"""
+    print(f"📱 [SMS ASYNC] Starting SMS send to {phone_number}")
     with app.app_context():
         try:
             # Check if SMS sending is suppressed (for development)
             if app.config.get('SMS_SUPPRESS_SEND', False):
-                print(f"📱 [DEV MODE] SMS suppressed: {message[:50]}... to {phone_number}")
+                print(f"📱 [SMS ASYNC] [DEV MODE] SMS suppressed: {message[:50]}... to {phone_number}")
                 return
             
             # Prepare payload
@@ -31,36 +32,50 @@ def send_sms_async(app, phone_number, message):
                 "mobile": phone_number
             }
             
+            print(f"📱 [SMS ASYNC] Sending POST request to {CELCOM_SMS_URL}")
+            print(f"📱 [SMS ASYNC] Payload: {payload}")
+            
             # Send request
             response = requests.post(CELCOM_SMS_URL, json=payload, timeout=10)
             
+            print(f"📱 [SMS ASYNC] Response status: {response.status_code}")
+            print(f"📱 [SMS ASYNC] Response text: {response.text}")
+            
             if response.status_code == 200:
                 result = response.json()
+                print(f"📱 [SMS ASYNC] Response JSON: {result}")
                 if result.get('success') or result.get('status') == 'success' or result.get('responseCode') == '0':
-                    print(f"✅ SMS sent successfully to {phone_number}")
+                    print(f"✅ [SMS ASYNC] SMS sent successfully to {phone_number}")
                 else:
-                    print(f"❌ SMS failed: {result}")
+                    print(f"❌ [SMS ASYNC] SMS failed: {result}")
             else:
-                print(f"❌ SMS API error: {response.status_code} - {response.text}")
+                print(f"❌ [SMS ASYNC] SMS API error: {response.status_code} - {response.text}")
                 
         except Exception as e:
-            print(f"❌ Error sending SMS: {str(e)}")
+            print(f"❌ [SMS ASYNC] Error sending SMS: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
 
 def send_sms(phone_number, message):
     """Send SMS (async and non-blocking)"""
+    print(f"📱 [SMS] send_sms called for phone: {phone_number}, message length: {len(message)}")
     try:
         from flask import current_app
         app = current_app._get_current_object()
         
+        print(f"📱 [SMS] Starting async thread for SMS to {phone_number}")
         # Start thread and don't wait for it
         thread = Thread(target=send_sms_async, args=(app, phone_number, message))
         thread.daemon = True  # Daemon thread won't block app shutdown
         thread.start()
+        print(f"📱 [SMS] Thread started for {phone_number}")
         
     except Exception as e:
         # Don't let SMS errors crash the app
-        print(f"❌ Error queuing SMS: {str(e)}")
+        print(f"❌ [SMS] Error queuing SMS: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 
 def format_phone_for_sms(phone_number):
@@ -84,15 +99,20 @@ def format_phone_for_sms(phone_number):
 
 def send_booking_confirmation_sms(booking, tickets):
     """Send booking confirmation SMS"""
+    print(f"📱 [SMS] send_booking_confirmation_sms called for booking {booking.id}")
     user = booking.user
     event = booking.event
+    
+    print(f"📱 [SMS] User ID: {user.id}, Phone: {user.phone_number}")
     
     # Format phone number
     phone = format_phone_for_sms(user.phone_number) if user.phone_number else None
     
     if not phone:
-        print(f"⚠️ No phone number for user {user.id}, skipping SMS")
+        print(f"⚠️ [SMS] No phone number for user {user.id}, skipping SMS")
         return
+    
+    print(f"📱 [SMS] Formatted phone: {phone}")
     
     # Create message
     ticket_numbers = ', '.join([t.ticket_number for t in tickets[:3]])  # First 3 tickets
@@ -111,7 +131,9 @@ Amount: KES {booking.total_amount:,.2f}
 Present QR code at entrance.
 Thank you for using Niko Free!"""
     
+    print(f"📱 [SMS] Sending booking confirmation SMS to {phone} for event '{event.title}'")
     send_sms(phone, message)
+    print(f"📱 [SMS] SMS queued for {phone}")
 
 
 def send_payment_confirmation_sms(booking, payment):
@@ -216,11 +238,14 @@ Login to your dashboard to get started!"""
 
 def send_event_approval_sms(partner, event):
     """Send event approval SMS to partner"""
+    print(f"📱 send_event_approval_sms called for partner {partner.id}, event {event.id}")
+    
     if not partner.phone_number:
-        print(f"⚠️ No phone number for partner {partner.id}, skipping SMS")
+        print(f"⚠️ No phone number for partner {partner.id} ({partner.business_name}), skipping SMS")
         return
     
     phone = format_phone_for_sms(partner.phone_number)
+    print(f"📱 Formatted phone number: {phone} (original: {partner.phone_number})")
     
     message = f"""Event Approved! ✅
 
@@ -229,7 +254,9 @@ def send_event_approval_sms(partner, event):
 Your event has been approved and is visible to all users.
 Start promoting it to maximize attendance!"""
     
+    print(f"📱 Sending SMS to {phone}...")
     send_sms(phone, message)
+    print(f"📱 SMS queued for {phone}")
 
 
 def send_event_rejection_sms(partner, event, reason):

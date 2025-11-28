@@ -21,46 +21,70 @@ bp = Blueprint('tickets', __name__)
 @user_required
 def validate_promo_code(current_user):
     """Validate promo code"""
-    data = request.get_json()
-    
-    if not data.get('code') or not data.get('event_id'):
-        return jsonify({'error': 'code and event_id are required'}), 400
-    
-    # Find promo code
-    promo = PromoCode.query.filter_by(
-        code=data['code'].upper(),
-        event_id=data['event_id'],
-        is_active=True
-    ).first()
-    
-    if not promo:
-        return jsonify({'error': 'Invalid promo code'}), 404
-    
-    # Check validity period
-    now = datetime.utcnow()
-    if promo.valid_from and now < promo.valid_from:
-        return jsonify({'error': 'Promo code not yet valid'}), 400
-    
-    if promo.valid_until and now > promo.valid_until:
-        return jsonify({'error': 'Promo code expired'}), 400
-    
-    # Check usage limits
-    if promo.max_uses and promo.current_uses >= promo.max_uses:
-        return jsonify({'error': 'Promo code usage limit reached'}), 400
-    
-    # Check per-user usage
-    user_usage = Booking.query.filter_by(
-        user_id=current_user.id,
-        promo_code_id=promo.id
-    ).count()
-    
-    if user_usage >= promo.max_uses_per_user:
-        return jsonify({'error': 'You have already used this promo code'}), 400
-    
-    return jsonify({
-        'valid': True,
-        'promo_code': promo.to_dict()
-    }), 200
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+        
+        code = data.get('code')
+        event_id = data.get('event_id')
+        
+        if not code or not event_id:
+            return jsonify({'error': 'code and event_id are required'}), 400
+        
+        # Convert event_id to int if it's a string
+        try:
+            event_id = int(event_id)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid event_id format'}), 400
+        
+        # Normalize code to uppercase
+        code = code.upper().strip()
+        
+        # Find promo code
+        promo = PromoCode.query.filter_by(
+            code=code,
+            event_id=event_id,
+            is_active=True
+        ).first()
+        
+        if not promo:
+            # Check if code exists but for different event
+            promo_exists = PromoCode.query.filter_by(code=code, is_active=True).first()
+            if promo_exists:
+                return jsonify({'error': 'Promo code exists but is not valid for this event'}), 404
+            return jsonify({'error': 'Invalid promo code'}), 404
+        
+        # Check validity period
+        now = datetime.utcnow()
+        if promo.valid_from and now < promo.valid_from:
+            return jsonify({'error': 'Promo code not yet valid'}), 400
+        
+        if promo.valid_until and now > promo.valid_until:
+            return jsonify({'error': 'Promo code expired'}), 400
+        
+        # Check usage limits
+        if promo.max_uses is not None and promo.current_uses >= promo.max_uses:
+            return jsonify({'error': 'Promo code usage limit reached'}), 400
+        
+        # Check per-user usage
+        user_usage = Booking.query.filter_by(
+            user_id=current_user.id,
+            promo_code_id=promo.id
+        ).count()
+        
+        if user_usage >= promo.max_uses_per_user:
+            return jsonify({'error': 'You have already used this promo code'}), 400
+        
+        return jsonify({
+            'valid': True,
+            'promo_code': promo.to_dict()
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f'Error validating promo code: {str(e)}')
+        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
 
 @bp.route('/book', methods=['POST'])
@@ -263,7 +287,9 @@ def book_event(current_user):
         send_booking_confirmation_email(booking, tickets)
         
         # Send confirmation SMS
+        print(f"📱 [TICKETS] About to send booking confirmation SMS for booking {booking.id}")
         send_booking_confirmation_sms(booking, tickets)
+        print(f"📱 [TICKETS] Booking confirmation SMS call completed for booking {booking.id}")
         
         # Notify user of successful booking
         create_notification(

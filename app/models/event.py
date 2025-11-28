@@ -98,7 +98,8 @@ class Event(db.Model):
             'published_at': self.published_at.isoformat() if self.published_at else None,
             'hosts': [host.to_dict() for host in self.hosts],
             'interests': [interest.name for interest in self.interests],
-            'ticket_types': [tt.to_dict() for tt in self.ticket_types]
+            'ticket_types': [tt.to_dict() for tt in self.ticket_types],
+            'promo_codes': [pc.to_dict() for pc in self.promo_codes]
         }
         
         if include_stats:

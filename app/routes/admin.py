@@ -186,8 +186,23 @@ def get_partners(current_admin):
         page=page, per_page=per_page, error_out=False
     )
     
+    # Add event counts and revenue to each partner
+    partners_data = []
+    for partner in partners.items:
+        partner_dict = partner.to_dict()
+        # Count events for this partner
+        event_count = Event.query.filter_by(partner_id=partner.id).count()
+        partner_dict['total_events'] = event_count
+        # Calculate total revenue from confirmed bookings
+        total_revenue = db.session.query(func.sum(Booking.total_amount)).join(Event).filter(
+            Event.partner_id == partner.id,
+            Booking.status == 'confirmed'
+        ).scalar() or 0
+        partner_dict['total_revenue'] = float(total_revenue)
+        partners_data.append(partner_dict)
+    
     return jsonify({
-        'partners': [partner.to_dict() for partner in partners.items],
+        'partners': partners_data,
         'total': partners.total,
         'page': partners.page,
         'pages': partners.pages
