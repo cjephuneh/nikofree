@@ -50,6 +50,7 @@ def create_app(config_name='default'):
     env_origins = os.getenv('CORS_ORIGINS', '').split(',') if os.getenv('CORS_ORIGINS') else []
     allowed_origins.extend([origin.strip() for origin in env_origins if origin.strip()])
     
+    # Use a simpler CORS configuration that works better in production
     CORS(app, 
          resources={
              r"/api/*": {
@@ -83,43 +84,9 @@ def create_app(config_name='default'):
          supports_credentials=False,
          automatic_options=True)
     
-    # Handle OPTIONS requests explicitly for all API routes
-    @app.before_request
-    def handle_preflight():
-        if request.method == "OPTIONS":
-            # Get the origin from the request
-            origin = request.headers.get('Origin', '*')
-            
-            # Check if origin is in allowed list (for API routes)
-            if request.path.startswith('/api/'):
-                allowed_origins_list = [
-                    "http://localhost:5173",
-                    "http://127.0.0.1:5173",
-                    "http://localhost:3000",
-                    "http://127.0.0.1:3000",
-                    "https://niko-free.com",
-                    "https://www.niko-free.com",
-                    "https://nikofree.onrender.com",
-                ]
-                env_origins = os.getenv('CORS_ORIGINS', '').split(',') if os.getenv('CORS_ORIGINS') else []
-                allowed_origins_list.extend([o.strip() for o in env_origins if o.strip()])
-                
-                # Allow the origin if it's in the list, otherwise use *
-                if origin in allowed_origins_list or origin == '*':
-                    allowed_origin = origin
-                else:
-                    allowed_origin = allowed_origins_list[0] if allowed_origins_list else '*'
-            else:
-                allowed_origin = '*'  # For non-API routes, allow all
-            
-            response = make_response()
-            response.headers.add("Access-Control-Allow-Origin", allowed_origin)
-            response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization,X-Requested-With,Accept")
-            response.headers.add('Access-Control-Allow-Methods', "GET,POST,PUT,DELETE,OPTIONS,PATCH")
-            response.headers.add('Access-Control-Max-Age', "3600")
-            return response
-    
     # Add CORS headers to all responses (including errors)
+    # This is a fallback to ensure CORS headers are always present
+    # This ensures CORS headers are present even on error responses
     @app.after_request
     def after_request(response):
         # Don't add CORS headers to database files or other sensitive paths
@@ -127,9 +94,9 @@ def create_app(config_name='default'):
             return response
         
         # Get the origin from the request
-        origin = request.headers.get('Origin', '*')
+        origin = request.headers.get('Origin')
         
-        # Define allowed origins
+        # Define allowed origins (must match the list in CORS config)
         allowed_origins_list = [
             "http://localhost:5173",
             "http://127.0.0.1:5173",
@@ -144,25 +111,41 @@ def create_app(config_name='default'):
         
         # Add CORS headers for API routes
         if request.path.startswith('/api/'):
-            # Use the request origin if it's allowed, otherwise use the first allowed origin
-            if origin in allowed_origins_list:
-                response.headers.add('Access-Control-Allow-Origin', origin)
-            elif allowed_origins_list:
-                response.headers.add('Access-Control-Allow-Origin', allowed_origins_list[0])
-            else:
-                response.headers.add('Access-Control-Allow-Origin', '*')
-            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
-            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
-            response.headers.add('Access-Control-Max-Age', '3600')
-            response.headers.add('Access-Control-Allow-Credentials', 'false')
+            # If Flask-CORS didn't set headers (e.g., on error), add them
+            if 'Access-Control-Allow-Origin' not in response.headers:
+                # Only set origin if it's in the allowed list
+                if origin and origin in allowed_origins_list:
+                    response.headers['Access-Control-Allow-Origin'] = origin
+                elif origin:
+                    # Origin not in list - check if it's a localhost variant we should allow
+                    if 'localhost' in origin.lower() or '127.0.0.1' in origin:
+                        # Allow localhost origins for development/testing
+                        response.headers['Access-Control-Allow-Origin'] = origin
+                    elif allowed_origins_list:
+                        # Use first allowed origin as fallback (not ideal but ensures CORS works)
+                        response.headers['Access-Control-Allow-Origin'] = allowed_origins_list[0]
+            
+            # Ensure these headers are always present for API routes (even on errors)
+            if 'Access-Control-Allow-Headers' not in response.headers:
+                response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,Accept'
+            if 'Access-Control-Allow-Methods' not in response.headers:
+                response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS,PATCH'
+            if 'Access-Control-Max-Age' not in response.headers:
+                response.headers['Access-Control-Max-Age'] = '3600'
+            if 'Access-Control-Allow-Credentials' not in response.headers:
+                response.headers['Access-Control-Allow-Credentials'] = 'false'
         # Add CORS headers for uploads (images)
         elif request.path.startswith('/uploads/'):
-            response.headers.add('Access-Control-Allow-Origin', '*')
-            response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+            if 'Access-Control-Allow-Origin' not in response.headers:
+                response.headers['Access-Control-Allow-Origin'] = '*'
+            if 'Access-Control-Allow-Methods' not in response.headers:
+                response.headers['Access-Control-Allow-Methods'] = 'GET,OPTIONS'
         # Add CORS headers for SEO routes
         elif request.path in ['/sitemap.xml', '/robots.txt']:
-            response.headers.add('Access-Control-Allow-Origin', '*')
-            response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+            if 'Access-Control-Allow-Origin' not in response.headers:
+                response.headers['Access-Control-Allow-Origin'] = '*'
+            if 'Access-Control-Allow-Methods' not in response.headers:
+                response.headers['Access-Control-Allow-Methods'] = 'GET,OPTIONS'
         
         return response
     limiter.init_app(app)
