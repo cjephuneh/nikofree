@@ -7,6 +7,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from config import config
+import os
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -34,13 +35,27 @@ def create_app(config_name='default'):
     app.url_map.strict_slashes = False
     
     # Configure CORS to handle preflight requests properly
-    # Exclude database files and other sensitive paths
+    # Allow both development and production origins
+    allowed_origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://niko-free.com",
+        "https://www.niko-free.com",
+        "https://nikofree.onrender.com",  # Production API domain
+    ]
+    
+    # Get additional origins from environment variable if set
+    env_origins = os.getenv('CORS_ORIGINS', '').split(',') if os.getenv('CORS_ORIGINS') else []
+    allowed_origins.extend([origin.strip() for origin in env_origins if origin.strip()])
+    
     CORS(app, 
          resources={
              r"/api/*": {
-                 "origins": ["http://localhost:5173", "http://127.0.0.1:5173", "https://niko-free.com", "https://www.niko-free.com"],
+                 "origins": allowed_origins,
                  "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-                 "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+                 "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
                  "supports_credentials": False,
                  "max_age": 3600,
                  "expose_headers": ["Content-Type", "Authorization"]
@@ -68,13 +83,38 @@ def create_app(config_name='default'):
          supports_credentials=False,
          automatic_options=True)
     
-    # Handle OPTIONS requests explicitly for all routes
+    # Handle OPTIONS requests explicitly for all API routes
     @app.before_request
     def handle_preflight():
         if request.method == "OPTIONS":
+            # Get the origin from the request
+            origin = request.headers.get('Origin', '*')
+            
+            # Check if origin is in allowed list (for API routes)
+            if request.path.startswith('/api/'):
+                allowed_origins_list = [
+                    "http://localhost:5173",
+                    "http://127.0.0.1:5173",
+                    "http://localhost:3000",
+                    "http://127.0.0.1:3000",
+                    "https://niko-free.com",
+                    "https://www.niko-free.com",
+                    "https://nikofree.onrender.com",
+                ]
+                env_origins = os.getenv('CORS_ORIGINS', '').split(',') if os.getenv('CORS_ORIGINS') else []
+                allowed_origins_list.extend([o.strip() for o in env_origins if o.strip()])
+                
+                # Allow the origin if it's in the list, otherwise use *
+                if origin in allowed_origins_list or origin == '*':
+                    allowed_origin = origin
+                else:
+                    allowed_origin = allowed_origins_list[0] if allowed_origins_list else '*'
+            else:
+                allowed_origin = '*'  # For non-API routes, allow all
+            
             response = make_response()
-            response.headers.add("Access-Control-Allow-Origin", "*")
-            response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization,X-Requested-With")
+            response.headers.add("Access-Control-Allow-Origin", allowed_origin)
+            response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization,X-Requested-With,Accept")
             response.headers.add('Access-Control-Allow-Methods', "GET,POST,PUT,DELETE,OPTIONS,PATCH")
             response.headers.add('Access-Control-Max-Age', "3600")
             return response
@@ -86,12 +126,35 @@ def create_app(config_name='default'):
         if request.path.endswith('.db') or '/nikofree.db' in request.path:
             return response
         
+        # Get the origin from the request
+        origin = request.headers.get('Origin', '*')
+        
+        # Define allowed origins
+        allowed_origins_list = [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "https://niko-free.com",
+            "https://www.niko-free.com",
+            "https://nikofree.onrender.com",
+        ]
+        env_origins = os.getenv('CORS_ORIGINS', '').split(',') if os.getenv('CORS_ORIGINS') else []
+        allowed_origins_list.extend([o.strip() for o in env_origins if o.strip()])
+        
         # Add CORS headers for API routes
         if request.path.startswith('/api/'):
-            response.headers.add('Access-Control-Allow-Origin', '*')
-            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+            # Use the request origin if it's allowed, otherwise use the first allowed origin
+            if origin in allowed_origins_list:
+                response.headers.add('Access-Control-Allow-Origin', origin)
+            elif allowed_origins_list:
+                response.headers.add('Access-Control-Allow-Origin', allowed_origins_list[0])
+            else:
+                response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
             response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
             response.headers.add('Access-Control-Max-Age', '3600')
+            response.headers.add('Access-Control-Allow-Credentials', 'false')
         # Add CORS headers for uploads (images)
         elif request.path.startswith('/uploads/'):
             response.headers.add('Access-Control-Allow-Origin', '*')
@@ -119,7 +182,6 @@ def create_app(config_name='default'):
     
     # Serve static files from uploads folder
     from flask import send_file, abort
-    import os
     
     @app.route('/uploads/<path:filename>')
     def uploaded_file(filename):
