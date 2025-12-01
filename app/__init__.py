@@ -230,3 +230,10 @@ def create_app(config_name='default'):
     
     return app
 
+# For Azure Oryx auto-detection: export app instance when imported as 'app:app'
+# This allows gunicorn to find the app when Oryx generates 'gunicorn app:app'
+# The app is created with 'production' config by default for deployment
+import os
+_app_instance = create_app(os.getenv('FLASK_ENV', 'production'))
+app = _app_instance
+

@@ -73,4 +73,8 @@ jobs:
         with:
           app-name: 'nikofree'
           slot-name: 'Production'
+      
+      - name: 'Configure startup command'
+        run: |
+          az webapp config set --name nikofree --startup-file "gunicorn --bind 0.0.0.0:8000 wsgi:app" || echo "Startup command configuration skipped (may need to be set manually in Azure Portal)"
           
