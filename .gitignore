@@ -59,8 +59,9 @@ htmlcov/
 Thumbs.db
 
 # Uploads
-uploads/
-temp/
+# Note: uploads/ folder is included for deployment
+# If you want to exclude it, uncomment the line below:
+# uploads/
 
 # Apple Private Keys
 *.p8

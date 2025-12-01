@@ -33,7 +33,7 @@ jobs:
           pip install -r requirements.txt
                 
       # By default, when you enable GitHub CI/CD integration through the Azure portal, the platform automatically sets the SCM_DO_BUILD_DURING_DEPLOYMENT application setting to true. This triggers the use of Oryx, a build engine that handles application compilation and dependency installation (e.g., pip install) directly on the platform during deployment. Hence, we exclude the antenv virtual environment directory from the deployment artifact to reduce the payload size. 
-      - name: Prepare database file for deployment
+      - name: Prepare database and uploads for deployment
         run: |
           # Copy database file to root if it exists in instance folder
           # This ensures it's included in the deployment
@@ -46,6 +46,15 @@ jobs:
             echo "Database file ready for deployment: $(ls -lh nikofree.db)"
           else
             echo "Warning: No database file found. A new database will be created on first run."
+          fi
+          # Verify uploads folder exists
+          if [ -d "uploads" ]; then
+            echo "Uploads folder found: $(du -sh uploads)"
+            echo "Uploads contents:"
+            find uploads -type f | head -10
+          else
+            echo "Warning: No uploads folder found. Creating empty uploads structure."
+            mkdir -p uploads/{events,logos,profiles,qrcodes}
           fi
       
       - name: Upload artifact for deployment jobs
