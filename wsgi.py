@@ -10,9 +10,10 @@ from flask_migrate import upgrade as migrate_upgrade
 # Use 'production' config for Azure deployment, or get from environment
 app = create_app(os.getenv('FLASK_ENV', 'production'))
 
-# Run database migrations on startup in production
-# This ensures the database is up-to-date when the app starts
-if os.getenv('FLASK_ENV') == 'production' or os.getenv('RUN_MIGRATIONS_ON_STARTUP', '').lower() == 'true':
+# Note: Database file should be deployed with the application
+# If using an existing database file, ensure it's included in the deployment
+# Migrations will only run if RUN_MIGRATIONS_ON_STARTUP is explicitly set to 'true'
+if os.getenv('RUN_MIGRATIONS_ON_STARTUP', '').lower() == 'true':
     with app.app_context():
         try:
             print("Running database migrations...")

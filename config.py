@@ -17,6 +17,7 @@ class Config:
     ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'admin@nikofree.com')
     
     # Database
+    # Use the database file from the app directory (will be deployed with the app)
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///nikofree.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
