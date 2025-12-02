@@ -73,7 +73,7 @@ class Config:
     MPESA_PASSKEY = os.getenv('MPESA_PASSKEY', 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919')  # Sandbox passkey
     MPESA_SHORTCODE = os.getenv('MPESA_SHORTCODE', '174379')  # Sandbox shortcode
     MPESA_ENVIRONMENT = os.getenv('MPESA_ENVIRONMENT', 'sandbox')
-    MPESA_CALLBACK_URL = os.getenv('MPESA_CALLBACK_URL', 'https://nikofree-arhecnfueegrasf8.canadacentral-01.azurewebsites.net/')
+    MPESA_CALLBACK_URL = os.getenv('MPESA_CALLBACK_URL', 'https://nikofree-arhecnfueegrasf8.canadacentral-01.azurewebsites.net')
     
     # Redis
     REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
