@@ -116,10 +116,12 @@ def get_bookings(current_user):
     elif status == 'cancelled':
         query = query.filter(Booking.status == 'cancelled')
     elif status == 'pending':
-        # Pending bookings are unpaid bookings that haven't been cancelled
+        # Pending bookings are unpaid or failed bookings that haven't been cancelled
+        # Include both 'unpaid' and 'failed' payment statuses since failed payments
+        # are still pending and can be retried
         query = query.filter(
             Booking.status == 'pending',
-            Booking.payment_status == 'unpaid'
+            Booking.payment_status.in_(['unpaid', 'failed'])
         )
     
     # Order by date

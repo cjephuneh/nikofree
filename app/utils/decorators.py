@@ -11,12 +11,8 @@ def user_required(fn):
     def wrapper(*args, **kwargs):
         try:
             verify_jwt_in_request()
-        except Exception as e:
-            # JWT validation failed
-            return jsonify({'msg': 'Invalid or missing authentication token'}), 401
-        
-        try:
             current_user_id = get_jwt_identity()
+            
             if not current_user_id:
                 return jsonify({'msg': 'Invalid authentication token'}), 401
             
@@ -31,6 +27,25 @@ def user_required(fn):
             return fn(current_user=user, *args, **kwargs)
         except Exception as e:
             from flask import current_app
+            # Check if it's a JWT-related error (expired, invalid, malformed, etc.)
+            error_msg = str(e).lower()
+            error_type = type(e).__name__.lower()
+            
+            # Handle "Not enough segments" error (malformed token)
+            if 'not enough segments' in error_msg or 'decodeerror' in error_type:
+                current_app.logger.debug(f'Malformed JWT token: {str(e)}')
+                return jsonify({'msg': 'Invalid authentication token. Please log in again.'}), 401
+            
+            # Handle expired tokens and other JWT errors gracefully (don't log as errors)
+            if ('expired' in error_msg or 'expired' in error_type or 
+                'token' in error_msg or 'jwt' in error_msg or 
+                'unauthorized' in error_msg or 'signature' in error_msg or
+                'decode' in error_msg):
+                # Log at debug level instead of error level for expired/invalid tokens
+                current_app.logger.debug(f'JWT authentication failed: {str(e)}')
+                return jsonify({'msg': 'Invalid or expired token. Please log in again.'}), 401
+            
+            # Log unexpected errors at error level
             current_app.logger.error(f'Error in user_required decorator: {str(e)}', exc_info=True)
             return jsonify({'msg': 'Authentication failed'}), 401
     

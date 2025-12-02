@@ -146,7 +146,7 @@ class Booking(db.Model):
                 'id': self.id,
                 'booking_number': getattr(self, 'booking_number', None),
                 'error': f'Serialization error: {str(e)}'
-            }
+        }
 
 
 class Ticket(db.Model):

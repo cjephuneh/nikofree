@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime
-from sqlalchemy import func
+from sqlalchemy import func, or_
 import json
 from app import db, limiter
 from app.models.partner import Partner, PartnerSupportRequest, PartnerTeamMember
@@ -19,10 +19,21 @@ bp = Blueprint('partners', __name__)
 def get_dashboard(current_partner):
     """Get partner dashboard overview"""
     # Count events
+    now = datetime.utcnow()
     total_events = Event.query.filter_by(partner_id=current_partner.id).count()
     upcoming_events = Event.query.filter(
         Event.partner_id == current_partner.id,
-        Event.start_date > datetime.utcnow(),
+        Event.start_date > now,
+        Event.status == 'approved'
+    ).count()
+    
+    # Count past events (using same logic as events endpoint)
+    past_events = Event.query.filter(
+        Event.partner_id == current_partner.id,
+        or_(
+            (Event.end_date.isnot(None)) & (Event.end_date < now),
+            (Event.end_date.is_(None)) & (Event.start_date < now)
+        ),
         Event.status == 'approved'
     ).count()
     
@@ -30,6 +41,24 @@ def get_dashboard(current_partner):
     total_attendees = db.session.query(func.sum(Event.attendee_count)).filter(
         Event.partner_id == current_partner.id
     ).scalar() or 0
+    
+    # Calculate actual earnings from database (only from completed payments)
+    # Join with Payment to ensure we only count bookings with completed payments
+    actual_total_earnings = db.session.query(func.sum(Booking.partner_amount)).join(Event).join(Payment).filter(
+        Event.partner_id == current_partner.id,
+        Booking.status == 'confirmed',
+        Payment.status == 'completed',
+        Booking.payment_id == Payment.id
+    ).scalar() or 0
+    
+    # Get withdrawn earnings (from payouts)
+    withdrawn_earnings = db.session.query(func.sum(PartnerPayout.amount)).filter(
+        PartnerPayout.partner_id == current_partner.id,
+        PartnerPayout.status == 'approved'
+    ).scalar() or 0
+    
+    # Pending earnings = total - withdrawn
+    pending_earnings = float(actual_total_earnings) - float(withdrawn_earnings)
     
     # Get recent bookings
     recent_bookings = Booking.query.join(Event).filter(
@@ -42,10 +71,11 @@ def get_dashboard(current_partner):
         'stats': {
             'total_events': total_events,
             'upcoming_events': upcoming_events,
+            'past_events': past_events,
             'total_attendees': int(total_attendees),
-            'total_earnings': float(current_partner.total_earnings),
-            'pending_earnings': float(current_partner.pending_earnings),
-            'withdrawn_earnings': float(current_partner.withdrawn_earnings)
+            'total_earnings': float(actual_total_earnings),
+            'pending_earnings': float(pending_earnings),
+            'withdrawn_earnings': float(withdrawn_earnings)
         },
         'recent_bookings': [booking.to_dict() for booking in recent_bookings]
     }), 200
@@ -63,40 +93,51 @@ def get_partner_analytics(current_partner):
         start_7d = now - timedelta(days=7)
         start_1d = now - timedelta(days=1)
         
-        # Base confirmed bookings query for this partner
-        base_bookings = Booking.query.join(Event).filter(
+        # Base confirmed bookings query for this partner (only bookings with COMPLETED payments count for revenue)
+        # Join with Payment to ensure we only count bookings with completed payments
+        base_bookings = Booking.query.join(Event).join(Payment).filter(
             Event.partner_id == current_partner.id,
-            Booking.status == 'confirmed'
+            Booking.status == 'confirmed',
+            Payment.status == 'completed',
+            Booking.payment_id == Payment.id
         )
         
         # All-time stats
         total_bookings = base_bookings.count()
-        total_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
+        total_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).join(Payment).filter(
             Event.partner_id == current_partner.id,
-            Booking.status == 'confirmed'
+            Booking.status == 'confirmed',
+            Payment.status == 'completed',
+            Booking.payment_id == Payment.id
         ).scalar() or 0
         
         # Period stats (last N days)
         period_bookings = base_bookings.filter(Booking.created_at >= start_period).count()
-        period_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
+        period_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).join(Payment).filter(
             Event.partner_id == current_partner.id,
             Booking.status == 'confirmed',
+            Payment.status == 'completed',
+            Booking.payment_id == Payment.id,
             Booking.created_at >= start_period
         ).scalar() or 0
         
         # Last 7 days
         last_7d_bookings = base_bookings.filter(Booking.created_at >= start_7d).count()
-        last_7d_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
+        last_7d_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).join(Payment).filter(
             Event.partner_id == current_partner.id,
             Booking.status == 'confirmed',
+            Payment.status == 'completed',
+            Booking.payment_id == Payment.id,
             Booking.created_at >= start_7d
         ).scalar() or 0
         
         # Last 24 hours
         last_1d_bookings = base_bookings.filter(Booking.created_at >= start_1d).count()
-        last_1d_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
+        last_1d_revenue = db.session.query(func.sum(Booking.partner_amount)).join(Event).join(Payment).filter(
             Event.partner_id == current_partner.id,
             Booking.status == 'confirmed',
+            Payment.status == 'completed',
+            Booking.payment_id == Payment.id,
             Booking.created_at >= start_1d
         ).scalar() or 0
         
@@ -109,55 +150,48 @@ def get_partner_analytics(current_partner):
         ).count()
         
         # Generate daily time-series data for line chart
+        # Pre-fetch all events and bookings to avoid N+1 queries
+        all_events = Event.query.filter_by(partner_id=current_partner.id).all()
+        all_bookings = base_bookings.all()
+        
         chart_data = []
+        cumulative_bookings_count = 0
+        cumulative_revenue_total = 0.0
+        
         for i in range(days):
             day_start = start_period + timedelta(days=i)
             day_end = day_start + timedelta(days=1)
             
             # Active events on this day (events that were active/upcoming on this date)
-            active_on_day = Event.query.filter(
-                Event.partner_id == current_partner.id,
-                Event.start_date > day_start,
-                Event.status == 'approved'
-            ).count()
+            active_on_day = sum(1 for event in all_events 
+                               if event.start_date > day_start and event.status == 'approved')
             
             # Total events created up to this day
-            total_events_by_day = Event.query.filter(
-                Event.partner_id == current_partner.id,
-                Event.created_at <= day_end
-            ).count()
+            total_events_by_day = sum(1 for event in all_events 
+                                     if event.created_at <= day_end)
             
             # Bookings created on this day
-            bookings_on_day = base_bookings.filter(
-                Booking.created_at >= day_start,
-                Booking.created_at < day_end
-            ).count()
+            bookings_on_day = sum(1 for booking in all_bookings 
+                                if day_start <= booking.created_at < day_end)
             
             # Revenue from bookings created on this day
-            revenue_on_day = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
-                Event.partner_id == current_partner.id,
-                Booking.status == 'confirmed',
-                Booking.created_at >= day_start,
-                Booking.created_at < day_end
-            ).scalar() or 0
+            revenue_on_day = sum(float(booking.partner_amount) for booking in all_bookings 
+                               if day_start <= booking.created_at < day_end)
             
-            # Cumulative bookings up to this day
-            cumulative_bookings = base_bookings.filter(
-                Booking.created_at <= day_end
-            ).count()
+            # Update cumulative values
+            cumulative_bookings_count = sum(1 for booking in all_bookings 
+                                           if booking.created_at <= day_end)
+            cumulative_revenue_total = sum(float(booking.partner_amount) for booking in all_bookings 
+                                          if booking.created_at <= day_end)
             
             chart_data.append({
                 'date': day_start.strftime('%Y-%m-%d'),
                 'active_events': active_on_day,
                 'total_events': total_events_by_day,
                 'bookings': bookings_on_day,
-                'cumulative_bookings': cumulative_bookings,
+                'cumulative_bookings': cumulative_bookings_count,
                 'revenue': float(revenue_on_day),
-                'cumulative_revenue': float(db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
-                    Event.partner_id == current_partner.id,
-                    Booking.status == 'confirmed',
-                    Booking.created_at <= day_end
-                ).scalar() or 0)
+                'cumulative_revenue': float(cumulative_revenue_total)
             })
         
         return jsonify({
@@ -344,7 +378,6 @@ def get_partner_events(current_partner):
             )
         elif status == 'ongoing':
             # Events happening now (started but not ended)
-            from sqlalchemy import or_
             query = query.filter(
                 Event.start_date <= now,
                 or_(Event.end_date.is_(None), Event.end_date >= now),
@@ -352,9 +385,12 @@ def get_partner_events(current_partner):
             )
         elif status == 'past':
             # Events that have ended
+            # Past = (end_date < now) OR (end_date is None AND start_date < now)
             query = query.filter(
-                Event.end_date.isnot(None),
-                Event.end_date < now,
+                or_(
+                    (Event.end_date.isnot(None)) & (Event.end_date < now),
+                    (Event.end_date.is_(None)) & (Event.start_date < now)
+                ),
                 Event.status == 'approved'
             )
         else:
@@ -428,9 +464,13 @@ def create_event(current_partner):
         try:
             end_date_str = data['end_date']
             if 'T' in end_date_str:
+                # Handle ISO format with time: "2025-12-02T14:30:00" or "2025-12-02T14:30:00Z"
                 end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
             else:
+                # Handle separate date and time
                 end_time = data.get('end_time', '23:59')
+                if ':' not in end_time:
+                    end_time = '23:59'  # Default if invalid
                 end_date = datetime.strptime(f"{end_date_str} {end_time}", "%Y-%m-%d %H:%M")
         except Exception as e:
             return jsonify({'error': f'Invalid end_date format: {str(e)}'}), 400
@@ -448,6 +488,16 @@ def create_event(current_partner):
         except ValueError as e:
             return jsonify({'error': str(e)}), 400
     
+    # Handle attendee capacity
+    attendee_capacity = None
+    if data.get('attendee_capacity') or data.get('attendeeLimit'):
+        try:
+            capacity_value = data.get('attendee_capacity') or data.get('attendeeLimit')
+            if capacity_value and str(capacity_value).strip() and str(capacity_value) != '0':
+                attendee_capacity = int(capacity_value)
+        except (ValueError, TypeError):
+            attendee_capacity = None
+    
     # Create event
     event = Event(
         title=data['title'].strip(),
@@ -456,6 +506,7 @@ def create_event(current_partner):
         category_id=int(data['category_id']),
         start_date=start_date,
         end_date=end_date,
+        attendee_capacity=attendee_capacity,
         is_online=is_online or is_hybrid,
         venue_name=data.get('venue_name') or data.get('location_name'),
         venue_address=data.get('venue_address'),
@@ -640,11 +691,26 @@ def update_event(current_partner, event_id):
         try:
             end_date_str = data['end_date']
             if 'T' in end_date_str:
+                # Handle ISO format with time: "2025-12-02T14:30:00" or "2025-12-02T14:30:00Z"
                 event.end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
             else:
+                # Handle separate date and time
                 end_time = data.get('end_time', '23:59')
+                if ':' not in end_time:
+                    end_time = '23:59'  # Default if invalid
                 event.end_date = datetime.strptime(f"{end_date_str} {end_time}", "%Y-%m-%d %H:%M")
         except Exception as e:
+            current_app.logger.warning(f'Error parsing end_date: {str(e)}')
+    
+    # Update attendee capacity
+    if 'attendee_capacity' in data or 'attendeeLimit' in data:
+        try:
+            capacity_value = data.get('attendee_capacity') or data.get('attendeeLimit')
+            if capacity_value and str(capacity_value).strip() and str(capacity_value) != '0':
+                event.attendee_capacity = int(capacity_value)
+            elif capacity_value == '' or capacity_value is None:
+                event.attendee_capacity = None
+        except (ValueError, TypeError):
             pass
     
     # Location
@@ -1258,12 +1324,23 @@ def get_all_attendees(current_partner):
                 ticket_type_name = ticket.ticket_type.name
         
         # Determine if current event (upcoming or ongoing)
+        # Past = (end_date < now) OR (end_date is None AND start_date < now)
         now = datetime.utcnow()
         is_current = False
-        if event.start_date > now:
-            is_current = True  # Upcoming
-        elif event.start_date <= now and (not event.end_date or event.end_date >= now):
-            is_current = True  # Ongoing
+        
+        # Check if event is past
+        is_past = False
+        if event.end_date and event.end_date < now:
+            is_past = True  # Past event (has ended)
+        elif not event.end_date and event.start_date < now:
+            is_past = True  # Past event (no end_date but start_date is past)
+        
+        # If not past, it's current (upcoming or ongoing)
+        if not is_past:
+            if event.start_date > now:
+                is_current = True  # Upcoming
+            elif event.start_date <= now and (not event.end_date or event.end_date >= now):
+                is_current = True  # Ongoing
         
         attendees.append({
             'id': booking.id,
@@ -1282,11 +1359,17 @@ def get_all_attendees(current_partner):
             'booking': booking.to_dict()
         })
     
+    # Count past and current events from attendees
+    past_events_count = sum(1 for a in attendees if not a['isCurrentEvent'])
+    current_events_count = sum(1 for a in attendees if a['isCurrentEvent'])
+    
     return jsonify({
         'attendees': attendees,
         'total': bookings.total,
         'page': bookings.page,
-        'pages': bookings.pages
+        'pages': bookings.pages,
+        'past_events_count': past_events_count,
+        'current_events_count': current_events_count
     }), 200
 
 

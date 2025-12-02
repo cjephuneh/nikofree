@@ -22,6 +22,7 @@ class Event(db.Model):
     # Date and Time
     start_date = db.Column(db.DateTime, nullable=False, index=True)
     end_date = db.Column(db.DateTime, nullable=True)
+    attendee_capacity = db.Column(db.Integer, nullable=True)  # Maximum number of attendees
     
     # Location
     is_online = db.Column(db.Boolean, default=False)
@@ -83,6 +84,7 @@ class Event(db.Model):
             'category': self.category.to_dict() if self.category else None,
             'start_date': self.start_date.isoformat(),
             'end_date': self.end_date.isoformat() if self.end_date else None,
+            'attendee_capacity': self.attendee_capacity,
             'is_online': self.is_online,
             'venue_name': self.venue_name,
             'venue_address': self.venue_address,

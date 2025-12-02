@@ -45,8 +45,24 @@ def initiate_payment(current_user):
     if booking.payment_status == 'paid':
         return jsonify({'error': 'Booking already paid'}), 400
     
+    # Validate amount (minimum 1 KES for MPesa)
+    if float(booking.total_amount) < 1:
+        return jsonify({'error': 'Payment amount must be at least KES 1'}), 400
+    
     # Format phone number
     phone = format_phone_number(data['phone_number'])
+    
+    # Validate phone number format (must be 12 digits starting with 254)
+    if not phone or len(phone) != 12 or not phone.startswith('254'):
+        return jsonify({
+            'error': 'Invalid phone number format. Please use a valid Kenyan phone number (e.g., 0708419386 or 254708419386)'
+        }), 400
+    
+    # Validate phone number is numeric after 254
+    if not phone[3:].isdigit():
+        return jsonify({
+            'error': 'Invalid phone number. Phone number must contain only digits after country code'
+        }), 400
     
     # Generate transaction ID
     import uuid
@@ -96,6 +112,11 @@ def initiate_payment(current_user):
         }
         db.session.commit()
         
+        current_app.logger.info(
+            f'STK push initiated successfully for payment {payment.id}: '
+            f'Phone={phone}, Amount={payment.amount}, CheckoutRequestID={response.get("CheckoutRequestID")}'
+        )
+        
         return jsonify({
             'message': 'Payment initiated. Please check your phone to complete payment.',
             'payment_id': payment.id,
@@ -104,15 +125,26 @@ def initiate_payment(current_user):
             'amount': float(payment.amount)
         }), 200
     else:
-        # Failed
+        # Failed to initiate STK push
         payment.status = 'failed'
-        payment.error_message = response.get('errorMessage') or response.get('ResponseDescription')
+        payment.failed_at = datetime.utcnow()
+        error_code = response.get('errorCode') or response.get('ResponseCode')
+        error_message = response.get('errorMessage') or response.get('ResponseDescription') or 'Failed to initiate payment'
+        payment.error_message = error_message
         db.session.commit()
         
-        return jsonify({
-            'error': 'Failed to initiate payment',
-            'message': payment.error_message
-        }), 400
+        current_app.logger.error(
+            f'STK push initiation failed for payment {payment.id}: '
+            f'ErrorCode={error_code}, ErrorMessage={error_message}, Phone={phone}, Amount={payment.amount}'
+        )
+        
+        # Provide more helpful error messages
+        if '2001' in str(error_code) or 'invalid' in error_message.lower():
+            error_message = 'Invalid phone number or amount. Please ensure your phone number is registered for M-Pesa and try again. If using sandbox, ensure you are using a test number.'
+        elif 'insufficient' in error_message.lower() or 'balance' in error_message.lower():
+            error_message = 'Insufficient balance. Please ensure you have enough funds in your M-Pesa account.'
+        
+        return jsonify({'error': error_message}), 400
 
 
 @bp.route('/mpesa/callback', methods=['POST'])
@@ -122,7 +154,7 @@ def mpesa_callback():
     
     This endpoint receives payment confirmations from Safaricom M-Pesa Daraja API.
     Callback URL should be configured in M-Pesa Daraja portal as:
-    http://your-domain.com/api/payments/mpesa/callback
+    https://nikofree-arhecnfueegrasf8.canadacentral-01.azurewebsites.net/api/payments/mpesa/callback
     
     The callback is called automatically when:
     - User completes STK push payment
@@ -303,10 +335,35 @@ def mpesa_callback():
                 notify_new_booking(event, booking)
                 notify_payment_completed(booking, payment)
         else:
-            # Payment failed
+            # Payment failed or cancelled
+            result_desc = callback_data.get('ResultDesc', 'Payment failed')
+            
+            # Map MPesa result codes:
+            # ResultCode 0 = Success (handled above)
+            # ResultCode 2001 = Initiator information invalid (STK push never sent - phone/amount validation failed)
+            # ResultCode 1032 = User cancelled the STK push (user saw prompt and cancelled)
+            # ResultCode 2002 = Insufficient balance (user tried to pay but no funds)
+            # ResultCode 2003 = Transaction cancelled by user (user cancelled)
+            # ResultCode 2004 = Transaction timeout (user didn't respond in time)
+            # ResultCode 2005 = Duplicate transaction
+            
+            # ResultCode 2001 means the STK push was never sent to the user's phone
+            # This happens when MPesa validates the request and finds issues before sending
+            # Common causes: phone not registered for M-Pesa, invalid test number in sandbox, etc.
+            # Since the user never got a prompt, we should mark as failed immediately
+            
+            # For codes where user interacted (1032, 2003, 2004), they had a chance to pay
+            # For 2001, they never got the prompt, so mark as failed
+            
             payment.status = 'failed'
             payment.failed_at = datetime.utcnow()
-            payment.error_message = callback_data.get('ResultDesc')
+            payment.error_message = result_desc
+            
+            # Log the failure reason with more context
+            current_app.logger.warning(
+                f'Payment {payment.id} failed: ResultCode={result_code}, '
+                f'ResultDesc={result_desc}, Phone={payment.phone_number}, Amount={payment.amount}'
+            )
             
             # Find booking for failed payment
             booking = None
@@ -315,11 +372,22 @@ def mpesa_callback():
             
             if booking:
                 booking.payment_status = 'failed'
-                # Send payment failed SMS to user
-                user = booking.user
-                event = booking.event
-                if user and event:
-                    send_payment_failed_sms(user, payment, event)
+                # Send payment failed SMS for ResultCode 2001 (validation failed - STK push never sent)
+                # ResultCode 2001 means the phone number/amount validation failed at MPesa's end
+                # The user never received the STK push prompt, so we should inform them
+                if result_code == 2001:
+                    # Check if we're in sandbox mode for better error messaging
+                    is_sandbox = current_app.config.get('MPESA_ENVIRONMENT', 'sandbox') == 'sandbox'
+                    user = booking.user
+                    event = booking.event
+                    if user and event:
+                        try:
+                            # Only send SMS if it's not a sandbox validation issue
+                            # In sandbox, ResultCode 2001 usually means phone not registered as test number
+                            # We'll still send the SMS but the frontend should show a better message
+                            send_payment_failed_sms(user, payment, event)
+                        except Exception as sms_error:
+                            current_app.logger.warning(f'Failed to send payment failed SMS: {str(sms_error)}')
             
             db.session.commit()
         
