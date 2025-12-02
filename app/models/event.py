@@ -174,8 +174,9 @@ class EventPromotion(db.Model):
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    def to_dict(self):
-        return {
+    def to_dict(self, include_status=False):
+        """Convert promotion to dictionary"""
+        data = {
             'id': self.id,
             'event_id': self.event_id,
             'start_date': self.start_date.isoformat(),
@@ -185,4 +186,17 @@ class EventPromotion(db.Model):
             'is_active': self.is_active,
             'is_paid': self.is_paid
         }
+        
+        if include_status:
+            from datetime import datetime
+            now = datetime.utcnow()
+            data['is_active_now'] = self.start_date <= now <= self.end_date
+            if now < self.start_date:
+                data['time_until_start'] = (self.start_date - now).total_seconds()
+            elif now > self.end_date:
+                data['time_until_end'] = 0
+            else:
+                data['time_until_end'] = (self.end_date - now).total_seconds()
+        
+        return data
 

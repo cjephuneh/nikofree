@@ -116,10 +116,13 @@ def get_event(current_user, event_id):
         return jsonify({'error': 'Event not found'}), 404
     
     # Check if user can view this event
+    # Allow viewing unpublished events if user is logged in (for now)
+    # In production, you might want to restrict this to organizers and admins only
     if not event.is_published or event.status != 'approved':
-        # Only organizer and admin can view unpublished events
         if not current_user:
-            return jsonify({'error': 'Event not found'}), 404
+            return jsonify({'error': 'Event not found or not available'}), 404
+        # For logged-in users, allow viewing unpublished events
+        # This helps with testing and allows users to see events they're interested in
     
     # Increment view count
     event.view_count += 1
@@ -137,7 +140,7 @@ def get_event(current_user, event_id):
     if not current_user:
         event_data['attendee_count_blurred'] = True
     
-    return jsonify(event_data), 200
+    return jsonify({'event': event_data}), 200
 
 
 @bp.route('/promoted', methods=['GET'])
@@ -146,25 +149,48 @@ def get_promoted_events():
     # Get active promotions (both free and paid)
     now = datetime.utcnow()
     
+    # Only show promotions that are currently active (between start and end time)
+    # This ensures events only show during their scheduled promotion window
     promotions = EventPromotion.query.filter(
         EventPromotion.is_active == True,
         EventPromotion.start_date <= now,
         EventPromotion.end_date >= now
     ).order_by(
         EventPromotion.is_paid.desc(),  # Paid promotions first
-        EventPromotion.created_at.desc()  # Then by creation date
+        EventPromotion.start_date.asc()  # Then by start date (earliest first)
     ).limit(10).all()
     
     events = []
     for promo in promotions:
         if promo.event and promo.event.is_published and promo.event.status == 'approved':
             event_dict = promo.event.to_dict()
-            # Include promotion info
+            
+            # Calculate promotion status
+            time_until_start = None
+            time_until_end = None
+            is_active_now = promo.start_date <= now <= promo.end_date
+            
+            if now < promo.start_date:
+                # Promotion hasn't started yet
+                time_until_start = (promo.start_date - now).total_seconds()
+            elif now > promo.end_date:
+                # Promotion has ended
+                time_until_end = 0
+            else:
+                # Promotion is active
+                time_until_end = (promo.end_date - now).total_seconds()
+            
+            # Include promotion info with status
             event_dict['promotion'] = {
+                'id': promo.id,
                 'is_paid': promo.is_paid,
                 'days_count': promo.days_count,
                 'start_date': promo.start_date.isoformat(),
-                'end_date': promo.end_date.isoformat()
+                'end_date': promo.end_date.isoformat(),
+                'is_active_now': is_active_now,
+                'time_until_start': time_until_start,  # seconds until start (None if already started)
+                'time_until_end': time_until_end,  # seconds until end (None if not started or already ended)
+                'total_cost': float(promo.total_cost)
             }
             events.append(event_dict)
     
@@ -385,6 +411,13 @@ def get_event_reviews(current_user, event_id):
     event = Event.query.get(event_id)
     if not event:
         return jsonify({'error': 'Event not found'}), 404
+    
+    # Check if user can view this event (same logic as get_event)
+    # Allow viewing reviews for unpublished events if user is logged in
+    if not event.is_published or event.status != 'approved':
+        if not current_user:
+            return jsonify({'error': 'Event not found or not available'}), 404
+        # For logged-in users, allow viewing reviews for unpublished events
     
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)

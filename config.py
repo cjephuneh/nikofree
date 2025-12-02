@@ -41,6 +41,9 @@ class Config:
     UPLOAD_FOLDER = 'uploads'
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}
     
+    # Base URL for generating download links
+    BASE_URL = os.getenv('BASE_URL', 'https://nikofree.onrender.com')
+    
     # Email
     MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
     MAIL_PORT = int(os.getenv('MAIL_PORT', 587))
@@ -51,7 +54,8 @@ class Config:
     MAIL_SUPPRESS_SEND = os.getenv('MAIL_SUPPRESS_SEND', 'True') == 'True'  # Disable emails in dev
     
     # SMS Configuration
-    SMS_SUPPRESS_SEND = os.getenv('SMS_SUPPRESS_SEND', 'True') == 'True'  # Disable SMS in dev
+    # Set SMS_SUPPRESS_SEND=False in production to enable SMS sending
+    SMS_SUPPRESS_SEND = os.getenv('SMS_SUPPRESS_SEND', 'False') == 'True'  # Default: False (enabled), set to 'True' to disable
     
     # OAuth
     GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
@@ -102,6 +106,8 @@ class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
     TESTING = False
+    # Enable SMS in production
+    SMS_SUPPRESS_SEND = os.getenv('SMS_SUPPRESS_SEND', 'False') == 'True'  # Disable only if explicitly set to 'True'
 
 
 class TestingConfig(Config):

@@ -261,7 +261,9 @@ def mpesa_callback():
                 send_payment_confirmation_sms(booking, payment)
                 
                 # Send booking confirmation SMS
-                send_booking_confirmation_sms(booking, tickets)
+                # Use phone number from payment (most reliable for paid events)
+                phone_for_sms = payment.phone_number or booking.user.phone_number
+                send_booking_confirmation_sms(booking, tickets, phone_number_override=phone_for_sms)
                 
                 # Notify user of successful payment
                 create_notification(

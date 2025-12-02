@@ -449,13 +449,22 @@ def create_event(current_partner):
             if not tt_data.get('name', '').strip():
                 continue
                 
+            # Handle quantity - if empty string or 0, set to None (unlimited)
+            quantity_value = tt_data.get('quantity')
+            if quantity_value is None or quantity_value == '' or quantity_value == 0:
+                quantity_total = None
+                quantity_available = None
+            else:
+                quantity_total = int(quantity_value)
+                quantity_available = quantity_total  # New ticket type, all available
+            
             ticket_type = TicketType(
                 event_id=event.id,
                 name=tt_data.get('name', '').strip(),
                 description=tt_data.get('description', ''),
                 price=float(tt_data.get('price', 0)),
-                quantity_total=int(tt_data.get('quantity', 0)) if tt_data.get('quantity') else None,
-                quantity_available=int(tt_data.get('quantity', 0)) if tt_data.get('quantity') else None,
+                quantity_total=quantity_total,
+                quantity_available=quantity_available,
                 is_active=True
             )
             db.session.add(ticket_type)
@@ -663,29 +672,84 @@ def update_event(current_partner, event_id):
         
         # Update or create ticket types
         for tt_data in ticket_types_data:
-            if tt_data.get('id') and tt_data['id'] in existing_ticket_ids:
-                # Update existing
-                ticket_type = TicketType.query.get(tt_data['id'])
-                if ticket_type and ticket_type.event_id == event.id:
-                    ticket_type.name = tt_data.get('name', '').strip()
-                    ticket_type.price = float(tt_data.get('price', 0))
-                    if tt_data.get('quantity') is not None:
-                        new_quantity_total = int(tt_data['quantity'])
-                        current_sold = ticket_type.quantity_sold or 0
-                        ticket_type.quantity_total = new_quantity_total
-                        ticket_type.quantity_available = max(0, new_quantity_total - current_sold)
+            ticket_type_id = tt_data.get('id')
+            
+            # Try to find existing ticket type by ID first
+            ticket_type = None
+            if ticket_type_id and ticket_type_id in existing_ticket_ids:
+                ticket_type = TicketType.query.get(ticket_type_id)
+                if ticket_type and ticket_type.event_id != event.id:
+                    ticket_type = None  # Wrong event, don't use it
+            
+            # If not found by ID, try to find by name (to avoid duplicates)
+            if not ticket_type:
+                ticket_name = tt_data.get('name', '').strip()
+                if ticket_name:
+                    ticket_type = TicketType.query.filter_by(
+                        event_id=event.id,
+                        name=ticket_name
+                    ).first()
+            
+            if ticket_type:
+                # Update existing ticket type
+                ticket_type.name = tt_data.get('name', '').strip()
+                ticket_type.price = float(tt_data.get('price', 0))
+                ticket_type.description = tt_data.get('description', '')
+                
+                # Only update quantity if it's explicitly provided and different
+                quantity_value = tt_data.get('quantity')
+                
+                # Check if quantity is being changed
+                if quantity_value is not None and quantity_value != '':
+                    # Convert to appropriate type for comparison
+                    try:
+                        quantity_value_int = int(quantity_value) if quantity_value != '' else None
+                    except (ValueError, TypeError):
+                        quantity_value_int = None
+                    
+                    # Only update if the value is actually different
+                    if quantity_value_int != ticket_type.quantity_total:
+                        if quantity_value_int is None or quantity_value_int == 0:
+                            # Unlimited tickets
+                            ticket_type.quantity_total = None
+                            ticket_type.quantity_available = None
+                        else:
+                            # Limited tickets - recalculate available based on current sold count
+                            current_sold = ticket_type.quantity_sold or 0
+                            ticket_type.quantity_total = quantity_value_int
+                            # Don't increase available - calculate from total minus sold
+                            ticket_type.quantity_available = max(0, quantity_value_int - current_sold)
+                # If quantity is not provided, keep existing values (don't change)
             else:
-                # Create new
-                ticket_type = TicketType(
-                    event_id=event.id,
-                    name=tt_data.get('name', '').strip(),
-                    description=tt_data.get('description', ''),
-                    price=float(tt_data.get('price', 0)),
-                    quantity_total=int(tt_data.get('quantity', 0)) if tt_data.get('quantity') else None,
-                    quantity_available=int(tt_data.get('quantity', 0)) if tt_data.get('quantity') else None,
-                    is_active=True
-                )
-                db.session.add(ticket_type)
+                # Create new ticket type only if it doesn't exist
+                ticket_name = tt_data.get('name', '').strip()
+                if ticket_name:
+                    # Double-check it doesn't exist
+                    existing = TicketType.query.filter_by(
+                        event_id=event.id,
+                        name=ticket_name
+                    ).first()
+                    
+                    if not existing:
+                        # Handle quantity - if empty string or 0, set to None (unlimited)
+                        quantity_value = tt_data.get('quantity')
+                        if quantity_value is None or quantity_value == '' or quantity_value == 0:
+                            quantity_total = None
+                            quantity_available = None
+                        else:
+                            quantity_total = int(quantity_value)
+                            quantity_available = quantity_total  # New ticket type, all available
+                        
+                        ticket_type = TicketType(
+                            event_id=event.id,
+                            name=ticket_name,
+                            description=tt_data.get('description', ''),
+                            price=float(tt_data.get('price', 0)),
+                            quantity_total=quantity_total,
+                            quantity_available=quantity_available,
+                            is_active=True
+                        )
+                        db.session.add(ticket_type)
     
     # Update promo codes
     if 'promo_codes' in data:
@@ -998,13 +1062,22 @@ def create_ticket_type(current_partner, event_id):
     if not data.get('name') or data.get('price') is None:
         return jsonify({'error': 'name and price are required'}), 400
     
+    # Handle quantity - if empty string or 0, set to None (unlimited)
+    quantity_total = data.get('quantity_total')
+    if quantity_total is None or quantity_total == '' or quantity_total == 0:
+        quantity_total = None
+        quantity_available = None
+    else:
+        quantity_total = int(quantity_total)
+        quantity_available = quantity_total  # New ticket type, all available
+    
     ticket_type = TicketType(
         event_id=event_id,
         name=data['name'].strip(),
         description=data.get('description'),
         price=data['price'],
-        quantity_total=data.get('quantity_total'),
-        quantity_available=data.get('quantity_total'),
+        quantity_total=quantity_total,
+        quantity_available=quantity_available,
         min_per_order=data.get('min_per_order', 1),
         max_per_order=data.get('max_per_order', 10)
     )
@@ -1479,13 +1552,38 @@ def promote_event(current_partner, event_id):
     days_count = data.get('days_count', 7)  # Default 7 days
     is_free = data.get('is_free', False)  # Free promotion for testing
     
-    if days_count < 1 or days_count > 30:
-        return jsonify({'error': 'Promotion period must be between 1 and 30 days'}), 400
+    # Allow custom start and end dates for scheduled promotions
+    custom_start_date = data.get('start_date')  # ISO format datetime string
+    custom_end_date = data.get('end_date')  # ISO format datetime string
     
-    # Calculate dates
-    start_date = datetime.utcnow()
-    from datetime import timedelta
-    end_date = start_date + timedelta(days=days_count)
+    if custom_start_date and custom_end_date:
+        # Parse custom dates
+        try:
+            from dateutil import parser
+            start_date = parser.parse(custom_start_date)
+            end_date = parser.parse(custom_end_date)
+            
+            # Validate dates
+            if start_date >= end_date:
+                return jsonify({'error': 'Start date must be before end date'}), 400
+            
+            if start_date < datetime.utcnow():
+                return jsonify({'error': 'Start date cannot be in the past'}), 400
+            
+            # Calculate days_count from custom dates
+            days_count = (end_date - start_date).days + 1  # Include both start and end days
+            if days_count < 1 or days_count > 30:
+                return jsonify({'error': 'Promotion period must be between 1 and 30 days'}), 400
+        except (ValueError, TypeError) as e:
+            return jsonify({'error': f'Invalid date format: {str(e)}'}), 400
+    else:
+        # Use default behavior: start now, end after days_count
+        if days_count < 1 or days_count > 30:
+            return jsonify({'error': 'Promotion period must be between 1 and 30 days'}), 400
+        
+        start_date = datetime.utcnow()
+        from datetime import timedelta
+        end_date = start_date + timedelta(days=days_count)
     
     # Calculate cost (KES 400 per day for paid, 0 for free)
     cost_per_day = 400

@@ -4,17 +4,21 @@ SMS Utility using Celcom Africa API
 import requests
 from flask import current_app
 from threading import Thread
+import urllib3
+
+# Disable SSL warnings (since we're using verify=False to match PHP example)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 # Celcom Africa SMS API Configuration
-CELCOM_SMS_URL = "https://isms.celcomafrica.com/api/services/sendsms"
-CELCOM_API_KEY = "b4e69853162316c2db235c8a444eb265"
-CELCOM_PARTNER_ID = "36"
-CELCOM_SHORTCODE = "TEXTME"
+CELCOM_SMS_URL = "https://isms.celcomafrica.com/api/services/sendsms/"
+CELCOM_API_KEY = "ffbf65bc0649575080064282d3a324f8"
+CELCOM_PARTNER_ID = "946"
+CELCOM_SHORTCODE = "NIKO FREE"
 
 
 def send_sms_async(app, phone_number, message):
-    """Send SMS asynchronously"""
+    """Send SMS asynchronously using Celcom Africa API"""
     print(f"📱 [SMS ASYNC] Starting SMS send to {phone_number}")
     with app.app_context():
         try:
@@ -23,31 +27,62 @@ def send_sms_async(app, phone_number, message):
                 print(f"📱 [SMS ASYNC] [DEV MODE] SMS suppressed: {message[:50]}... to {phone_number}")
                 return
             
-            # Prepare payload
+            # Prepare payload (matching PHP example format)
             payload = {
                 "apikey": CELCOM_API_KEY,
                 "partnerID": CELCOM_PARTNER_ID,
                 "message": message,
                 "shortcode": CELCOM_SHORTCODE,
-                "mobile": phone_number
+                "mobile": phone_number,
+                "pass_type": "plain"  # Optional: 'plain' or 'bm5' (base64)
             }
             
             print(f"📱 [SMS ASYNC] Sending POST request to {CELCOM_SMS_URL}")
             print(f"📱 [SMS ASYNC] Payload: {payload}")
             
-            # Send request
-            response = requests.post(CELCOM_SMS_URL, json=payload, timeout=10)
+            # Send POST request with JSON body (matching PHP example)
+            headers = {
+                'Content-Type': 'application/json'
+            }
+            response = requests.post(
+                CELCOM_SMS_URL, 
+                json=payload, 
+                headers=headers,
+                timeout=30,
+                verify=False  # SSL verification disabled (matching PHP example)
+            )
             
             print(f"📱 [SMS ASYNC] Response status: {response.status_code}")
             print(f"📱 [SMS ASYNC] Response text: {response.text}")
             
             if response.status_code == 200:
-                result = response.json()
-                print(f"📱 [SMS ASYNC] Response JSON: {result}")
-                if result.get('success') or result.get('status') == 'success' or result.get('responseCode') == '0':
-                    print(f"✅ [SMS ASYNC] SMS sent successfully to {phone_number}")
-                else:
-                    print(f"❌ [SMS ASYNC] SMS failed: {result}")
+                try:
+                    result = response.json()
+                    print(f"📱 [SMS ASYNC] Response JSON: {result}")
+                    
+                    # Check response format: {"responses":[{"response-code":200,...}]}
+                    if 'responses' in result and isinstance(result['responses'], list):
+                        for response_item in result['responses']:
+                            response_code = response_item.get('response-code') or response_item.get('respose-code')  # Handle typo in API
+                            if response_code == 200:
+                                message_id = response_item.get('messageid')
+                                mobile = response_item.get('mobile')
+                                description = response_item.get('response-description', 'Success')
+                                print(f"✅ [SMS ASYNC] SMS sent successfully to {mobile}")
+                                print(f"   Message ID: {message_id}, Description: {description}")
+                            else:
+                                error_code = response_code
+                                error_desc = response_item.get('response-description', 'Unknown error')
+                                print(f"❌ [SMS ASYNC] SMS failed: Code {error_code} - {error_desc}")
+                    else:
+                        # Fallback: check for success indicators
+                        if result.get('success') or result.get('status') == 'success':
+                            print(f"✅ [SMS ASYNC] SMS sent successfully to {phone_number}")
+                        else:
+                            print(f"❌ [SMS ASYNC] SMS failed: {result}")
+                except ValueError as e:
+                    print(f"❌ [SMS ASYNC] Failed to parse JSON response: {response.text}")
+                    print(f"   Error: {e}")
             else:
                 print(f"❌ [SMS ASYNC] SMS API error: {response.status_code} - {response.text}")
                 
@@ -80,8 +115,20 @@ def send_sms(phone_number, message):
 
 def format_phone_for_sms(phone_number):
     """Format phone number for SMS (ensure it starts with country code)"""
+    if not phone_number:
+        return None
+    
+    # Convert to string if not already
+    phone_str = str(phone_number).strip()
+    
+    if not phone_str:
+        return None
+    
     # Remove any spaces, dashes, or other characters
-    phone = ''.join(filter(str.isdigit, phone_number))
+    phone = ''.join(filter(str.isdigit, phone_str))
+    
+    if not phone:
+        return None
     
     # If it doesn't start with 254, add it
     if not phone.startswith('254'):
@@ -94,25 +141,91 @@ def format_phone_for_sms(phone_number):
             # Assume it's a local number, add 254
             phone = '254' + phone
     
+    # Validate length (should be 12 digits: 254XXXXXXXXX)
+    if len(phone) != 12:
+        print(f"⚠️ [SMS] Invalid phone number length: {phone} (expected 12 digits)")
+        return None
+    
     return phone
 
 
-def send_booking_confirmation_sms(booking, tickets):
-    """Send booking confirmation SMS"""
+def send_booking_confirmation_sms(booking, tickets, phone_number_override=None):
+    """Send booking confirmation SMS
+    
+    Args:
+        booking: Booking object
+        tickets: List of Ticket objects
+        phone_number_override: Optional phone number to use (from booking request)
+    """
     print(f"📱 [SMS] send_booking_confirmation_sms called for booking {booking.id}")
     user = booking.user
     event = booking.event
     
-    print(f"📱 [SMS] User ID: {user.id}, Phone: {user.phone_number}")
+    # Refresh user from database to get latest phone number
+    from app import db
+    db.session.refresh(user)
     
-    # Format phone number
-    phone = format_phone_for_sms(user.phone_number) if user.phone_number else None
+    print(f"📱 [SMS] User ID: {user.id}, Email: {user.email}, Phone: {user.phone_number}")
+    if phone_number_override:
+        print(f"📱 [SMS] Phone number override provided: {phone_number_override}")
+    
+    # Try phone number override first (from booking request)
+    phone = None
+    if phone_number_override:
+        try:
+            phone = format_phone_for_sms(phone_number_override)
+            if phone:
+                print(f"📱 [SMS] Using phone number from booking request: {phone}")
+            else:
+                print(f"⚠️ [SMS] Phone number override {phone_number_override} failed validation")
+        except Exception as e:
+            print(f"⚠️ [SMS] Error formatting phone number override: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    # Try to get phone number from user
+    if not phone and user.phone_number:
+        try:
+            phone = format_phone_for_sms(user.phone_number)
+            if phone:
+                print(f"📱 [SMS] Using user phone number: {phone}")
+            else:
+                print(f"⚠️ [SMS] User phone number {user.phone_number} failed validation")
+        except Exception as e:
+            print(f"⚠️ [SMS] Error formatting user phone number: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    # For paid events, try to get phone from payment as fallback
+    if not phone and booking.payment_status == 'paid':
+        # Try to get phone from payment record
+        from app.models.payment import Payment
+        payment = Payment.query.filter_by(booking_id=booking.id, status='completed').first()
+        if payment and payment.phone_number:
+            try:
+                phone = format_phone_for_sms(payment.phone_number)
+                if phone:
+                    print(f"📱 [SMS] Using payment phone number as fallback: {phone}")
+                else:
+                    print(f"⚠️ [SMS] Payment phone number {payment.phone_number} failed validation")
+            except Exception as e:
+                print(f"⚠️ [SMS] Error formatting payment phone number: {e}")
+                import traceback
+                traceback.print_exc()
     
     if not phone:
-        print(f"⚠️ [SMS] No phone number for user {user.id}, skipping SMS")
+        print(f"⚠️ [SMS] No phone number available for user {user.id} (email: {user.email}), skipping SMS")
+        print(f"⚠️ [SMS] User phone_number field: {repr(user.phone_number)}")
+        print(f"⚠️ [SMS] Booking payment_status: {booking.payment_status}")
+        print(f"⚠️ [SMS] Phone override provided: {phone_number_override}")
         return
     
     print(f"📱 [SMS] Formatted phone: {phone}")
+    
+    # Get base URL for download link
+    from flask import current_app
+    base_url = current_app.config.get('BASE_URL', 'https://nikofree.onrender.com')
+    download_url = f"{base_url}/api/tickets/{booking.id}/download"
     
     # Create message
     ticket_numbers = ', '.join([t.ticket_number for t in tickets[:3]])  # First 3 tickets
@@ -128,6 +241,9 @@ Booking: {booking.booking_number}
 Tickets: {ticket_numbers}
 Amount: KES {booking.total_amount:,.2f}
 
+Download ticket & QR code:
+{download_url}
+
 Present QR code at entrance.
 Thank you for using Niko Free!"""
     
@@ -141,16 +257,32 @@ def send_payment_confirmation_sms(booking, payment):
     user = booking.user
     event = booking.event
     
-    # Format phone number
-    phone = format_phone_for_sms(payment.phone_number) if payment.phone_number else None
+    print(f"📱 [SMS] send_payment_confirmation_sms called for payment {payment.id}, booking {booking.id}")
+    print(f"📱 [SMS] User ID: {user.id}, Email: {user.email}, User Phone: {user.phone_number}")
+    print(f"📱 [SMS] Payment Phone: {payment.phone_number}")
+    
+    # Try payment phone number first (most reliable for paid events)
+    phone = None
+    if payment.phone_number:
+        try:
+            phone = format_phone_for_sms(payment.phone_number)
+            print(f"📱 [SMS] Using payment phone number: {phone}")
+        except Exception as e:
+            print(f"⚠️ [SMS] Error formatting payment phone number: {e}")
+    
+    # Fallback to user's phone number
+    if not phone and user.phone_number:
+        try:
+            phone = format_phone_for_sms(user.phone_number)
+            print(f"📱 [SMS] Using user phone number as fallback: {phone}")
+        except Exception as e:
+            print(f"⚠️ [SMS] Error formatting user phone number: {e}")
     
     if not phone:
-        # Try user's phone number
-        phone = format_phone_for_sms(user.phone_number) if user.phone_number else None
-    
-    if not phone:
-        print(f"⚠️ No phone number for payment {payment.id}, skipping SMS")
+        print(f"⚠️ [SMS] No phone number available for payment {payment.id} (user {user.id}, email: {user.email}), skipping SMS")
         return
+    
+    print(f"📱 [SMS] Formatted phone: {phone}")
     
     # Create message
     message = f"""Payment Confirmed! ✅

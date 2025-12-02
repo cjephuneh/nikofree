@@ -7,6 +7,7 @@ from app.models.payment import Payment
 from app.utils.decorators import user_required, partner_required
 from app.utils.qrcode_generator import generate_qr_code
 from app.utils.email import send_booking_confirmation_email
+from app.utils.ticket_pdf import generate_ticket_pdf
 from app.utils.sms import (
     send_booking_confirmation_sms,
     send_booking_cancellation_sms,
@@ -229,6 +230,23 @@ def book_event(current_user):
     platform_fee = final_amount * commission_rate
     partner_amount = final_amount - platform_fee
     
+    # Update user phone number if provided (even if user already has one, allow update)
+    if data.get('phone_number'):
+        from app.utils.validators import validate_phone
+        phone = data.get('phone_number')
+        if validate_phone(phone):
+            # Check if phone is already taken by another user
+            from app.models.user import User
+            existing = User.query.filter(
+                User.phone_number == phone,
+                User.id != current_user.id
+            ).first()
+            if not existing:
+                current_user.phone_number = phone
+                print(f"📱 [TICKETS] Updated user {current_user.id} phone number to {phone}")
+                # Commit phone number update immediately so it's available for SMS
+                db.session.commit()
+    
     # Create booking
     booking = Booking(
         user_id=current_user.id,
@@ -287,8 +305,11 @@ def book_event(current_user):
         send_booking_confirmation_email(booking, tickets)
         
         # Send confirmation SMS
+        # Use phone number from request if provided, or from user profile
+        phone_for_sms = data.get('phone_number') or current_user.phone_number
         print(f"📱 [TICKETS] About to send booking confirmation SMS for booking {booking.id}")
-        send_booking_confirmation_sms(booking, tickets)
+        print(f"📱 [TICKETS] Phone number for SMS: {phone_for_sms}")
+        send_booking_confirmation_sms(booking, tickets, phone_number_override=phone_for_sms)
         print(f"📱 [TICKETS] Booking confirmation SMS call completed for booking {booking.id}")
         
         # Notify user of successful booking
@@ -517,6 +538,62 @@ def scan_ticket(current_partner):
     }), 200
 
 
+@bp.route('/<int:booking_id>', methods=['GET'])
+@user_required
+def get_ticket(current_user, booking_id):
+    """Get ticket details with QR codes"""
+    booking = Booking.query.filter_by(
+        id=booking_id,
+        user_id=current_user.id
+    ).first()
+    
+    if not booking:
+        return jsonify({'error': 'Booking not found'}), 404
+    
+    # Get all tickets for this booking
+    tickets = list(booking.tickets.all())
+    if not tickets:
+        return jsonify({'error': 'No tickets found for this booking'}), 404
+    
+    # Ensure QR codes are generated for all tickets
+    from flask import current_app
+    base_url = current_app.config.get('BASE_URL', 'https://nikofree.onrender.com')
+    
+    ticket_data = []
+    for ticket in tickets:
+        # Generate QR code if it doesn't exist
+        if not ticket.qr_code:
+            qr_data = ticket.ticket_number
+            qr_path = generate_qr_code(qr_data, ticket.ticket_number)
+            ticket.qr_code = qr_path
+            db.session.commit()
+        
+        # Build QR code URL
+        if ticket.qr_code.startswith('http'):
+            qr_url = ticket.qr_code
+        elif ticket.qr_code.startswith('/'):
+            qr_url = f"{base_url}{ticket.qr_code}"
+        else:
+            qr_url = f"{base_url}/uploads/{ticket.qr_code}"
+        
+        ticket_data.append({
+            'id': ticket.id,
+            'ticket_number': ticket.ticket_number,
+            'qr_code_url': qr_url,
+            'qr_code_path': ticket.qr_code,
+            'ticket_type': ticket.ticket_type.to_dict() if ticket.ticket_type else None,
+            'is_valid': ticket.is_valid,
+            'is_scanned': ticket.is_scanned,
+            'scanned_at': ticket.scanned_at.isoformat() if ticket.scanned_at else None
+        })
+    
+    return jsonify({
+        'booking': booking.to_dict(),
+        'tickets': ticket_data,
+        'download_url': f"{base_url}/api/tickets/{booking_id}/download"
+    }), 200
+
+
 @bp.route('/<int:booking_id>/qr', methods=['GET'])
 @user_required
 def get_ticket_qr(current_user, booking_id):
@@ -543,13 +620,14 @@ def get_ticket_qr(current_user, booking_id):
     
     # Return QR code URL
     from flask import current_app
+    base_url = current_app.config.get('BASE_URL', 'https://nikofree.onrender.com')
     # Handle both relative paths and full URLs
     if ticket.qr_code.startswith('http'):
         qr_url = ticket.qr_code
     elif ticket.qr_code.startswith('/'):
-        qr_url = f"{current_app.config.get('BASE_URL', 'http://localhost:5005')}{ticket.qr_code}"
+        qr_url = f"{base_url}{ticket.qr_code}"
     else:
-        qr_url = f"{current_app.config.get('BASE_URL', 'http://localhost:5005')}/uploads/{ticket.qr_code}"
+        qr_url = f"{base_url}/uploads/{ticket.qr_code}"
     
     return jsonify({
         'qr_code_url': qr_url,
@@ -562,49 +640,61 @@ def get_ticket_qr(current_user, booking_id):
 @user_required
 def download_ticket(current_user, booking_id):
     """Download ticket as PDF"""
-    booking = Booking.query.filter_by(
-        id=booking_id,
-        user_id=current_user.id
-    ).first()
-    
-    if not booking:
-        return jsonify({'error': 'Booking not found'}), 404
-    
-    # For now, return a simple text response
-    # In production, generate a PDF
-    from flask import current_app, send_file
+    from flask import send_file, current_app, Response
     import os
     
-    # Get first ticket
-    ticket = booking.tickets.first()
-    if not ticket:
-        return jsonify({'error': 'No tickets found'}), 404
-    
-    # Generate simple ticket text
-    ticket_text = f"""
-    NIKO FREE TICKET
-    ================
-    
-    Booking Number: {booking.booking_number}
-    Ticket Number: {ticket.ticket_number}
-    
-    Event: {booking.event.title}
-    Date: {booking.event.start_date.strftime('%B %d, %Y at %I:%M %p')}
-    Location: {booking.event.venue_name or 'Online'}
-    
-    Ticket Type: {ticket.ticket_type.name if ticket.ticket_type else 'General Admission'}
-    Quantity: {booking.quantity}
-    Total: KES {booking.total_amount:,.2f}
-    
-    Status: {booking.status.upper()}
-    
-    Thank you for using Niko Free!
-    """
-    
-    # Return as JSON for now (in production, generate PDF)
-    return jsonify({
-        'ticket_data': ticket_text,
-        'booking': booking.to_dict(),
-        'message': 'PDF generation coming soon. Use QR code for entry.'
-    }), 200
+    try:
+        booking = Booking.query.filter_by(
+            id=booking_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not booking:
+            return jsonify({'error': 'Booking not found'}), 404
+        
+        # Get all tickets for this booking
+        tickets = list(booking.tickets.all())
+        if not tickets:
+            return jsonify({'error': 'No tickets found for this booking'}), 404
+        
+        print(f"📄 [TICKET DOWNLOAD] Generating PDF for booking {booking_id}, {len(tickets)} tickets")
+        
+        # Ensure QR codes are generated for all tickets
+        for ticket in tickets:
+            if not ticket.qr_code:
+                print(f"📄 [TICKET DOWNLOAD] Generating QR code for ticket {ticket.ticket_number}")
+                qr_data = ticket.ticket_number
+                qr_path = generate_qr_code(qr_data, ticket.ticket_number)
+                ticket.qr_code = qr_path
+                db.session.commit()
+                print(f"📄 [TICKET DOWNLOAD] QR code generated: {qr_path}")
+        
+        # Generate PDF
+        print(f"📄 [TICKET DOWNLOAD] Creating PDF buffer...")
+        pdf_buffer = generate_ticket_pdf(booking, tickets)
+        
+        # Create filename
+        filename = f"ticket-{booking.booking_number}.pdf"
+        
+        print(f"📄 [TICKET DOWNLOAD] PDF generated successfully, sending file: {filename}")
+        
+        # Reset buffer position
+        pdf_buffer.seek(0)
+        
+        # Return PDF as download
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        print(f"❌ [TICKET DOWNLOAD] Error generating PDF: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': 'Failed to generate ticket PDF',
+            'details': str(e),
+            'message': 'Please try again or contact support if the issue persists'
+        }), 500
 
