@@ -9,17 +9,30 @@ def user_required(fn):
     """Decorator to require user authentication"""
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        verify_jwt_in_request()
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        try:
+            verify_jwt_in_request()
+        except Exception as e:
+            # JWT validation failed
+            return jsonify({'msg': 'Invalid or missing authentication token'}), 401
         
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-        
-        if not user.is_active:
-            return jsonify({'error': 'Account is deactivated'}), 403
+        try:
+            current_user_id = get_jwt_identity()
+            if not current_user_id:
+                return jsonify({'msg': 'Invalid authentication token'}), 401
             
-        return fn(current_user=user, *args, **kwargs)
+            user = User.query.get(current_user_id)
+            
+            if not user:
+                return jsonify({'msg': 'User not found'}), 404
+            
+            if not user.is_active:
+                return jsonify({'msg': 'Account is deactivated'}), 403
+                
+            return fn(current_user=user, *args, **kwargs)
+        except Exception as e:
+            from flask import current_app
+            current_app.logger.error(f'Error in user_required decorator: {str(e)}', exc_info=True)
+            return jsonify({'msg': 'Authentication failed'}), 401
     
     return wrapper
 

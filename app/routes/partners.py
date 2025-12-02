@@ -108,6 +108,58 @@ def get_partner_analytics(current_partner):
             Event.status == 'approved'
         ).count()
         
+        # Generate daily time-series data for line chart
+        chart_data = []
+        for i in range(days):
+            day_start = start_period + timedelta(days=i)
+            day_end = day_start + timedelta(days=1)
+            
+            # Active events on this day (events that were active/upcoming on this date)
+            active_on_day = Event.query.filter(
+                Event.partner_id == current_partner.id,
+                Event.start_date > day_start,
+                Event.status == 'approved'
+            ).count()
+            
+            # Total events created up to this day
+            total_events_by_day = Event.query.filter(
+                Event.partner_id == current_partner.id,
+                Event.created_at <= day_end
+            ).count()
+            
+            # Bookings created on this day
+            bookings_on_day = base_bookings.filter(
+                Booking.created_at >= day_start,
+                Booking.created_at < day_end
+            ).count()
+            
+            # Revenue from bookings created on this day
+            revenue_on_day = db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
+                Event.partner_id == current_partner.id,
+                Booking.status == 'confirmed',
+                Booking.created_at >= day_start,
+                Booking.created_at < day_end
+            ).scalar() or 0
+            
+            # Cumulative bookings up to this day
+            cumulative_bookings = base_bookings.filter(
+                Booking.created_at <= day_end
+            ).count()
+            
+            chart_data.append({
+                'date': day_start.strftime('%Y-%m-%d'),
+                'active_events': active_on_day,
+                'total_events': total_events_by_day,
+                'bookings': bookings_on_day,
+                'cumulative_bookings': cumulative_bookings,
+                'revenue': float(revenue_on_day),
+                'cumulative_revenue': float(db.session.query(func.sum(Booking.partner_amount)).join(Event).filter(
+                    Event.partner_id == current_partner.id,
+                    Booking.status == 'confirmed',
+                    Booking.created_at <= day_end
+                ).scalar() or 0)
+            })
+        
         return jsonify({
             'summary': {
                 'total_bookings': total_bookings,
@@ -128,6 +180,7 @@ def get_partner_analytics(current_partner):
                 'bookings': last_1d_bookings,
                 'revenue': float(last_1d_revenue),
             },
+            'chart_data': chart_data,
         }), 200
     except Exception as e:
         current_app.logger.error(f'Error fetching partner analytics: {str(e)}', exc_info=True)

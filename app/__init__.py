@@ -26,6 +26,21 @@ def create_app(config_name='default'):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
     
+    # Configure logging - suppress SQLAlchemy verbose logs, keep requests and errors
+    import logging
+    from logging import StreamHandler
+    
+    # Suppress SQLAlchemy engine logs (INFO level shows all queries)
+    logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+    logging.getLogger('sqlalchemy.pool').setLevel(logging.WARNING)
+    logging.getLogger('sqlalchemy.dialects').setLevel(logging.WARNING)
+    
+    # Keep Flask request logs at INFO level
+    logging.getLogger('werkzeug').setLevel(logging.INFO)
+    
+    # Set app logger to INFO (for our custom logs)
+    app.logger.setLevel(logging.INFO)
+    
     # Initialize extensions with app
     db.init_app(app)
     migrate.init_app(app, db)

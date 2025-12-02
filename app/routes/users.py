@@ -1,8 +1,8 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 from datetime import datetime
 from sqlalchemy import or_
-from app import db
+from app import db, limiter
 from app.models.user import User
 from app.models.event import Event
 from app.models.ticket import Booking
@@ -91,6 +91,7 @@ def upload_profile_picture(current_user):
 
 
 @bp.route('/bookings', methods=['GET'])
+@limiter.exempt
 @user_required
 def get_bookings(current_user):
     """Get user's bookings"""
@@ -114,6 +115,12 @@ def get_bookings(current_user):
         )
     elif status == 'cancelled':
         query = query.filter(Booking.status == 'cancelled')
+    elif status == 'pending':
+        # Pending bookings are unpaid bookings that haven't been cancelled
+        query = query.filter(
+            Booking.status == 'pending',
+            Booking.payment_status == 'unpaid'
+        )
     
     # Order by date
     query = query.order_by(Booking.created_at.desc())
@@ -134,15 +141,25 @@ def get_bookings(current_user):
 @user_required
 def get_booking(current_user, booking_id):
     """Get specific booking"""
-    booking = Booking.query.filter_by(
-        id=booking_id,
-        user_id=current_user.id
-    ).first()
-    
-    if not booking:
-        return jsonify({'error': 'Booking not found'}), 404
-    
-    return jsonify(booking.to_dict()), 200
+    try:
+        booking = Booking.query.filter_by(
+            id=booking_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not booking:
+            return jsonify({'msg': 'Booking not found'}), 404
+        
+        booking_dict = booking.to_dict(include_event_stats=True)
+        return jsonify({
+            'booking': booking_dict
+        }), 200
+    except AttributeError as e:
+        current_app.logger.error(f'Attribute error fetching booking {booking_id}: {str(e)}', exc_info=True)
+        return jsonify({'msg': f'Failed to fetch booking: {str(e)}'}), 422
+    except Exception as e:
+        current_app.logger.error(f'Error fetching booking {booking_id}: {str(e)}', exc_info=True)
+        return jsonify({'msg': f'Failed to fetch booking: {str(e)}'}), 500
 
 
 @bp.route('/bucketlist', methods=['GET'])

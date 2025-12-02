@@ -376,3 +376,49 @@ def notify_payment_completed(booking, payment):
         send_email=False
     )
 
+
+@bp.route('/event/reminder', methods=['POST'])
+@admin_required
+def send_event_reminders(current_admin):
+    """Send event reminders to users (can be called by scheduled task/cron)"""
+    from app.models.event import Event
+    from app.models.ticket import Booking
+    from datetime import datetime, timedelta
+    
+    hours_before = request.json.get('hours_before', 24) if request.is_json else 24
+    
+    # Find events happening in the next 'hours_before' hours
+    reminder_time = datetime.utcnow() + timedelta(hours=hours_before)
+    time_window_start = datetime.utcnow() + timedelta(hours=hours_before - 1)
+    time_window_end = datetime.utcnow() + timedelta(hours=hours_before + 1)
+    
+    # Get events in the time window
+    events = Event.query.filter(
+        Event.start_date >= time_window_start,
+        Event.start_date <= time_window_end,
+        Event.status == 'approved',
+        Event.is_published == True
+    ).all()
+    
+    reminders_sent = 0
+    for event in events:
+        # Get all confirmed bookings for this event
+        bookings = Booking.query.filter_by(
+            event_id=event.id,
+            status='confirmed'
+        ).all()
+        
+        for booking in bookings:
+            if booking.user and booking.user.phone_number:
+                try:
+                    notify_event_reminder(booking.user, event, hours_before)
+                    reminders_sent += 1
+                except Exception as e:
+                    print(f"Error sending reminder to user {booking.user.id}: {str(e)}")
+    
+    return jsonify({
+        'message': f'Event reminders sent',
+        'reminders_sent': reminders_sent,
+        'events_processed': len(events)
+    }), 200
+

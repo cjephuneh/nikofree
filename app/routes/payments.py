@@ -1,5 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime
+import re
+from sqlalchemy import func, or_, cast, String
 from app import db
 from app.models.payment import Payment
 from app.models.ticket import Booking
@@ -98,7 +100,8 @@ def initiate_payment(current_user):
             'message': 'Payment initiated. Please check your phone to complete payment.',
             'payment_id': payment.id,
             'transaction_id': transaction_id,
-            'checkout_request_id': response.get('CheckoutRequestID')
+            'checkout_request_id': response.get('CheckoutRequestID'),
+            'amount': float(payment.amount)
         }), 200
     else:
         # Failed
@@ -149,9 +152,27 @@ def mpesa_callback():
             return jsonify({'error': 'CheckoutRequestID missing'}), 400
         
         # Find payment by CheckoutRequestID
-        payment = Payment.query.filter(
-            Payment.payment_metadata['CheckoutRequestID'].astext == checkout_request_id
-        ).first()
+        # Use a database-agnostic approach that works with SQLite and PostgreSQL
+        # SQLite stores JSON as TEXT, so we can use json_extract or filter in Python
+        payment = None
+        try:
+            # Try SQLite JSON1 extension (most efficient for SQLite)
+            payment = Payment.query.filter(
+                func.json_extract(Payment.payment_metadata, '$.CheckoutRequestID') == checkout_request_id
+            ).first()
+        except Exception as e:
+            current_app.logger.debug(f'JSON1 query failed, using Python filter: {str(e)}')
+        
+        # Fallback: if JSON1 didn't work or returned None, filter in Python
+        if not payment:
+            all_payments = Payment.query.filter(
+                Payment.payment_metadata.isnot(None)
+            ).all()
+            payment = next(
+                (p for p in all_payments 
+                 if p.payment_metadata and p.payment_metadata.get('CheckoutRequestID') == checkout_request_id),
+                None
+            )
         
         if not payment:
             current_app.logger.error(f'MPesa callback: Payment not found for CheckoutRequestID: {checkout_request_id}')
@@ -326,15 +347,43 @@ def check_payment_status(current_user, payment_id):
         checkout_request_id = payment.payment_metadata.get('CheckoutRequestID')
         
         if checkout_request_id:
+            current_app.logger.info(f'Querying MPesa for payment {payment.id} with CheckoutRequestID: {checkout_request_id}')
             mpesa = MPesaClient()
             response = mpesa.stk_query(checkout_request_id)
             
+            current_app.logger.info(f'MPesa STK query response for payment {payment.id}: {response}')
+            
             result_code = response.get('ResultCode')
             
-            if result_code == '0':
-                # Payment completed - update status
+            # Handle both string and int result codes
+            if result_code == '0' or result_code == 0:
+                # Payment completed - process like callback
+                current_app.logger.info(f'Payment {payment.id} completed according to MPesa query')
                 payment.status = 'completed'
                 payment.completed_at = datetime.utcnow()
+                
+                # Extract receipt number from query response if available
+                # STK Query response structure may differ from callback
+                # Try multiple possible locations for receipt number
+                receipt_number = None
+                
+                # Check ResponseDescription field
+                if 'ResponseDescription' in response:
+                    desc = response.get('ResponseDescription', '')
+                    receipt_match = re.search(r'[A-Z0-9]{10}', desc)
+                    if receipt_match:
+                        receipt_number = receipt_match.group()
+                
+                # Check if receipt is in ResultDesc
+                if not receipt_number and 'ResultDesc' in response:
+                    desc = str(response.get('ResultDesc', ''))
+                    receipt_match = re.search(r'[A-Z0-9]{10}', desc)
+                    if receipt_match:
+                        receipt_number = receipt_match.group()
+                
+                if receipt_number:
+                    payment.mpesa_receipt_number = receipt_number
+                    current_app.logger.info(f'Extracted receipt number {receipt_number} for payment {payment.id}')
                 
                 # Find booking for payment
                 booking = None
@@ -345,12 +394,82 @@ def check_payment_status(current_user, payment_id):
                     booking.payment_status = 'paid'
                     booking.status = 'confirmed'
                     booking.confirmed_at = datetime.utcnow()
-                
-                db.session.commit()
+                    
+                    # Create tickets if they don't exist
+                    if booking.tickets.count() == 0:
+                        tickets = []
+                        for i in range(booking.quantity):
+                            ticket = Ticket(
+                                booking_id=booking.id,
+                                ticket_type_id=booking.event.ticket_types.first().id
+                            )
+                            db.session.add(ticket)
+                            db.session.flush()
+                            
+                            # Generate QR code
+                            qr_data = ticket.ticket_number
+                            qr_path = generate_qr_code(qr_data, ticket.ticket_number)
+                            ticket.qr_code = qr_path
+                            
+                            tickets.append(ticket)
+                        
+                        # Update event stats
+                        event = booking.event
+                        event.attendee_count += booking.quantity
+                        event.total_tickets_sold += booking.quantity
+                        event.revenue += booking.total_amount
+                        
+                        # Update partner earnings
+                        partner = event.organizer
+                        if partner:
+                            partner.pending_earnings += booking.partner_amount
+                            partner.total_earnings += booking.partner_amount
+                        
+                        # Update ticket type availability
+                        ticket_type = booking.event.ticket_types.first()
+                        if ticket_type and ticket_type.quantity_available is not None:
+                            ticket_type.quantity_available -= booking.quantity
+                            ticket_type.quantity_sold += booking.quantity
+                        
+                        # Update promo code usage
+                        if booking.promo_code:
+                            booking.promo_code.current_uses += 1
+                        
+                        db.session.commit()
+                        
+                        # Send notifications
+                        send_payment_confirmation_email(booking, payment, tickets)
+                        send_booking_confirmation_email(booking, tickets)
+                        send_payment_confirmation_sms(booking, payment)
+                        phone_for_sms = payment.phone_number or booking.user.phone_number
+                        send_booking_confirmation_sms(booking, tickets, phone_number_override=phone_for_sms)
+                        
+                        # Create notifications
+                        create_notification(
+                            user_id=booking.user_id,
+                            title='Payment Successful!',
+                            message=f'Your payment of KES {payment.amount:,.2f} for "{event.title}" has been confirmed.',
+                            notification_type='payment',
+                            event_id=event.id,
+                            booking_id=booking.id,
+                            action_url=f'/bookings/{booking.id}',
+                            action_text='View Booking',
+                            send_email=False
+                        )
+                        
+                        notify_new_booking(event, booking)
+                        notify_payment_completed(booking, payment)
+                    else:
+                        # Tickets already exist, just commit payment status
+                        db.session.commit()
+                else:
+                    db.session.commit()
+                    
             elif result_code:
                 # Payment failed
                 payment.status = 'failed'
                 payment.failed_at = datetime.utcnow()
+                payment.error_message = response.get('ResultDesc') or response.get('errorMessage')
                 db.session.commit()
     
     # Get booking - payment.booking might be a list or single object

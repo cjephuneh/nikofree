@@ -345,58 +345,88 @@ def book_event(current_user):
     }), 201
 
 
+# Cancel booking route - support both /cancel/<id> and /bookings/<id>/cancel
+@bp.route('/cancel/<int:booking_id>', methods=['POST'])
 @bp.route('/bookings/<int:booking_id>/cancel', methods=['POST'])
 @user_required
 def cancel_booking(current_user, booking_id):
     """Cancel booking"""
-    booking = Booking.query.filter_by(
-        id=booking_id,
-        user_id=current_user.id
-    ).first()
-    
-    if not booking:
-        return jsonify({'error': 'Booking not found'}), 404
-    
-    if booking.status == 'cancelled':
-        return jsonify({'error': 'Booking already cancelled'}), 400
-    
-    # Check if event has already started
-    if booking.event.start_date < datetime.utcnow():
-        return jsonify({'error': 'Cannot cancel booking for past events'}), 400
-    
-    # Cancel booking
-    booking.status = 'cancelled'
-    booking.cancelled_at = datetime.utcnow()
-    
-    # Restore ticket availability
-    if booking.status == 'confirmed':
-        for ticket in booking.tickets:
-            ticket.is_valid = False
+    try:
+        current_app.logger.info(f'Cancel booking request: booking_id={booking_id}, user_id={current_user.id if current_user else None}')
         
-        ticket_type = booking.tickets.first().ticket_type if booking.tickets.first() else None
-        if ticket_type and ticket_type.quantity_available is not None:
-            ticket_type.quantity_available += booking.quantity
-            ticket_type.quantity_sold -= booking.quantity
+        if not current_user:
+            return jsonify({'msg': 'User authentication required'}), 401
         
-        # Update event stats
-        booking.event.attendee_count -= booking.quantity
-        booking.event.total_tickets_sold -= booking.quantity
-    
-    # TODO: Process refund if paid
-    
-    db.session.commit()
-    
-    # Send cancellation SMS to user
-    send_booking_cancellation_sms(current_user, booking, booking.event)
-    
-    # Send cancellation SMS to partner
-    partner = booking.event.organizer
-    if partner:
-        send_booking_cancellation_to_partner_sms(partner, booking, booking.event)
-    
-    return jsonify({
-        'message': 'Booking cancelled successfully'
-    }), 200
+        if not booking_id:
+            return jsonify({'msg': 'Booking ID is required'}), 400
+        
+        booking = Booking.query.filter_by(
+            id=booking_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not booking:
+            return jsonify({'msg': 'Booking not found'}), 404
+        
+        if booking.status == 'cancelled':
+            return jsonify({'msg': 'Booking already cancelled'}), 400
+        
+        # Check if event exists and has started
+        if not booking.event:
+            return jsonify({'msg': 'Event not found for this booking'}), 404
+        
+        if booking.event.start_date < datetime.utcnow():
+            return jsonify({'msg': 'Cannot cancel booking for past events'}), 400
+        
+        # Store original status before cancelling
+        was_confirmed = booking.status == 'confirmed'
+        
+        # Cancel booking
+        booking.status = 'cancelled'
+        booking.cancelled_at = datetime.utcnow()
+        
+        # Restore ticket availability if booking was confirmed
+        if was_confirmed:
+            for ticket in booking.tickets:
+                ticket.is_valid = False
+            
+            ticket_type = booking.tickets.first().ticket_type if booking.tickets.first() else None
+            if ticket_type and ticket_type.quantity_available is not None:
+                ticket_type.quantity_available += booking.quantity
+                ticket_type.quantity_sold -= booking.quantity
+            
+            # Update event stats
+            if booking.event:
+                booking.event.attendee_count -= booking.quantity
+                booking.event.total_tickets_sold -= booking.quantity
+        
+        # TODO: Process refund if paid
+        
+        db.session.commit()
+        
+        # Send cancellation SMS to user
+        try:
+            send_booking_cancellation_sms(current_user, booking, booking.event)
+        except Exception as sms_error:
+            current_app.logger.warning(f'Failed to send cancellation SMS: {str(sms_error)}')
+        
+        # Send cancellation SMS to partner
+        try:
+            partner = booking.event.organizer if booking.event else None
+            if partner:
+                send_booking_cancellation_to_partner_sms(partner, booking, booking.event)
+        except Exception as sms_error:
+            current_app.logger.warning(f'Failed to send partner cancellation SMS: {str(sms_error)}')
+        
+        return jsonify({
+            'message': 'Booking cancelled successfully'
+        }), 200
+    except AttributeError as e:
+        current_app.logger.error(f'Attribute error cancelling booking {booking_id}: {str(e)}', exc_info=True)
+        return jsonify({'msg': f'Failed to cancel booking: {str(e)}'}), 422
+    except Exception as e:
+        current_app.logger.error(f'Error cancelling booking {booking_id}: {str(e)}', exc_info=True)
+        return jsonify({'msg': f'Failed to cancel booking: {str(e)}'}), 500
 
 
 @bp.route('/<ticket_number>/verify', methods=['GET'])
