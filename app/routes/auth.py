@@ -43,20 +43,25 @@ def register():
     if User.query.filter_by(email=email).first():
         return jsonify({'error': 'Email already registered'}), 409
     
-    # Check phone number if provided
+    # Handle phone number - strip and normalize
+    phone_number = None
     if data.get('phone_number'):
-        if not validate_phone(data['phone_number']):
-            return jsonify({'error': 'Invalid phone number'}), 400
-        
-        if User.query.filter_by(phone_number=data['phone_number']).first():
-            return jsonify({'error': 'Phone number already registered'}), 409
+        phone_number = data['phone_number'].strip()
+        if phone_number:  # Only process if not empty after stripping
+            if not validate_phone(phone_number):
+                return jsonify({'error': 'Invalid phone number'}), 400
+            
+            if User.query.filter_by(phone_number=phone_number).first():
+                return jsonify({'error': 'Phone number already registered'}), 409
+        else:
+            phone_number = None  # Convert empty string to None
     
     # Create new user
     user = User(
         email=email,
         first_name=data['first_name'].strip(),
         last_name=data['last_name'].strip(),
-        phone_number=data.get('phone_number'),
+        phone_number=phone_number,
         oauth_provider='email'
     )
     user.set_password(data['password'])

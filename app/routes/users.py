@@ -33,15 +33,26 @@ def update_profile(current_user):
     if data.get('last_name'):
         current_user.last_name = data['last_name'].strip()
     
-    if data.get('phone_number'):
-        # Check if phone is already taken
-        existing = User.query.filter(
-            User.phone_number == data['phone_number'],
-            User.id != current_user.id
-        ).first()
-        if existing:
-            return jsonify({'error': 'Phone number already in use'}), 409
-        current_user.phone_number = data['phone_number']
+    if data.get('phone_number') is not None:
+        # Strip and normalize phone number
+        phone_number = data['phone_number'].strip() if isinstance(data['phone_number'], str) else None
+        if phone_number:  # Only process if not empty after stripping
+            # Validate phone number
+            from app.utils.validators import validate_phone
+            if not validate_phone(phone_number):
+                return jsonify({'error': 'Invalid phone number'}), 400
+            
+            # Check if phone is already taken
+            existing = User.query.filter(
+                User.phone_number == phone_number,
+                User.id != current_user.id
+            ).first()
+            if existing:
+                return jsonify({'error': 'Phone number already in use'}), 409
+            current_user.phone_number = phone_number
+        else:
+            # Allow clearing phone number by setting to None
+            current_user.phone_number = None
     
     if data.get('date_of_birth'):
         try:
