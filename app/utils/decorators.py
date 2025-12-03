@@ -10,21 +10,21 @@ def user_required(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
         try:
-        verify_jwt_in_request()
-        current_user_id = get_jwt_identity()
+            verify_jwt_in_request()
+            current_user_id = get_jwt_identity()
             
             if not current_user_id:
                 return jsonify({'msg': 'Invalid authentication token'}), 401
             
-        user = User.query.get(current_user_id)
-        
-        if not user:
+            user = User.query.get(current_user_id)
+            
+            if not user:
                 return jsonify({'msg': 'User not found'}), 404
-        
-        if not user.is_active:
+            
+            if not user.is_active:
                 return jsonify({'msg': 'Account is deactivated'}), 403
             
-        return fn(current_user=user, *args, **kwargs)
+            return fn(current_user=user, *args, **kwargs)
         except Exception as e:
             from flask import current_app
             # Check if it's a JWT-related error (expired, invalid, malformed, etc.)

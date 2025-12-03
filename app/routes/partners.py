@@ -1337,10 +1337,10 @@ def get_all_attendees(current_partner):
         
         # If not past, it's current (upcoming or ongoing)
         if not is_past:
-        if event.start_date > now:
-            is_current = True  # Upcoming
-        elif event.start_date <= now and (not event.end_date or event.end_date >= now):
-            is_current = True  # Ongoing
+            if event.start_date > now:
+                is_current = True  # Upcoming
+            elif event.start_date <= now and (not event.end_date or event.end_date >= now):
+                is_current = True  # Ongoing
         
         attendees.append({
             'id': booking.id,

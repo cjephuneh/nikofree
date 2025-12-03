@@ -49,10 +49,10 @@ def register():
         phone_number = data['phone_number'].strip()
         if phone_number:  # Only process if not empty after stripping
             if not validate_phone(phone_number):
-            return jsonify({'error': 'Invalid phone number'}), 400
-        
+                return jsonify({'error': 'Invalid phone number'}), 400
+            
             if User.query.filter_by(phone_number=phone_number).first():
-            return jsonify({'error': 'Phone number already registered'}), 409
+                return jsonify({'error': 'Phone number already registered'}), 409
         else:
             phone_number = None  # Convert empty string to None
     

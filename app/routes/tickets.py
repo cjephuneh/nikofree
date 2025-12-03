@@ -397,8 +397,8 @@ def cancel_booking(current_user, booking_id):
             
             # Update event stats
             if booking.event:
-            booking.event.attendee_count -= booking.quantity
-            booking.event.total_tickets_sold -= booking.quantity
+                booking.event.attendee_count -= booking.quantity
+                booking.event.total_tickets_sold -= booking.quantity
         
         # TODO: Process refund if paid
         
@@ -406,15 +406,15 @@ def cancel_booking(current_user, booking_id):
         
         # Send cancellation SMS to user
         try:
-        send_booking_cancellation_sms(current_user, booking, booking.event)
+            send_booking_cancellation_sms(current_user, booking, booking.event)
         except Exception as sms_error:
             current_app.logger.warning(f'Failed to send cancellation SMS: {str(sms_error)}')
         
         # Send cancellation SMS to partner
         try:
             partner = booking.event.organizer if booking.event else None
-        if partner:
-            send_booking_cancellation_to_partner_sms(partner, booking, booking.event)
+            if partner:
+                send_booking_cancellation_to_partner_sms(partner, booking, booking.event)
         except Exception as sms_error:
             current_app.logger.warning(f'Failed to send partner cancellation SMS: {str(sms_error)}')
         

@@ -124,7 +124,7 @@ class Booking(db.Model):
                 # Fallback if tickets serialization fails
                 tickets_list = []
             
-        return {
+            return {
             'id': self.id,
             'booking_number': self.booking_number,
                 'user': user_dict,
@@ -146,7 +146,7 @@ class Booking(db.Model):
                 'id': self.id,
                 'booking_number': getattr(self, 'booking_number', None),
                 'error': f'Serialization error: {str(e)}'
-        }
+            }
 
 
 class Ticket(db.Model):
