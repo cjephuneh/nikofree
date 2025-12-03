@@ -224,7 +224,7 @@ def send_booking_confirmation_sms(booking, tickets, phone_number_override=None):
     
     # Get base URL for download link
     from flask import current_app
-    base_url = current_app.config.get('BASE_URL', 'https://nikofree.onrender.com')
+    base_url = current_app.config.get('BASE_URL', 'https://niko-free.com')
     download_url = f"{base_url}/api/tickets/{booking.id}/download"
     
     # Create message

@@ -163,6 +163,12 @@ def get_promoted_events():
     events = []
     for promo in promotions:
         if promo.event and promo.event.is_published and promo.event.status == 'approved':
+            # Check if event is past - use end_date if available, otherwise start_date
+            event_end_date = promo.event.end_date if promo.event.end_date else promo.event.start_date
+            if event_end_date < now:
+                # Event is past, skip it
+                continue
+            
             event_dict = promo.event.to_dict()
             
             # Calculate promotion status
@@ -200,10 +206,20 @@ def get_promoted_events():
     }), 200
 
 
-@bp.route('/categories', methods=['GET'])
-@bp.route('/categories/', methods=['GET'])
+@bp.route('/categories', methods=['GET', 'OPTIONS'])
+@bp.route('/categories/', methods=['GET', 'OPTIONS'])
 def get_categories():
     """Get all event categories"""
+    # Handle OPTIONS preflight request
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept')
+        response.headers.add('Access-Control-Max-Age', '3600')
+        return response, 200
+    
     from sqlalchemy import func
     categories = Category.query.filter_by(is_active=True).order_by(Category.display_order).all()
     
@@ -221,9 +237,14 @@ def get_categories():
         cat_dict['event_count'] = event_count
         categories_data.append(cat_dict)
     
-    return jsonify({
+    response = jsonify({
         'categories': categories_data
-    }), 200
+    })
+    # Ensure CORS headers are set
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Methods', 'GET, OPTIONS')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept')
+    return response, 200
 
 
 @bp.route('/categories/<int:category_id>/events', methods=['GET'])

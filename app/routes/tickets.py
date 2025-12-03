@@ -587,7 +587,7 @@ def get_ticket(current_user, booking_id):
     
     # Ensure QR codes are generated for all tickets
     from flask import current_app
-    base_url = current_app.config.get('BASE_URL', 'https://nikofree.onrender.com')
+    base_url = current_app.config.get('BASE_URL', 'https://niko-free.com')
     
     ticket_data = []
     for ticket in tickets:
@@ -650,7 +650,7 @@ def get_ticket_qr(current_user, booking_id):
     
     # Return QR code URL
     from flask import current_app
-    base_url = current_app.config.get('BASE_URL', 'https://nikofree.onrender.com')
+    base_url = current_app.config.get('BASE_URL', 'https://niko-free.com')
     # Handle both relative paths and full URLs
     if ticket.qr_code.startswith('http'):
         qr_url = ticket.qr_code

@@ -42,7 +42,7 @@ class Config:
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}
     
     # Base URL for generating download links
-    BASE_URL = os.getenv('BASE_URL', 'https://nikofree.onrender.com')
+    BASE_URL = os.getenv('BASE_URL', 'https://niko-free.com')
     
     # Email
     MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
