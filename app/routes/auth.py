@@ -17,7 +17,7 @@ bp = Blueprint('auth', __name__)
 # ============ USER AUTHENTICATION ============
 
 @bp.route('/register', methods=['POST'])
-@limiter.limit("5 per hour")
+@limiter.limit("100 per hour")  # Increased from 5 to 100 per hour
 def register():
     """Register new user with email and password"""
     data = request.get_json()

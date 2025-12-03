@@ -87,6 +87,23 @@ def create_app(config_name='default'):
             response.headers['Access-Control-Allow-Credentials'] = 'false'
         
         return response
+    
+    # Custom error handler for rate limiting (429 errors)
+    @app.errorhandler(429)
+    def ratelimit_handler(e):
+        """Return JSON error for rate limit instead of HTML"""
+        from flask import jsonify
+        response = jsonify({
+            'error': 'Too many requests. Please try again later.',
+            'message': 'You have exceeded the rate limit. Please wait a moment before trying again.'
+        })
+        response.status_code = 429
+        # Add CORS headers
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+        return response
+    
     limiter.init_app(app)
     
     # Register blueprints
