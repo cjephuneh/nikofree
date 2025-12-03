@@ -124,20 +124,20 @@ class Booking(db.Model):
                 # Fallback if tickets serialization fails
                 tickets_list = []
             
-            return {
-                'id': self.id,
-                'booking_number': self.booking_number,
+        return {
+            'id': self.id,
+            'booking_number': self.booking_number,
                 'user': user_dict,
                 'event': event_dict,
-                'quantity': self.quantity,
+            'quantity': self.quantity,
                 'total_amount': float(self.total_amount) if self.total_amount else 0.0,
                 'discount_amount': float(self.discount_amount) if self.discount_amount else 0.0,
-                'status': self.status,
-                'payment_status': self.payment_status,
-                'is_checked_in': self.is_checked_in,
-                'checked_in_at': self.checked_in_at.isoformat() if self.checked_in_at else None,
+            'status': self.status,
+            'payment_status': self.payment_status,
+            'is_checked_in': self.is_checked_in,
+            'checked_in_at': self.checked_in_at.isoformat() if self.checked_in_at else None,
                 'created_at': self.created_at.isoformat() if self.created_at else None,
-                'confirmed_at': self.confirmed_at.isoformat() if self.confirmed_at else None,
+            'confirmed_at': self.confirmed_at.isoformat() if self.confirmed_at else None,
                 'tickets': tickets_list
             }
         except Exception as e:

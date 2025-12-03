@@ -42,13 +42,13 @@ def update_profile(current_user):
             if not validate_phone(phone_number):
                 return jsonify({'error': 'Invalid phone number'}), 400
             
-            # Check if phone is already taken
-            existing = User.query.filter(
+        # Check if phone is already taken
+        existing = User.query.filter(
                 User.phone_number == phone_number,
-                User.id != current_user.id
-            ).first()
-            if existing:
-                return jsonify({'error': 'Phone number already in use'}), 409
+            User.id != current_user.id
+        ).first()
+        if existing:
+            return jsonify({'error': 'Phone number already in use'}), 409
             current_user.phone_number = phone_number
         else:
             # Allow clearing phone number by setting to None

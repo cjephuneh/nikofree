@@ -337,6 +337,7 @@ def mpesa_callback():
         else:
             # Payment failed or cancelled
             result_desc = callback_data.get('ResultDesc', 'Payment failed')
+            result_code_int = int(result_code) if result_code is not None else None
             
             # Map MPesa result codes:
             # ResultCode 0 = Success (handled above)
@@ -344,7 +345,7 @@ def mpesa_callback():
             # ResultCode 1032 = User cancelled the STK push (user saw prompt and cancelled)
             # ResultCode 2002 = Insufficient balance (user tried to pay but no funds)
             # ResultCode 2003 = Transaction cancelled by user (user cancelled)
-            # ResultCode 2004 = Transaction timeout (user didn't respond in time)
+            # ResultCode 2004 = Transaction timeout (user didn't respond in time - wait longer before marking failed)
             # ResultCode 2005 = Duplicate transaction
             
             # ResultCode 2001 means the STK push was never sent to the user's phone
@@ -352,9 +353,26 @@ def mpesa_callback():
             # Common causes: phone not registered for M-Pesa, invalid test number in sandbox, etc.
             # Since the user never got a prompt, we should mark as failed immediately
             
-            # For codes where user interacted (1032, 2003, 2004), they had a chance to pay
-            # For 2001, they never got the prompt, so mark as failed
+            # For ResultCode 2004 (timeout), the user might still be processing the payment
+            # Give them more time - don't mark as failed immediately, keep as pending for a bit longer
+            # Only mark as failed if it's been pending for more than 2 minutes after timeout callback
             
+            # Check if payment was created recently (within last 2 minutes)
+            time_since_creation = (datetime.utcnow() - payment.created_at).total_seconds()
+            
+            # For timeout (2004), wait at least 2 minutes before marking as failed
+            # This gives the user time to complete the payment even if MPesa sends timeout callback early
+            if result_code_int == 2004 and time_since_creation < 120:
+                # Keep as pending - user might still complete payment
+                current_app.logger.info(
+                    f'Payment {payment.id} timeout callback received but payment created recently '
+                    f'({time_since_creation:.1f}s ago). Keeping as pending to allow user to complete payment.'
+                )
+                # Don't mark as failed yet - let the status check endpoint handle it after timeout period
+                return jsonify({'message': 'Callback received, payment still pending'}), 200
+            
+            # For other failure codes, mark as failed immediately
+            # But for codes where user had interaction (1032, 2002, 2003), they attempted payment
             payment.status = 'failed'
             payment.failed_at = datetime.utcnow()
             payment.error_message = result_desc
@@ -411,7 +429,11 @@ def check_payment_status(current_user, payment_id):
         return jsonify({'error': 'Payment not found'}), 404
     
     # If still pending, query MPesa
-    if payment.status == 'pending' and payment.payment_metadata:
+    # But only query if payment was created more than 30 seconds ago
+    # This prevents querying too early before MPesa has processed the request
+    time_since_creation = (datetime.utcnow() - payment.created_at).total_seconds()
+    
+    if payment.status == 'pending' and payment.payment_metadata and time_since_creation > 30:
         checkout_request_id = payment.payment_metadata.get('CheckoutRequestID')
         
         if checkout_request_id:
@@ -422,6 +444,7 @@ def check_payment_status(current_user, payment_id):
             current_app.logger.info(f'MPesa STK query response for payment {payment.id}: {response}')
             
             result_code = response.get('ResultCode')
+            result_code_int = int(result_code) if result_code is not None else None
             
             # Handle both string and int result codes
             if result_code == '0' or result_code == 0:
@@ -534,11 +557,21 @@ def check_payment_status(current_user, payment_id):
                     db.session.commit()
                     
             elif result_code:
-                # Payment failed
-                payment.status = 'failed'
-                payment.failed_at = datetime.utcnow()
-                payment.error_message = response.get('ResultDesc') or response.get('errorMessage')
-                db.session.commit()
+                # Payment failed - but check if it's a timeout and payment is still recent
+                # For timeout (2004), wait at least 3 minutes before marking as failed
+                # This gives the user time to complete the payment
+                if result_code_int == 2004 and time_since_creation < 180:
+                    # Keep as pending - user might still complete payment
+                    current_app.logger.info(
+                        f'Payment {payment.id} timeout query result but payment created recently '
+                        f'({time_since_creation:.1f}s ago). Keeping as pending.'
+                    )
+                else:
+                    # Payment failed - mark as failed
+                    payment.status = 'failed'
+                    payment.failed_at = datetime.utcnow()
+                    payment.error_message = response.get('ResultDesc') or response.get('errorMessage')
+                    db.session.commit()
     
     # Get booking - payment.booking might be a list or single object
     booking = None
