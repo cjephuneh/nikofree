@@ -2,6 +2,7 @@ from datetime import datetime
 from app import db
 
 
+
 class Event(db.Model):
     """Event model"""
     __tablename__ = 'events'
