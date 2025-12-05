@@ -8,6 +8,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from config import config
 import os
+import smtplib
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -46,6 +47,40 @@ def create_app(config_name='default'):
     migrate.init_app(app, db)
     jwt.init_app(app)
     mail.init_app(app)
+    
+    # Patch Flask-Mail to support timeout (only if email sending is enabled)
+    # Flask-Mail doesn't expose timeout directly, so we patch the connection method
+    # Note: This is optional since MAIL_SUPPRESS_SEND=True prevents email sending anyway
+    if not app.config.get('MAIL_SUPPRESS_SEND', False):
+        try:
+            import flask_mail
+            # Try to patch the Connection class's _get_smtp method
+            if hasattr(flask_mail, 'Connection') and hasattr(flask_mail.Connection, '_get_smtp'):
+                original_get_smtp = flask_mail.Connection._get_smtp
+                
+                def patched_get_smtp(self):
+                    """Patched SMTP creation with timeout"""
+                    mail_timeout = app.config.get('MAIL_TIMEOUT', 10)
+                    if self.mail.use_ssl:
+                        return smtplib.SMTP_SSL(
+                            self.mail.server, 
+                            self.mail.port, 
+                            timeout=mail_timeout
+                        )
+                    else:
+                        smtp = smtplib.SMTP(
+                            self.mail.server, 
+                            self.mail.port, 
+                            timeout=mail_timeout
+                        )
+                        if self.mail.use_tls:
+                            smtp.starttls()
+                        return smtp
+                
+                flask_mail.Connection._get_smtp = patched_get_smtp
+        except (AttributeError, ImportError, TypeError):
+            # If patching fails, silently continue (not critical if MAIL_SUPPRESS_SEND=True)
+            pass
     # Disable strict slashes to prevent redirects (must be before CORS)
     app.url_map.strict_slashes = False
     

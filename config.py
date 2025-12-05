@@ -44,16 +44,21 @@ class Config:
     # Base URL for generating download links
     BASE_URL = os.getenv('BASE_URL', 'https://niko-free.com')
     
-    # Email Configuration (True Host)
+    # Email Configuration (Secure SSL/TLS Settings - Recommended)
     # Set these in .env file for security
-    MAIL_SERVER = os.getenv('MAIL_SERVER', 'mail.truhost.co.ke')
-    MAIL_PORT = int(os.getenv('MAIL_PORT', 587))
-    MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'True') == 'True'
-    MAIL_USE_SSL = os.getenv('MAIL_USE_SSL', 'False') == 'True'
+    # Secure Settings: Port 465 with SSL (Recommended)
+    # Non-SSL Settings: Port 587 with TLS (Not Recommended)
+    MAIL_SERVER = os.getenv('MAIL_SERVER', 'mail.niko-free.com')
+    MAIL_PORT = int(os.getenv('MAIL_PORT', 465))  # 465 for SSL (recommended), 587 for TLS
+    MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'False') == 'True'  # False for SSL (port 465)
+    MAIL_USE_SSL = os.getenv('MAIL_USE_SSL', 'True') == 'True'  # True for SSL (port 465)
     MAIL_USERNAME = os.getenv('MAIL_USERNAME', 'noreply@niko-free.com')
     MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')  # Set in .env file
     MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', 'noreply@niko-free.com')
-    MAIL_SUPPRESS_SEND = os.getenv('MAIL_SUPPRESS_SEND', 'False') == 'True'  # Set to 'True' to disable emails in dev 
+    MAIL_SUPPRESS_SEND = os.getenv('MAIL_SUPPRESS_SEND', 'False') == 'True'  # Set to 'True' to disable emails in dev
+    # SMTP timeout settings (in seconds)
+    MAIL_TIMEOUT = int(os.getenv('MAIL_TIMEOUT', '10'))  # Connection timeout
+    MAIL_DEBUG = os.getenv('MAIL_DEBUG', 'False') == 'True'  # Enable SMTP debug output 
     
     # SMS Configuration
     # Set SMS_SUPPRESS_SEND=False in production to enable SMS sending
