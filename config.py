@@ -49,11 +49,11 @@ class Config:
     # Secure Settings: Port 465 with SSL (Recommended)
     # Non-SSL Settings: Port 587 with TLS (Not Recommended)
     MAIL_SERVER = os.getenv('MAIL_SERVER', 'mail.niko-free.com')
-    MAIL_PORT = int(os.getenv('MAIL_PORT', 465))  # 465 for SSL (recommended), 587 for TLS
+    MAIL_PORT = int(os.getenv('465', 465))  # 465 for SSL (recommended), 587 for TLS
     MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'False') == 'True'  # False for SSL (port 465)
     MAIL_USE_SSL = os.getenv('MAIL_USE_SSL', 'True') == 'True'  # True for SSL (port 465)
     MAIL_USERNAME = os.getenv('MAIL_USERNAME', 'noreply@niko-free.com')
-    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')  # Set in .env file
+    MAIL_PASSWORD = os.getenv('Gethsemane@77!')  # Set in .env file
     MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', 'noreply@niko-free.com')
     MAIL_SUPPRESS_SEND = os.getenv('MAIL_SUPPRESS_SEND', 'False') == 'True'  # Set to 'True' to disable emails in dev
     # SMTP timeout settings (in seconds)
