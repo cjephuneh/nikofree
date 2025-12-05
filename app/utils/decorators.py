@@ -1,5 +1,5 @@
 from functools import wraps
-from flask import jsonify
+from flask import jsonify, request
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from app.models.user import User
 from app.models.partner import Partner
@@ -9,6 +9,10 @@ def user_required(fn):
     """Decorator to require user authentication"""
     @wraps(fn)
     def wrapper(*args, **kwargs):
+        # Skip authentication for OPTIONS requests (CORS preflight)
+        if request.method == 'OPTIONS':
+            return jsonify({}), 200
+        
         try:
             verify_jwt_in_request()
             current_user_id = get_jwt_identity()
@@ -56,6 +60,10 @@ def partner_required(fn):
     """Decorator to require partner authentication"""
     @wraps(fn)
     def wrapper(*args, **kwargs):
+        # Skip authentication for OPTIONS requests (CORS preflight)
+        if request.method == 'OPTIONS':
+            return jsonify({}), 200
+        
         verify_jwt_in_request()
         current_partner_id = get_jwt_identity()
         partner = Partner.query.get(current_partner_id)
@@ -78,6 +86,10 @@ def admin_required(fn):
     """Decorator to require admin authentication"""
     @wraps(fn)
     def wrapper(*args, **kwargs):
+        # Skip authentication for OPTIONS requests (CORS preflight)
+        if request.method == 'OPTIONS':
+            return jsonify({}), 200
+        
         verify_jwt_in_request()
         current_user_id = get_jwt_identity()
         user = User.query.get(current_user_id)

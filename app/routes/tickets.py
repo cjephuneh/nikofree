@@ -6,7 +6,7 @@ from app.models.ticket import TicketType, Booking, Ticket, PromoCode
 from app.models.payment import Payment
 from app.utils.decorators import user_required, partner_required
 from app.utils.qrcode_generator import generate_qr_code
-from app.utils.email import send_booking_confirmation_email
+from app.utils.email import send_booking_confirmation_email, send_booking_cancellation_email, send_booking_cancellation_to_partner_email
 from app.utils.ticket_pdf import generate_ticket_pdf
 from app.utils.sms import (
     send_booking_confirmation_sms,
@@ -43,16 +43,20 @@ def validate_promo_code(current_user):
         # Normalize code to uppercase
         code = code.upper().strip()
         
-        # Find promo code
-        promo = PromoCode.query.filter_by(
-            code=code,
-            event_id=event_id,
-            is_active=True
+        # Find promo code (case-insensitive search for safety)
+        from sqlalchemy import func
+        promo = PromoCode.query.filter(
+            func.upper(PromoCode.code) == code,
+            PromoCode.event_id == event_id,
+            PromoCode.is_active == True
         ).first()
         
         if not promo:
-            # Check if code exists but for different event
-            promo_exists = PromoCode.query.filter_by(code=code, is_active=True).first()
+            # Check if code exists but for different event (case-insensitive)
+            promo_exists = PromoCode.query.filter(
+                func.upper(PromoCode.code) == code,
+                PromoCode.is_active == True
+            ).first()
             if promo_exists:
                 return jsonify({'error': 'Promo code exists but is not valid for this event'}), 404
             return jsonify({'error': 'Invalid promo code'}), 404
@@ -404,19 +408,31 @@ def cancel_booking(current_user, booking_id):
         
         db.session.commit()
         
-        # Send cancellation SMS to user
+        # Send cancellation SMS and email to user
         try:
             send_booking_cancellation_sms(current_user, booking, booking.event)
         except Exception as sms_error:
             current_app.logger.warning(f'Failed to send cancellation SMS: {str(sms_error)}')
         
-        # Send cancellation SMS to partner
+        try:
+            send_booking_cancellation_email(current_user, booking, booking.event)
+        except Exception as email_error:
+            current_app.logger.warning(f'Failed to send cancellation email: {str(email_error)}')
+        
+        # Send cancellation SMS and email to partner
         try:
             partner = booking.event.organizer if booking.event else None
             if partner:
                 send_booking_cancellation_to_partner_sms(partner, booking, booking.event)
         except Exception as sms_error:
             current_app.logger.warning(f'Failed to send partner cancellation SMS: {str(sms_error)}')
+        
+        try:
+            partner = booking.event.organizer if booking.event else None
+            if partner:
+                send_booking_cancellation_to_partner_email(partner, booking, booking.event)
+        except Exception as email_error:
+            current_app.logger.warning(f'Failed to send partner cancellation email: {str(email_error)}')
         
         return jsonify({
             'message': 'Booking cancelled successfully'
@@ -669,7 +685,7 @@ def get_ticket_qr(current_user, booking_id):
 @bp.route('/<int:booking_id>/download', methods=['GET'])
 @user_required
 def download_ticket(current_user, booking_id):
-    """Download ticket as PDF"""
+    """Download ticket as PDF (authenticated)"""
     from flask import send_file, current_app, Response
     import os
     
@@ -720,6 +736,66 @@ def download_ticket(current_user, booking_id):
         )
     except Exception as e:
         print(f"❌ [TICKET DOWNLOAD] Error generating PDF: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': 'Failed to generate ticket PDF',
+            'details': str(e),
+            'message': 'Please try again or contact support if the issue persists'
+        }), 500
+
+
+@bp.route('/download/<booking_number>', methods=['GET'])
+def download_ticket_public(booking_number):
+    """Public download ticket as PDF using booking number (for SMS links)"""
+    from flask import send_file, current_app, Response
+    import os
+    
+    try:
+        # Find booking by booking number
+        booking = Booking.query.filter_by(booking_number=booking_number).first()
+        
+        if not booking:
+            return jsonify({'error': 'Booking not found'}), 404
+        
+        # Get all tickets for this booking
+        tickets = list(booking.tickets.all())
+        if not tickets:
+            return jsonify({'error': 'No tickets found for this booking'}), 404
+        
+        print(f"📄 [TICKET DOWNLOAD PUBLIC] Generating PDF for booking {booking_number}, {len(tickets)} tickets")
+        
+        # Ensure QR codes are generated for all tickets
+        for ticket in tickets:
+            if not ticket.qr_code:
+                print(f"📄 [TICKET DOWNLOAD PUBLIC] Generating QR code for ticket {ticket.ticket_number}")
+                qr_data = ticket.ticket_number
+                qr_path = generate_qr_code(qr_data, ticket.ticket_number)
+                ticket.qr_code = qr_path
+                db.session.commit()
+                print(f"📄 [TICKET DOWNLOAD PUBLIC] QR code generated: {qr_path}")
+        
+        # Generate PDF
+        print(f"📄 [TICKET DOWNLOAD PUBLIC] Creating PDF buffer...")
+        pdf_buffer = generate_ticket_pdf(booking, tickets)
+        
+        # Create filename
+        filename = f"ticket-{booking.booking_number}.pdf"
+        
+        print(f"📄 [TICKET DOWNLOAD PUBLIC] PDF generated successfully, sending file: {filename}")
+        
+        # Reset buffer position
+        pdf_buffer.seek(0)
+        
+        # Return PDF as download
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        print(f"❌ [TICKET DOWNLOAD PUBLIC] Error generating PDF: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({

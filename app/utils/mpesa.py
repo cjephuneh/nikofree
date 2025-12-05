@@ -163,12 +163,15 @@ class MPesaClient:
             'Content-Type': 'application/json'
         }
         
-        # Security credential (you need to generate this)
-        # For production, encrypt the initiator password with MPesa public key
-        security_credential = 'YOUR_SECURITY_CREDENTIAL'
+        # Security credential - for sandbox, use the initiator password directly
+        # For production, this should be encrypted with MPesa public key
+        from flask import current_app
+        initiator_name = current_app.config.get('MPESA_INITIATOR_NAME', 'testapi')
+        initiator_password = current_app.config.get('MPESA_INITIATOR_PASSWORD', 'Safaricom999!*!')
+        security_credential = current_app.config.get('MPESA_SECURITY_CREDENTIAL', initiator_password)
         
         payload = {
-            'InitiatorName': 'testapi',
+            'InitiatorName': initiator_name,
             'SecurityCredential': security_credential,
             'CommandID': 'BusinessPayment',
             'Amount': int(amount),

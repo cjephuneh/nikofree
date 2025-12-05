@@ -311,6 +311,7 @@ def partner_apply():
     location = request.form.get('location')
     category_id = request.form.get('category_id')
     interests = request.form.get('interests')  # Optional, comma-separated or JSON array
+    description = request.form.get('description')  # Optional, about/business description
     signature_name = request.form.get('signature_name')
     terms_accepted = request.form.get('terms_accepted')  # 'true' or 'false' string
     
@@ -382,6 +383,7 @@ def partner_apply():
         location=location,
         category_id=category_id,
         interests=interests_json,
+        description=description.strip() if description else None,
         signature_name=signature_name.strip(),
         logo=logo_path,
         terms_accepted=True,

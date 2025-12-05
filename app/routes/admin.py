@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta
 from sqlalchemy import func, desc
-from app import db
+from app import db, limiter
 from app.models.user import User
 from app.models.partner import Partner, PartnerSupportRequest
 from app.models.event import Event
@@ -10,7 +10,7 @@ from app.models.payment import Payment, PartnerPayout
 from app.models.category import Category, Location
 from app.models.admin import AdminLog
 from app.utils.decorators import admin_required
-from app.utils.email import send_partner_approval_email, send_event_approval_email
+from app.utils.email import send_partner_approval_email, send_event_approval_email, send_partner_suspension_email, send_partner_activation_email, send_payout_approval_email
 from app.routes.notifications import notify_event_approved, notify_event_rejected, notify_partner_approved, notify_partner_rejected
 from app.utils.sms import send_partner_suspension_sms, send_partner_activation_sms, send_payout_approval_sms
 
@@ -34,6 +34,7 @@ def log_admin_action(admin, action, resource_type, resource_id, description=None
 
 
 @bp.route('/dashboard', methods=['GET'])
+@limiter.exempt
 @admin_required
 def get_dashboard(current_admin):
     """Get admin dashboard overview"""
@@ -169,6 +170,30 @@ def get_dashboard(current_admin):
 
 # ============ PARTNER MANAGEMENT ============
 
+@bp.route('/partners/stats', methods=['GET'])
+@admin_required
+def get_partner_stats(current_admin):
+    """Get partner statistics"""
+    # Total partners
+    total_partners = Partner.query.count()
+    
+    # Pending partners
+    pending_partners = Partner.query.filter_by(status='pending').count()
+    
+    # Suspended partners
+    suspended_partners = Partner.query.filter_by(status='suspended').count()
+    
+    # Active/Approved partners
+    active_partners = Partner.query.filter_by(status='approved').count()
+    
+    return jsonify({
+        'total_partners': total_partners,
+        'pending_partners': pending_partners,
+        'suspended_partners': suspended_partners,
+        'active_partners': active_partners
+    }), 200
+
+
 @bp.route('/partners', methods=['GET'])
 @admin_required
 def get_partners(current_admin):
@@ -246,10 +271,15 @@ def approve_partner(current_admin, partner_id):
     if partner.status != 'pending':
         return jsonify({'error': 'Partner is not pending approval'}), 400
     
-    # Extract temporary password if stored
+    # Extract temporary password if stored, or generate new one
+    import secrets
     temp_password = None
     if partner.rejection_reason and partner.rejection_reason.startswith('TEMP_PASS:'):
         temp_password = partner.rejection_reason.replace('TEMP_PASS:', '')
+    else:
+        # Generate new temporary password if not stored
+        temp_password = secrets.token_urlsafe(12)
+        partner.set_password(temp_password)
     
     partner.status = 'approved'
     partner.approved_by = current_admin.id
@@ -343,9 +373,17 @@ def suspend_partner(current_admin, partner_id):
     
     db.session.commit()
     
-    # Send suspension SMS to partner
+    # Send suspension SMS and email to partner
     reason = data.get('reason')
-    send_partner_suspension_sms(partner, reason)
+    try:
+        send_partner_suspension_sms(partner, reason)
+    except Exception as sms_error:
+        current_app.logger.warning(f'Failed to send suspension SMS: {str(sms_error)}')
+    
+    try:
+        send_partner_suspension_email(partner, reason)
+    except Exception as email_error:
+        current_app.logger.warning(f'Failed to send suspension email: {str(email_error)}')
     
     return jsonify({
         'message': 'Partner suspended successfully'
@@ -375,8 +413,16 @@ def activate_partner(current_admin, partner_id):
     
     db.session.commit()
     
-    # Send activation SMS to partner
-    send_partner_activation_sms(partner)
+    # Send activation SMS and email to partner
+    try:
+        send_partner_activation_sms(partner)
+    except Exception as sms_error:
+        current_app.logger.warning(f'Failed to send activation SMS: {str(sms_error)}')
+    
+    try:
+        send_partner_activation_email(partner)
+    except Exception as email_error:
+        current_app.logger.warning(f'Failed to send activation email: {str(email_error)}')
     
     return jsonify({
         'message': 'Partner activated successfully'
@@ -384,6 +430,37 @@ def activate_partner(current_admin, partner_id):
 
 
 # ============ EVENT MANAGEMENT ============
+
+@bp.route('/events/stats', methods=['GET'])
+@admin_required
+def get_event_stats(current_admin):
+    """Get event statistics"""
+    from datetime import datetime
+    from sqlalchemy import and_, or_
+    
+    # Total events
+    total_events = Event.query.count()
+    
+    # Free events
+    free_events = Event.query.filter_by(is_free=True).count()
+    
+    # Paid events
+    paid_events = Event.query.filter_by(is_free=False).count()
+    
+    # Multiday events (events with end_date that is different from start_date)
+    now = datetime.utcnow()
+    multiday_events = Event.query.filter(
+        Event.end_date.isnot(None),
+        Event.end_date != Event.start_date
+    ).count()
+    
+    return jsonify({
+        'total_events': total_events,
+        'free_events': free_events,
+        'paid_events': paid_events,
+        'multiday_events': multiday_events
+    }), 200
+
 
 @bp.route('/events', methods=['GET'])
 @admin_required
@@ -402,8 +479,29 @@ def get_events(current_admin):
         page=page, per_page=per_page, error_out=False
     )
     
+    # Check if events are promoted
+    from app.models.event import EventPromotion
+    from datetime import datetime
+    now = datetime.utcnow()
+    
+    events_data = []
+    for event in events.items:
+        event_dict = event.to_dict(include_stats=True)
+        # Check if event has an active promotion
+        active_promotion = EventPromotion.query.filter(
+            EventPromotion.event_id == event.id,
+            EventPromotion.is_active == True,
+            EventPromotion.start_date <= now,
+            EventPromotion.end_date >= now
+        ).first()
+        
+        event_dict['is_promoted'] = active_promotion is not None
+        if active_promotion:
+            event_dict['promotion_id'] = active_promotion.id
+        events_data.append(event_dict)
+    
     return jsonify({
-        'events': [event.to_dict(include_stats=True) for event in events.items],
+        'events': events_data,
         'total': events.total,
         'page': events.page,
         'pages': events.pages
@@ -514,6 +612,178 @@ def feature_event(current_admin, event_id):
     
     return jsonify({
         'message': 'Event featured successfully'
+    }), 200
+
+
+@bp.route('/events/<int:event_id>/promote', methods=['POST'])
+@admin_required
+def promote_event(current_admin, event_id):
+    """Promote event (admin can promote for free)"""
+    from app.models.event import EventPromotion
+    from datetime import datetime, timedelta
+    
+    event = Event.query.get(event_id)
+    
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    
+    if event.status != 'approved':
+        return jsonify({'error': 'Event must be approved before promotion'}), 400
+    
+    if not event.is_published:
+        return jsonify({'error': 'Event must be published before promotion'}), 400
+    
+    data = request.get_json()
+    days_count = data.get('days_count', 7)
+    start_date_str = data.get('start_date')
+    end_date_str = data.get('end_date')
+    is_free = data.get('is_free', True)  # Admin promotions are free by default
+    
+    # Parse dates
+    if start_date_str and end_date_str:
+        try:
+            start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+            end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+        except:
+            return jsonify({'error': 'Invalid date format'}), 400
+    else:
+        start_date = datetime.utcnow()
+        end_date = start_date + timedelta(days=days_count)
+    
+    # Check for existing active promotion
+    now = datetime.utcnow()
+    existing_promo = EventPromotion.query.filter(
+        EventPromotion.event_id == event_id,
+        EventPromotion.is_active == True,
+        EventPromotion.end_date >= now
+    ).first()
+    
+    if existing_promo:
+        return jsonify({
+            'error': 'Event already has an active promotion',
+            'promotion': existing_promo.to_dict()
+        }), 400
+    
+    # Calculate cost (KES 400/day, but free for admin)
+    cost_per_day = 400
+    total_cost = days_count * cost_per_day
+    
+    # Create promotion
+    promotion = EventPromotion(
+        event_id=event_id,
+        start_date=start_date,
+        end_date=end_date,
+        days_count=days_count,
+        total_cost=total_cost,
+        is_active=True,
+        is_paid=not is_free
+    )
+    
+    db.session.add(promotion)
+    
+    # Log action
+    log_admin_action(
+        current_admin,
+        'promote_event',
+        'event',
+        event_id,
+        f"Promoted event: {event.title} for {days_count} days"
+    )
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Event promoted successfully',
+        'promotion': promotion.to_dict()
+    }), 200
+
+
+@bp.route('/events/<int:event_id>/unpromote', methods=['POST'])
+@admin_required
+def unpromote_event(current_admin, event_id):
+    """Remove promotion from event"""
+    from app.models.event import EventPromotion
+    from datetime import datetime
+    
+    event = Event.query.get(event_id)
+    
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    
+    # Find active promotion
+    now = datetime.utcnow()
+    promotion = EventPromotion.query.filter(
+        EventPromotion.event_id == event_id,
+        EventPromotion.is_active == True,
+        EventPromotion.end_date >= now
+    ).first()
+    
+    if not promotion:
+        return jsonify({'error': 'No active promotion found for this event'}), 404
+    
+    # Deactivate promotion
+    promotion.is_active = False
+    
+    # Log action
+    log_admin_action(
+        current_admin,
+        'unpromote_event',
+        'event',
+        event_id,
+        f"Removed promotion from event: {event.title}"
+    )
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Promotion removed successfully'
+    }), 200
+
+
+@bp.route('/promoted-events', methods=['GET', 'OPTIONS'])
+@admin_required
+def get_promoted_events(current_admin):
+    """Get all promoted events for admin dashboard"""
+    from app.models.event import EventPromotion
+    
+    # Get all promotions (active and inactive)
+    promotions = EventPromotion.query.order_by(EventPromotion.created_at.desc()).all()
+    
+    now = datetime.utcnow()
+    promotions_data = []
+    
+    for promo in promotions:
+        event = promo.event
+        if not event:
+            continue
+            
+        # Calculate promotion status
+        is_active_now = (
+            promo.is_active and 
+            promo.start_date <= now <= promo.end_date
+        )
+        
+        event_dict = event.to_dict(include_stats=True) if event else {}
+        
+        promotion_dict = {
+            'id': promo.id,
+            'event_id': promo.event_id,
+            'event': event_dict,
+            'start_date': promo.start_date.isoformat(),
+            'end_date': promo.end_date.isoformat(),
+            'days_count': promo.days_count,
+            'total_cost': float(promo.total_cost),
+            'is_active': promo.is_active,
+            'is_paid': promo.is_paid,
+            'is_active_now': is_active_now,
+            'created_at': promo.created_at.isoformat() if promo.created_at else None
+        }
+        
+        promotions_data.append(promotion_dict)
+    
+    return jsonify({
+        'promotions': promotions_data,
+        'count': len(promotions_data)
     }), 200
 
 
@@ -844,6 +1114,192 @@ def get_analytics(current_admin):
     }), 200
 
 
+@bp.route('/analytics/charts', methods=['GET'])
+@admin_required
+def get_chart_data(current_admin):
+    """Get chart data for reports with time filters"""
+    period = request.args.get('period', 'all_time')  # today, 7_days, 30_days, all_time
+    now = datetime.utcnow()
+    
+    # Calculate date ranges
+    if period == 'today':
+        start_date = datetime(now.year, now.month, now.day)
+        group_by = 'hour'
+    elif period == '7_days':
+        start_date = now - timedelta(days=7)
+        group_by = 'day'
+    elif period == '30_days':
+        start_date = now - timedelta(days=30)
+        group_by = 'day'
+    else:  # all_time
+        start_date = None
+        group_by = 'month'
+    
+    # Helper function to format date for grouping
+    def format_date_for_group(date_obj, group_type):
+        if group_type == 'hour':
+            return date_obj.strftime('%Y-%m-%d %H:00')
+        elif group_type == 'day':
+            return date_obj.strftime('%Y-%m-%d')
+        elif group_type == 'month':
+            return date_obj.strftime('%Y-%m')
+        return date_obj.strftime('%Y-%m-%d')
+    
+    # Events data
+    events_query = Event.query
+    if start_date:
+        events_query = events_query.filter(Event.created_at >= start_date)
+    events = events_query.all()
+    
+    events_data = {}
+    for event in events:
+        key = format_date_for_group(event.created_at, group_by)
+        events_data[key] = events_data.get(key, 0) + 1
+    
+    # Partners data
+    partners_query = Partner.query
+    if start_date:
+        partners_query = partners_query.filter(Partner.created_at >= start_date)
+    partners = partners_query.all()
+    
+    partners_data = {}
+    for partner in partners:
+        key = format_date_for_group(partner.created_at, group_by)
+        partners_data[key] = partners_data.get(key, 0) + 1
+    
+    # Users data
+    users_query = User.query
+    if start_date:
+        users_query = users_query.filter(User.created_at >= start_date)
+    users = users_query.all()
+    
+    users_data = {}
+    for user in users:
+        key = format_date_for_group(user.created_at, group_by)
+        users_data[key] = users_data.get(key, 0) + 1
+    
+    # Revenue data
+    revenue_query = Payment.query.filter(Payment.status == 'completed')
+    if start_date:
+        revenue_query = revenue_query.filter(Payment.created_at >= start_date)
+    payments = revenue_query.all()
+    
+    revenue_data = {}
+    for payment in payments:
+        key = format_date_for_group(payment.created_at, group_by)
+        revenue_data[key] = revenue_data.get(key, 0) + float(payment.amount)
+    
+    # Convert to sorted arrays with filled dates
+    def create_chart_data(data_dict, group_type, start_dt=None, end_dt=None):
+        items = []
+        
+        # If we have a date range, fill in missing dates
+        if start_dt and end_dt:
+            current = start_dt
+            while current <= end_dt:
+                if group_type == 'hour':
+                    key = current.strftime('%Y-%m-%d %H:00')
+                    label = current.strftime('%H:00')
+                    # Move to next hour
+                    current += timedelta(hours=1)
+                    if current > end_dt:
+                        break
+                elif group_type == 'day':
+                    key = current.strftime('%Y-%m-%d')
+                    label = current.strftime('%b %d')
+                    # Move to next day
+                    current += timedelta(days=1)
+                elif group_type == 'month':
+                    key = current.strftime('%Y-%m')
+                    label = current.strftime('%b %Y')
+                    value = data_dict.get(key, 0)
+                    items.append({
+                        'date': key,
+                        'label': label,
+                        'value': value
+                    })
+                    # Move to next month
+                    if current.month == 12:
+                        next_month = datetime(current.year + 1, 1, 1)
+                    else:
+                        next_month = datetime(current.year, current.month + 1, 1)
+                    # Check if next month would exceed end date
+                    if next_month > end_dt:
+                        break
+                    current = next_month
+                    continue
+                else:
+                    break
+                
+                value = data_dict.get(key, 0)
+                items.append({
+                    'date': key,
+                    'label': label,
+                    'value': value
+                })
+        else:
+            # No date range, just use existing data
+            for key, value in data_dict.items():
+                if group_type == 'hour':
+                    label = key.split(' ')[1] if ' ' in key else key  # Just the hour
+                elif group_type == 'day':
+                    date_obj = datetime.strptime(key, '%Y-%m-%d')
+                    label = date_obj.strftime('%b %d')
+                elif group_type == 'month':
+                    date_obj = datetime.strptime(key, '%Y-%m')
+                    label = date_obj.strftime('%b %Y')
+                else:
+                    label = key
+                
+                items.append({
+                    'date': key,
+                    'label': label,
+                    'value': value
+                })
+            
+            # Sort by date
+            items.sort(key=lambda x: x['date'])
+        
+        return items
+    
+    # Calculate date ranges for filling
+    end_date_for_fill = now
+    start_date_for_fill = None
+    
+    if period == 'today':
+        start_date_for_fill = datetime(now.year, now.month, now.day)
+        end_date_for_fill = now
+    elif period == '7_days':
+        start_date_for_fill = now - timedelta(days=7)
+    elif period == '30_days':
+        start_date_for_fill = now - timedelta(days=30)
+    else:  # all_time
+        # For all_time, get the earliest event/partner/user date
+        earliest_event = db.session.query(func.min(Event.created_at)).scalar()
+        earliest_partner = db.session.query(func.min(Partner.created_at)).scalar()
+        earliest_user = db.session.query(func.min(User.created_at)).scalar()
+        
+        earliest_dates = [d for d in [earliest_event, earliest_partner, earliest_user] if d is not None]
+        if earliest_dates:
+            start_date_for_fill = min(earliest_dates)
+            # Round down to first of month
+            start_date_for_fill = datetime(start_date_for_fill.year, start_date_for_fill.month, 1)
+        else:
+            # Default to 1 year ago if no data
+            start_date_for_fill = datetime(now.year - 1, now.month, 1)
+        
+        # For all_time with month grouping, end_date should be current month
+        end_date_for_fill = datetime(now.year, now.month, 1)
+    
+    return jsonify({
+        'period': period,
+        'events': create_chart_data(events_data, group_by, start_date_for_fill, end_date_for_fill),
+        'partners': create_chart_data(partners_data, group_by, start_date_for_fill, end_date_for_fill),
+        'users': create_chart_data(users_data, group_by, start_date_for_fill, end_date_for_fill),
+        'revenue': create_chart_data(revenue_data, group_by, start_date_for_fill, end_date_for_fill)
+    }), 200
+
+
 # ============ PAYOUT MANAGEMENT ============
 
 @bp.route('/payouts', methods=['GET'])
@@ -898,10 +1354,18 @@ def approve_payout(current_admin, payout_id):
     
     db.session.commit()
     
-    # Send payout approval SMS to partner
+    # Send payout approval SMS and email to partner
     partner = payout.partner
     if partner:
-        send_payout_approval_sms(partner, payout)
+        try:
+            send_payout_approval_sms(partner, payout)
+        except Exception as sms_error:
+            current_app.logger.warning(f'Failed to send payout approval SMS: {str(sms_error)}')
+        
+        try:
+            send_payout_approval_email(partner, payout)
+        except Exception as email_error:
+            current_app.logger.warning(f'Failed to send payout approval email: {str(email_error)}')
     
     # TODO: Initiate actual payout via MPesa B2C
     

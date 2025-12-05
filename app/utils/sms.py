@@ -222,10 +222,11 @@ def send_booking_confirmation_sms(booking, tickets, phone_number_override=None):
     
     print(f"📱 [SMS] Formatted phone: {phone}")
     
-    # Get base URL for download link
+    # Get base URL for download link (using frontend route for better UX)
     from flask import current_app
     base_url = current_app.config.get('BASE_URL', 'https://niko-free.com')
-    download_url = f"{base_url}/api/tickets/{booking.id}/download"
+    # Use frontend route that handles the download properly
+    download_url = f"{base_url}/download-ticket/{booking.booking_number}"
     
     # Create message
     ticket_numbers = ', '.join([t.ticket_number for t in tickets[:3]])  # First 3 tickets

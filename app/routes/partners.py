@@ -951,7 +951,7 @@ def update_event(current_partner, event_id):
                 # Update existing promo code
                 promo_code = existing_promo_codes_by_id[promo_id]
                 # Only update code if it's different and doesn't conflict
-                new_code = code
+                new_code = code.upper().strip()  # Ensure code is always uppercase
                 if promo_code.code.upper() != new_code:
                     # Check if new code already exists (for a different promo code)
                     existing_with_code = PromoCode.query.filter_by(code=new_code).first()
@@ -970,15 +970,15 @@ def update_event(current_partner, event_id):
                     except:
                         pass
             else:
-                # Create new - but check if code already exists
-                existing_with_code = PromoCode.query.filter_by(code=code).first()
+                # Create new - but check if code already exists (normalize to uppercase for comparison)
+                existing_with_code = PromoCode.query.filter_by(code=code.upper().strip()).first()
                 if existing_with_code:
                     # Code already exists, skip creating duplicate
                     current_app.logger.warning(f'Promo code {code} already exists, skipping creation')
                     continue
                 
                 promo_code = PromoCode(
-                    code=code,
+                    code=code.upper().strip(),  # Ensure code is always uppercase
                     event_id=event.id,
                     discount_type=promo_data.get('discount_type', 'percentage'),
                     discount_value=float(promo_data.get('discount', 0)),
@@ -1276,6 +1276,106 @@ def create_promo_code(current_partner, event_id):
         'message': 'Promo code created successfully',
         'promo_code': promo_code.to_dict()
     }), 201
+
+
+@bp.route('/events/<int:event_id>/promo-codes/<int:promo_code_id>', methods=['PUT'])
+@partner_required
+def update_promo_code(current_partner, event_id, promo_code_id):
+    """Update promo code for event"""
+    event = Event.query.filter_by(
+        id=event_id,
+        partner_id=current_partner.id
+    ).first()
+    
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    
+    promo_code = PromoCode.query.filter_by(
+        id=promo_code_id,
+        event_id=event_id
+    ).first()
+    
+    if not promo_code:
+        return jsonify({'error': 'Promo code not found'}), 404
+    
+    data = request.get_json()
+    
+    # Validate required fields
+    if 'code' in data:
+        new_code = data['code'].upper().strip()
+        # Check if new code already exists (for a different promo code)
+        existing = PromoCode.query.filter_by(code=new_code).first()
+        if existing and existing.id != promo_code_id:
+            return jsonify({'error': 'Promo code already exists'}), 409
+        promo_code.code = new_code
+    
+    if 'discount_type' in data:
+        promo_code.discount_type = data['discount_type']
+    
+    if 'discount_value' in data:
+        promo_code.discount_value = float(data['discount_value'])
+    
+    if 'max_uses' in data:
+        promo_code.max_uses = int(data['max_uses']) if data['max_uses'] else None
+    
+    if 'max_uses_per_user' in data:
+        promo_code.max_uses_per_user = int(data.get('max_uses_per_user', 1))
+    
+    if 'valid_from' in data:
+        if data['valid_from']:
+            try:
+                promo_code.valid_from = datetime.fromisoformat(data['valid_from'].replace('Z', '+00:00'))
+            except:
+                pass
+        else:
+            promo_code.valid_from = None
+    
+    if 'valid_until' in data:
+        if data['valid_until']:
+            try:
+                promo_code.valid_until = datetime.fromisoformat(data['valid_until'].replace('Z', '+00:00'))
+            except:
+                pass
+        else:
+            promo_code.valid_until = None
+    
+    if 'is_active' in data:
+        promo_code.is_active = bool(data['is_active'])
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Promo code updated successfully',
+        'promo_code': promo_code.to_dict()
+    }), 200
+
+
+@bp.route('/events/<int:event_id>/promo-codes/<int:promo_code_id>', methods=['DELETE'])
+@partner_required
+def delete_promo_code(current_partner, event_id, promo_code_id):
+    """Delete promo code for event"""
+    event = Event.query.filter_by(
+        id=event_id,
+        partner_id=current_partner.id
+    ).first()
+    
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    
+    promo_code = PromoCode.query.filter_by(
+        id=promo_code_id,
+        event_id=event_id
+    ).first()
+    
+    if not promo_code:
+        return jsonify({'error': 'Promo code not found'}), 404
+    
+    db.session.delete(promo_code)
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Promo code deleted successfully'
+    }), 200
 
 
 # ============ ATTENDEE MANAGEMENT ============
@@ -1625,9 +1725,10 @@ def request_payout(current_partner):
     payout_method = data.get('payout_method', 'mpesa')
     
     if payout_method == 'mpesa':
-        if not current_partner.mpesa_number:
-            return jsonify({'error': 'Please add MPesa number in your profile'}), 400
-        account_number = current_partner.mpesa_number
+        # Use phone number from request if provided, otherwise use profile
+        account_number = data.get('phone_number') or current_partner.mpesa_number
+        if not account_number:
+            return jsonify({'error': 'Please provide MPesa number'}), 400
     elif payout_method == 'bank_transfer':
         if not current_partner.bank_account_number:
             return jsonify({'error': 'Please add bank details in your profile'}), 400
@@ -1644,18 +1745,74 @@ def request_payout(current_partner):
         payout_method=payout_method,
         account_number=account_number,
         account_name=current_partner.bank_account_name or current_partner.business_name,
-        status='pending'
+        status='processing'  # Start as processing since we'll attempt B2C immediately
     )
     
     db.session.add(payout)
+    db.session.flush()  # Get payout ID
     
-    # Update partner balance
-    current_partner.pending_earnings -= amount
+    # For MPesa, automatically process B2C payment
+    if payout_method == 'mpesa':
+        try:
+            from app.utils.mpesa import MPesaClient
+            from app.utils.sms import format_phone_for_sms
+            
+            # Format phone number for MPesa
+            formatted_phone = format_phone_for_sms(account_number)
+            if not formatted_phone:
+                payout.status = 'failed'
+                payout.rejection_reason = 'Invalid phone number format'
+                db.session.commit()
+                return jsonify({'error': 'Invalid phone number format'}), 400
+            
+            # Initiate B2C payment
+            mpesa = MPesaClient()
+            b2c_response = mpesa.b2c_payment(
+                phone_number=formatted_phone,
+                amount=amount,
+                occasion=f'Payout {payout.reference_number}'
+            )
+            
+            # Store response
+            payout.provider_response = b2c_response
+            
+            # Check if B2C was successful
+            if b2c_response.get('ResponseCode') == '0' or b2c_response.get('error') is None:
+                # B2C initiated successfully
+                payout.status = 'processing'
+                payout.transaction_reference = b2c_response.get('ConversationID') or b2c_response.get('OriginatorConversationID')
+                current_app.logger.info(f'B2C payment initiated for payout {payout.id}: {b2c_response}')
+            else:
+                # B2C failed
+                payout.status = 'failed'
+                payout.rejection_reason = b2c_response.get('ResponseDescription') or b2c_response.get('error') or 'B2C payment failed'
+                current_app.logger.error(f'B2C payment failed for payout {payout.id}: {b2c_response}')
+                # Don't update balance if payment failed
+                db.session.commit()
+                return jsonify({
+                    'error': payout.rejection_reason or 'Failed to process payment. Please try again.'
+                }), 400
+        except Exception as e:
+            current_app.logger.error(f'Error processing B2C payment for payout {payout.id}: {str(e)}', exc_info=True)
+            payout.status = 'failed'
+            payout.rejection_reason = f'Payment processing error: {str(e)}'
+            db.session.commit()
+            return jsonify({
+                'error': 'Failed to process payment. Please try again later.'
+            }), 500
+    else:
+        # Bank transfer - keep as pending for admin approval
+        payout.status = 'pending'
+    
+    # Update partner balance only if payment is processing/completed
+    if payout.status in ['processing', 'completed']:
+        current_partner.pending_earnings -= amount
+        current_partner.withdrawn_earnings += amount
     
     db.session.commit()
     
     return jsonify({
-        'message': 'Payout request submitted successfully',
+        'message': 'Payout request submitted successfully' if payout_method == 'bank_transfer' else 'Payment processing. You will receive funds shortly.',
         'payout': payout.to_dict()
     }), 201
 

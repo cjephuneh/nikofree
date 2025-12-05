@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime
 from app import db
 from app.models.notification import Notification
@@ -13,6 +13,7 @@ from app.utils.sms import (
     send_partner_rejection_sms,
     send_new_booking_sms_to_partner
 )
+from app.utils.email import send_new_booking_to_partner_email, send_event_reminder_email
 
 bp = Blueprint('notifications', __name__)
 
@@ -41,10 +42,20 @@ def create_notification(user_id=None, partner_id=None, admin_id=None, title=None
     return notification
 
 
-@bp.route('/user', methods=['GET'])
+@bp.route('/user', methods=['GET', 'OPTIONS'])
 @user_required
 def get_user_notifications(current_user):
     """Get user notifications"""
+    # Handle OPTIONS preflight request
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept')
+        response.headers.add('Access-Control-Max-Age', '3600')
+        return response, 200
+    
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     unread_only = request.args.get('unread_only', 'false').lower() == 'true'
@@ -58,7 +69,7 @@ def get_user_notifications(current_user):
         page=page, per_page=per_page, error_out=False
     )
     
-    return jsonify({
+    response = jsonify({
         'notifications': [notif.to_dict() for notif in notifications.items],
         'total': notifications.total,
         'unread_count': Notification.query.filter_by(
@@ -67,7 +78,12 @@ def get_user_notifications(current_user):
         ).count(),
         'page': notifications.page,
         'pages': notifications.pages
-    }), 200
+    })
+    # Ensure CORS headers are set
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Methods', 'GET, OPTIONS')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept')
+    return response, 200
 
 
 @bp.route('/partner', methods=['GET'])
@@ -339,10 +355,18 @@ def notify_new_booking(event, booking):
         action_url=f'/partner/events/{event.id}/attendees',
         action_text='View Attendees'
     )
-    # Send SMS notification to partner
+    # Send SMS and email notification to partner
     partner = event.organizer
     if partner:
-        send_new_booking_sms_to_partner(partner, booking, event)
+        try:
+            send_new_booking_sms_to_partner(partner, booking, event)
+        except Exception as sms_error:
+            current_app.logger.warning(f'Failed to send new booking SMS: {str(sms_error)}')
+        
+        try:
+            send_new_booking_to_partner_email(partner, booking, event)
+        except Exception as email_error:
+            current_app.logger.warning(f'Failed to send new booking email: {str(email_error)}')
 
 
 def notify_event_reminder(user, event, hours_before=24):
@@ -357,8 +381,16 @@ def notify_event_reminder(user, event, hours_before=24):
         action_text='View Event',
         send_email=True
     )
-    # Send SMS reminder
-    send_event_notification_sms(user, event, 'reminder')
+    # Send SMS and email reminder
+    try:
+        send_event_notification_sms(user, event, 'reminder')
+    except Exception as sms_error:
+        current_app.logger.warning(f'Failed to send event reminder SMS: {str(sms_error)}')
+    
+    try:
+        send_event_reminder_email(user, event)
+    except Exception as email_error:
+        current_app.logger.warning(f'Failed to send event reminder email: {str(email_error)}')
 
 
 def notify_payment_completed(booking, payment):

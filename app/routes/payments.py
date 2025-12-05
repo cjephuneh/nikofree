@@ -11,7 +11,7 @@ from app.models.partner import Partner
 from app.utils.decorators import user_required
 from app.utils.mpesa import MPesaClient, format_phone_number
 from app.utils.qrcode_generator import generate_qr_code
-from app.utils.email import send_booking_confirmation_email, send_payment_confirmation_email
+from app.utils.email import send_booking_confirmation_email, send_payment_confirmation_email, send_payment_failed_email, send_promotion_payment_success_email, send_payment_failed_email
 from app.utils.sms import (
     send_payment_confirmation_sms, 
     send_booking_confirmation_sms,
@@ -249,8 +249,16 @@ def mpesa_callback():
                             action_url=f'/events/{promotion.event_id}',
                             action_text='View Event'
                         )
-                        # Send promotion success SMS
-                        send_promotion_payment_success_sms(partner, promotion.event)
+                        # Send promotion success SMS and email
+                        try:
+                            send_promotion_payment_success_sms(partner, promotion.event)
+                        except Exception as sms_error:
+                            current_app.logger.warning(f'Failed to send promotion success SMS: {str(sms_error)}')
+                        
+                        try:
+                            send_promotion_payment_success_email(partner, promotion.event)
+                        except Exception as email_error:
+                            current_app.logger.warning(f'Failed to send promotion success email: {str(email_error)}')
                     
                     return jsonify({'message': 'Payment processed'}), 200
             
@@ -396,16 +404,21 @@ def mpesa_callback():
                 if result_code == 2001:
                     # Check if we're in sandbox mode for better error messaging
                     is_sandbox = current_app.config.get('MPESA_ENVIRONMENT', 'sandbox') == 'sandbox'
-                    user = booking.user
-                    event = booking.event
-                    if user and event:
-                        try:
-                            # Only send SMS if it's not a sandbox validation issue
-                            # In sandbox, ResultCode 2001 usually means phone not registered as test number
-                            # We'll still send the SMS but the frontend should show a better message
-                            send_payment_failed_sms(user, payment, event)
-                        except Exception as sms_error:
-                            current_app.logger.warning(f'Failed to send payment failed SMS: {str(sms_error)}')
+                user = booking.user
+                event = booking.event
+                if user and event:
+                    try:
+                        # Only send SMS if it's not a sandbox validation issue
+                        # In sandbox, ResultCode 2001 usually means phone not registered as test number
+                        # We'll still send the SMS but the frontend should show a better message
+                        send_payment_failed_sms(user, payment, event)
+                    except Exception as sms_error:
+                        current_app.logger.warning(f'Failed to send payment failed SMS: {str(sms_error)}')
+                    
+                    try:
+                        send_payment_failed_email(user, payment, event)
+                    except Exception as email_error:
+                        current_app.logger.warning(f'Failed to send payment failed email: {str(email_error)}')
             
             db.session.commit()
         

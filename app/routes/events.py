@@ -208,6 +208,7 @@ def get_promoted_events():
 
 @bp.route('/categories', methods=['GET', 'OPTIONS'])
 @bp.route('/categories/', methods=['GET', 'OPTIONS'])
+@limiter.exempt
 def get_categories():
     """Get all event categories"""
     # Handle OPTIONS preflight request
@@ -271,6 +272,7 @@ def get_category_events(category_id):
 
 
 @bp.route('/locations', methods=['GET'])
+@limiter.exempt
 def get_locations():
     """Get all locations"""
     locations = Location.query.filter_by(is_active=True).order_by(Location.display_order).all()

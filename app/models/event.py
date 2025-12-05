@@ -75,6 +75,19 @@ class Event(db.Model):
             # If somehow a base64 string got stored, return None so frontend can handle it
             poster_image = None
         
+        # Calculate tickets left (sum of all ticket types' quantity_available)
+        tickets_left = None
+        total_tickets_available = 0
+        has_limited_tickets = False
+        
+        for ticket_type in self.ticket_types:
+            if ticket_type.quantity_available is not None:
+                has_limited_tickets = True
+                total_tickets_available += ticket_type.quantity_available
+        
+        if has_limited_tickets:
+            tickets_left = total_tickets_available
+        
         data = {
             'id': self.id,
             'title': self.title,
@@ -101,12 +114,14 @@ class Event(db.Model):
             'hosts': [host.to_dict() for host in self.hosts],
             'interests': [interest.name for interest in self.interests],
             'ticket_types': [tt.to_dict() for tt in self.ticket_types],
-            'promo_codes': [pc.to_dict() for pc in self.promo_codes]
+            'promo_codes': [pc.to_dict() for pc in self.promo_codes],
+            # Always include attendee_count (total tickets sold, not number of bookings)
+            'attendee_count': self.attendee_count,
+            'tickets_left': tickets_left  # None means unlimited tickets
         }
         
         if include_stats:
             data['view_count'] = self.view_count
-            data['attendee_count'] = self.attendee_count
             data['total_tickets_sold'] = self.total_tickets_sold
             data['revenue'] = float(self.revenue)
             # Add bucketlist count (likes) - query the bucketlist table directly
@@ -116,7 +131,7 @@ class Event(db.Model):
                 bucketlist.c.event_id == self.id
             ).scalar() or 0
             data['bucketlist_count'] = bucketlist_count
-            # Add actual bookings count (people going)
+            # Add actual bookings count (people going) - kept for backward compatibility
             bookings_count = self.bookings.filter_by(status='confirmed').count()
             data['bookings_count'] = bookings_count
             
