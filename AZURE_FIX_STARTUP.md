@@ -172,13 +172,34 @@ port = int(os.getenv('PORT', 8000))
 
 ## Quick Fix Command (One-liner)
 
+### Option A: Use app.py (Recommended if wsgi.py not found)
 ```bash
 az webapp config set \
   --name your-app-name \
   --resource-group your-resource-group \
-  --startup-file "gunicorn --bind 0.0.0.0:8000 --workers 4 --timeout 120 wsgi:app" && \
+  --startup-file "gunicorn --bind 0.0.0.0:8000 --workers 4 --timeout 120 --chdir /home/site/wwwroot app:app" && \
+az webapp restart --name your-app-name --resource-group your-resource-group
+```
+
+### Option B: Use wsgi.py with explicit path
+```bash
+az webapp config set \
+  --name your-app-name \
+  --resource-group your-resource-group \
+  --startup-file "gunicorn --bind 0.0.0.0:8000 --workers 4 --timeout 120 --chdir /home/site/wwwroot wsgi:app" && \
 az webapp restart --name your-app-name --resource-group your-resource-group
 ```
 
 Replace `your-app-name` and `your-resource-group` with your actual values.
+
+## If wsgi.py is missing: Use app.py instead
+
+If you're getting `ModuleNotFoundError: No module named 'wsgi'`, you can use `app.py` directly:
+
+**In Azure Portal → Configuration → General settings → Startup Command:**
+```
+gunicorn --bind 0.0.0.0:8000 --workers 4 --timeout 120 --chdir /home/site/wwwroot app:app
+```
+
+This uses `app.py` which creates the Flask app instance.
 
