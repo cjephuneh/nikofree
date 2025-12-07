@@ -240,5 +240,9 @@ def clean_db():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000, debug=True)
+    # Get port from environment variable (Azure sets this) or default to 8000
+    port = int(os.getenv('PORT', 8000))
+    # Disable debug in production (Azure sets FLASK_ENV)
+    debug = os.getenv('FLASK_ENV', 'development') == 'development'
+    app.run(host='0.0.0.0', port=port, debug=debug)
 
