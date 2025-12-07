@@ -158,7 +158,7 @@ Test actual email functions in your app:
    ```bash
    # Test port connectivity
    telnet mail.niko-free.com 465
-   # or
+   # or 
    nc -zv mail.niko-free.com 465
    ```
 
