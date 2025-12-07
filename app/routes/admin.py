@@ -10,7 +10,7 @@ from app.models.payment import Payment, PartnerPayout
 from app.models.category import Category, Location
 from app.models.admin import AdminLog
 from app.utils.decorators import admin_required
-from app.utils.email import send_partner_approval_email, send_event_approval_email, send_partner_suspension_email, send_partner_activation_email, send_payout_approval_email
+from app.utils.email import send_partner_approval_email, send_event_approval_email, send_partner_suspension_email, send_partner_activation_email, send_payout_approval_email, send_email
 from app.routes.notifications import notify_event_approved, notify_event_rejected, notify_partner_approved, notify_partner_rejected
 from app.utils.sms import send_partner_suspension_sms, send_partner_activation_sms, send_payout_approval_sms
 
@@ -1457,4 +1457,25 @@ def update_support_status(current_admin, request_id):
         'message': 'Support request status updated',
         'support_request': support_request.to_dict()
     }), 200
+
+
+@bp.route('/test-email', methods=['POST'])
+@admin_required
+def test_email_endpoint(current_admin):
+    """Test email sending"""
+    recipient = request.json.get('email', current_admin.email)
+    
+    try:
+        send_email(
+            subject="Email Test from Niko Free",
+            recipient=recipient,
+            html_body="<h1>Test Email</h1><p>If you see this, email is working!</p>"
+        )
+        return jsonify({
+            'message': 'Test email sent',
+            'recipient': recipient,
+            'note': 'Check your inbox and spam folder'
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 

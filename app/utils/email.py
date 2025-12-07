@@ -3,6 +3,8 @@ from flask_mail import Message
 from app import mail
 from threading import Thread
 from datetime import datetime
+import socket
+import smtplib
 
 
 def send_async_email(app, msg):
@@ -25,22 +27,28 @@ def send_async_email(app, msg):
             # Send email with explicit timeout handling
             mail.send(msg)
             print(f"✅ Email sent successfully: {msg.subject} to {msg.recipients}")
-        except TimeoutError as e:
-            error_msg = f"❌ Email timeout error: {str(e)}. SMTP server {app.config.get('MAIL_SERVER')}:{app.config.get('MAIL_PORT')} is not responding."
+        except (socket.timeout, TimeoutError) as e:
+            error_msg = f"❌ Email timeout error: {str(e)}. SMTP server {app.config.get('MAIL_SERVER')}:{app.config.get('MAIL_PORT')} is not responding (likely blocked by firewall)."
             print(error_msg)
-            # Log to app logger if available
             if hasattr(app, 'logger'):
                 app.logger.error(error_msg)
-        except ConnectionError as e:
+        except (ConnectionError, ConnectionRefusedError, OSError) as e:
             error_msg = f"❌ Email connection error: {str(e)}. Cannot connect to SMTP server {app.config.get('MAIL_SERVER')}:{app.config.get('MAIL_PORT')}."
+            print(error_msg)
+            if hasattr(app, 'logger'):
+                app.logger.error(error_msg)
+        except smtplib.SMTPException as e:
+            error_msg = f"❌ SMTP error: {str(e)} (Type: {type(e).__name__})"
             print(error_msg)
             if hasattr(app, 'logger'):
                 app.logger.error(error_msg)
         except Exception as e:
             error_msg = f"❌ Error sending email: {str(e)} (Type: {type(e).__name__})"
             print(error_msg)
+            import traceback
+            traceback.print_exc()
             if hasattr(app, 'logger'):
-                app.logger.error(error_msg)
+                app.logger.error(error_msg, exc_info=True)
 
 
 def send_email(subject, recipient, html_body, text_body=None):
