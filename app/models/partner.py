@@ -57,6 +57,10 @@ class Partner(db.Model):
     bank_account_name = db.Column(db.String(200), nullable=True)
     mpesa_number = db.Column(db.String(20), nullable=True)
     
+    # Password Reset
+    reset_token = db.Column(db.String(255), nullable=True)
+    reset_token_expires = db.Column(db.DateTime, nullable=True)
+    
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

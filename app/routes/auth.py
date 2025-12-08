@@ -7,7 +7,7 @@ from app import db, limiter
 from app.models.user import User
 from app.models.partner import Partner
 from app.utils.validators import validate_email, validate_phone, validate_password
-from app.utils.email import send_welcome_email, send_password_reset_email
+from app.utils.email import send_welcome_email, send_password_reset_email, send_partner_password_reset_email
 from app.utils.sms import send_welcome_sms, send_partner_welcome_sms, send_password_reset_sms
 import secrets
 
@@ -507,6 +507,79 @@ def partner_login():
         'access_token': access_token,
         'refresh_token': refresh_token
     }), 200
+
+
+@bp.route('/partner/forgot-password', methods=['POST'])
+@limiter.limit("3 per hour")
+def partner_forgot_password():
+    """Request password reset for partner - sends reset token via email"""
+    data = request.get_json()
+    
+    if not data.get('email'):
+        return jsonify({'error': 'Email is required'}), 400
+    
+    email = data['email'].lower().strip()
+    
+    # Validate email format
+    if not validate_email(email):
+        return jsonify({'error': 'Invalid email address'}), 400
+    
+    # Find partner
+    partner = Partner.query.filter_by(email=email).first()
+    
+    # For security, always return success even if partner doesn't exist
+    if not partner:
+        return jsonify({'message': 'If an account with that email exists, a password reset link has been sent'}), 200
+    
+    # Check if partner is active
+    if not partner.is_active:
+        return jsonify({'error': 'Account is suspended'}), 403
+    
+    # Generate reset token
+    reset_token = secrets.token_urlsafe(32)
+    partner.reset_token = reset_token
+    partner.reset_token_expires = datetime.utcnow() + timedelta(hours=1)  # Token expires in 1 hour
+    
+    db.session.commit()
+    
+    # Send password reset email
+    send_partner_password_reset_email(partner, reset_token)
+    
+    return jsonify({'message': 'If an account with that email exists, a password reset link has been sent'}), 200
+
+
+@bp.route('/partner/reset-password', methods=['POST'])
+@limiter.limit("5 per hour")
+def partner_reset_password():
+    """Reset partner password using token"""
+    data = request.get_json()
+    
+    if not data.get('token') or not data.get('password'):
+        return jsonify({'error': 'Token and new password are required'}), 400
+    
+    # Validate password
+    is_valid, error_msg = validate_password(data['password'])
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
+    
+    # Find partner with valid token
+    partner = Partner.query.filter_by(reset_token=data['token']).first()
+    
+    if not partner:
+        return jsonify({'error': 'Invalid or expired reset token'}), 400
+    
+    # Check if token is expired
+    if partner.reset_token_expires < datetime.utcnow():
+        return jsonify({'error': 'Reset token has expired. Please request a new one'}), 400
+    
+    # Update password
+    partner.set_password(data['password'])
+    partner.reset_token = None
+    partner.reset_token_expires = None
+    
+    db.session.commit()
+    
+    return jsonify({'message': 'Password has been reset successfully'}), 200
 
 
 # ============ ADMIN AUTHENTICATION ============

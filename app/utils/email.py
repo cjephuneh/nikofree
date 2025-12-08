@@ -125,6 +125,61 @@ def send_password_reset_email(user, reset_token):
     send_email(subject, user.email, html_body)
 
 
+def send_partner_password_reset_email(partner, reset_token):
+    """Send password reset email to partner"""
+    subject = "Reset Your Niko Free Partner Password"
+    reset_url = f"{current_app.config.get('FRONTEND_URL')}/partner/reset-password?token={reset_token}"
+    
+    partner_name = partner.contact_person or partner.business_name or 'Partner'
+    
+    html_body = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #27aae2;">Reset Your Partner Password</h2>
+                <p>Hi {partner_name},</p>
+                <p>We received a request to reset your password for your Niko Free partner account ({partner.business_name}).</p>
+                
+                <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 15px; 
+                            border-radius: 5px; margin: 20px 0;">
+                    <p style="margin: 0; color: #856404;">
+                        <strong>⚠️ Security Notice:</strong> This link will expire in 1 hour.
+                    </p>
+                </div>
+                
+                <p>Click the button below to reset your password:</p>
+                
+                <a href="{reset_url}" 
+                   style="display: inline-block; padding: 12px 30px; background-color: #27aae2; 
+                          color: white; text-decoration: none; border-radius: 5px; margin-top: 20px;">
+                    Reset Password
+                </a>
+                
+                <p style="margin-top: 30px; font-size: 14px; color: #666;">
+                    Or copy and paste this link into your browser:<br>
+                    <a href="{reset_url}" style="color: #27aae2; word-break: break-all;">{reset_url}</a>
+                </p>
+                
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <p style="font-size: 14px; color: #666;">
+                        <strong>Didn't request this?</strong><br>
+                        If you didn't request a password reset, you can safely ignore this email. 
+                        Your password will remain unchanged.
+                    </p>
+                </div>
+                
+                <p style="margin-top: 30px; font-size: 12px; color: #999;">
+                    Best regards,<br>
+                    The Niko Free Team
+                </p>
+            </div>
+        </body>
+    </html>
+    """
+    
+    send_email(subject, partner.email, html_body)
+
+
 def send_welcome_email(user):
     """Send welcome email to new user"""
     subject = "Welcome to Niko Free!"
