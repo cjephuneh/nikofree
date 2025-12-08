@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime
-from app import db
+from app import db, limiter
 from app.models.notification import Notification
 from app.models.user import User
 from app.models.partner import Partner
@@ -43,6 +43,7 @@ def create_notification(user_id=None, partner_id=None, admin_id=None, title=None
 
 
 @bp.route('/user', methods=['GET', 'OPTIONS'])
+@limiter.limit("120 per hour")  # Allow more frequent polling (2 requests per minute max)
 @user_required
 def get_user_notifications(current_user):
     """Get user notifications"""
