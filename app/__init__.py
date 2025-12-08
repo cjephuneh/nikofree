@@ -139,6 +139,56 @@ def create_app(config_name='default'):
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
         return response
     
+    # Error handler for 500 errors - ensures CORS headers are always present
+    @app.errorhandler(500)
+    def internal_error_handler(e):
+        """Handle 500 errors with CORS headers"""
+        from flask import jsonify
+        import traceback
+        app.logger.error(f'Internal Server Error: {str(e)}')
+        app.logger.error(traceback.format_exc())
+        response = jsonify({
+            'error': 'Internal server error',
+            'message': 'An unexpected error occurred. Please try again later.'
+        })
+        response.status_code = 500
+        # Add CORS headers
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+        return response
+    
+    # Error handler for other HTTP errors (404, 403, etc.) - ensures CORS headers
+    @app.errorhandler(404)
+    def not_found_handler(e):
+        """Handle 404 errors with CORS headers"""
+        from flask import jsonify
+        response = jsonify({
+            'error': 'Not found',
+            'message': 'The requested resource was not found.'
+        })
+        response.status_code = 404
+        # Add CORS headers
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+        return response
+    
+    @app.errorhandler(403)
+    def forbidden_handler(e):
+        """Handle 403 errors with CORS headers"""
+        from flask import jsonify
+        response = jsonify({
+            'error': 'Forbidden',
+            'message': 'You do not have permission to access this resource.'
+        })
+        response.status_code = 403
+        # Add CORS headers
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+        return response
+    
     limiter.init_app(app)
     
     # Register blueprints
