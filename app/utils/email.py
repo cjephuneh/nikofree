@@ -258,7 +258,7 @@ def send_partner_approval_email(partner, approved=True, temp_password=None):
                     {credentials_html}
                     
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="{frontend_url}/partner/login" 
+                        <a href="https://niko-free.com" 
                            style="display: inline-block; padding: 14px 35px; background: linear-gradient(135deg, #27aae2 0%, #1e8bb8 100%); 
                                   color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(39, 170, 226, 0.3);">
                             🚀 Login to Dashboard

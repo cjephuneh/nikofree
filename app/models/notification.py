@@ -45,6 +45,8 @@ class Notification(db.Model):
             'notification_type': self.notification_type,
             'action_url': self.action_url,
             'action_text': self.action_text,
+            'event_id': self.event_id,
+            'booking_id': self.booking_id,
             'is_read': self.is_read,
             'read_at': self.read_at.isoformat() if self.read_at else None,
             'created_at': self.created_at.isoformat()
