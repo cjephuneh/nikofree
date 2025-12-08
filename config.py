@@ -44,20 +44,27 @@ class Config:
     # Base URL for generating download links
     BASE_URL = os.getenv('BASE_URL', 'https://niko-free.com')
     
-    # Email Configuration (Secure SSL/TLS Settings - Recommended)
+    # Email Configuration - SendGrid
     # Set these in .env file for security
-    # Secure Settings: Port 465 with SSL (Recommended)
-    # Non-SSL Settings: Port 587 with TLS (Not Recommended)
-    MAIL_SERVER = os.getenv('MAIL_SERVER', 'mail.niko-free.com')
-    MAIL_PORT = int(os.getenv('465', 465))  # 465 for SSL (recommended), 587 for TLS
-    MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'False') == 'True'  # False for SSL (port 465)
-    MAIL_USE_SSL = os.getenv('MAIL_USE_SSL', 'True') == 'True'  # True for SSL (port 465)
-    MAIL_USERNAME = os.getenv('MAIL_USERNAME', 'noreply@niko-free.com')
-    MAIL_PASSWORD = os.getenv('Gethsemane@77!')  # Set in .env file
+    # SendGrid SMTP Settings:
+    # - Server: smtp.sendgrid.net
+    # - Port: 587 (TLS) or 465 (SSL)
+    # - Username: apikey (this is literal, not your email)
+    # - Password: Your SendGrid API Key (get from SendGrid dashboard)
+    # - From Email: Your verified sender email in SendGrid
+    MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.sendgrid.net')
+    MAIL_PORT = int(os.getenv('MAIL_PORT', '587'))  # 587 for TLS (recommended), 465 for SSL
+    MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'True') == 'True'  # True for port 587 (TLS)
+    MAIL_USE_SSL = os.getenv('MAIL_USE_SSL', 'False') == 'True'  # True for port 465 (SSL), False for port 587
+    # SendGrid requires username to be 'apikey' (literal string)
+    MAIL_USERNAME = os.getenv('MAIL_USERNAME', 'apikey')
+    # MAIL_PASSWORD should be your SendGrid API Key (not your email password)
+    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')  # Set SENDGRID_API_KEY in .env file
+    # This should be a verified sender email in your SendGrid account
     MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', 'noreply@niko-free.com')
     MAIL_SUPPRESS_SEND = os.getenv('MAIL_SUPPRESS_SEND', 'False') == 'True'  # Set to 'True' to disable emails in dev
     # SMTP timeout settings (in seconds)
-    MAIL_TIMEOUT = int(os.getenv('MAIL_TIMEOUT', '10'))  # Connection timeout
+    MAIL_TIMEOUT = int(os.getenv('MAIL_TIMEOUT', '30'))  # Connection timeout (increased for SendGrid)
     MAIL_DEBUG = os.getenv('MAIL_DEBUG', 'False') == 'True'  # Enable SMTP debug output 
     
     # SMS Configuration

@@ -19,7 +19,7 @@ def send_async_email(app, msg):
             # Get SMTP connection with timeout
             mail_server = app.config.get('MAIL_SERVER')
             mail_port = app.config.get('MAIL_PORT', 587)
-            mail_timeout = app.config.get('MAIL_TIMEOUT', 10)
+            mail_timeout = app.config.get('MAIL_TIMEOUT', 30)  # Increased for SendGrid
             
             print(f"📧 [EMAIL] Attempting to send email to {msg.recipients}")
             print(f"📧 [EMAIL] SMTP Server: {mail_server}:{mail_port}, Timeout: {mail_timeout}s")
@@ -946,6 +946,98 @@ def send_partner_activation_email(partner):
     </html>
     """
     send_email(subject, partner.email, html_body)
+
+
+def send_event_edit_notification_to_admin(partner, event, changed_fields):
+    """Send email to admin when partner edits an event"""
+    from flask import current_app
+    admin_email = current_app.config.get('ADMIN_EMAIL')
+    
+    if not admin_email:
+        return
+    
+    subject = f"Event Edited: {event.title}"
+    
+    # Format changed fields list
+    if changed_fields:
+        fields_text = ", ".join(changed_fields)
+        changes_html = f"""
+        <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 15px; 
+                    border-radius: 5px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #856404;">📝 Fields Changed:</h3>
+            <p style="color: #856404; margin: 0;">{fields_text}</p>
+        </div>
+        """
+    else:
+        changes_html = """
+        <div style="background-color: #e3f2fd; border: 1px solid #2196f3; padding: 15px; 
+                    border-radius: 5px; margin: 20px 0;">
+            <p style="color: #1976d2; margin: 0;">Event was updated (no specific fields tracked)</p>
+        </div>
+        """
+    
+    base_url = current_app.config.get('BASE_URL', 'https://niko-free.com')
+    frontend_url = current_app.config.get('FRONTEND_URL', base_url)
+    
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 0;">
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); padding: 40px 30px; text-align: center;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">✏️ Event Edited</h1>
+                <p style="color: #ffffff; margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Partner has updated an event</p>
+            </div>
+            
+            <!-- Content -->
+            <div style="padding: 40px 30px;">
+                <p style="font-size: 16px; color: #333; margin: 0 0 20px 0;">Hello Admin,</p>
+                <p style="font-size: 16px; color: #555; margin: 0 0 30px 0;">
+                    Partner <strong>{partner.business_name}</strong> has edited the event <strong>"{event.title}"</strong>.
+                </p>
+                
+                {changes_html}
+                
+                <div style="background-color: #f8f9fa; padding: 25px; border-radius: 8px; margin: 30px 0;">
+                    <h3 style="margin: 0 0 15px 0; color: #333; font-size: 18px;">📋 Event Information</h3>
+                    <p style="margin: 8px 0; color: #555;"><strong>Event ID:</strong> {event.id}</p>
+                    <p style="margin: 8px 0; color: #555;"><strong>Event Title:</strong> {event.title}</p>
+                    <p style="margin: 8px 0; color: #555;"><strong>Partner:</strong> {partner.business_name}</p>
+                    <p style="margin: 8px 0; color: #555;"><strong>Partner Email:</strong> {partner.email}</p>
+                    <p style="margin: 8px 0; color: #555;"><strong>Status:</strong> <span style="color: {'#4caf50' if event.status == 'approved' else '#ff9800' if event.status == 'pending' else '#f44336'};">{event.status.upper()}</span></p>
+                    <p style="margin: 8px 0; color: #555;"><strong>Event Date:</strong> {event.start_date.strftime('%B %d, %Y at %I:%M %p') if event.start_date else 'TBA'}</p>
+                </div>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{frontend_url}/admin/events/{event.id}" 
+                       style="display: inline-block; padding: 14px 35px; background: linear-gradient(135deg, #27aae2 0%, #1e8bb8 100%); 
+                              color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                        Review Event Details
+                    </a>
+                </div>
+                
+                <p style="font-size: 14px; color: #666; margin-top: 30px;">
+                    Please review the changes to ensure the event meets our platform standards.
+                </p>
+            </div>
+            
+            <!-- Footer -->
+            <div style="background-color: #f8f9fa; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e5e5;">
+                <p style="font-size: 12px; color: #999; margin: 0;">
+                    © {datetime.now().year} Niko Free Admin Dashboard. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    send_email(subject, admin_email, html_body)
 
 
 def send_promotion_payment_success_email(partner, event):

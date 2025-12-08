@@ -1000,6 +1000,60 @@ def update_event(current_partner, event_id):
         event.rejection_reason = None
     
     event.updated_at = datetime.utcnow()
+    
+    # Notify admin that partner edited the event
+    try:
+        from app.routes.notifications import create_notification
+        from app.utils.email import send_event_edit_notification_to_admin
+        admin_email = current_app.config.get('ADMIN_EMAIL')
+        if admin_email:
+            admin_user = User.query.filter_by(email=admin_email).first()
+            if admin_user:
+                # Track what fields were changed (simplified - just note that event was edited)
+                changed_fields = []
+                if 'title' in data:
+                    changed_fields.append('title')
+                if 'description' in data:
+                    changed_fields.append('description')
+                if 'start_date' in data or 'end_date' in data:
+                    changed_fields.append('dates')
+                if 'venue_name' in data or 'venue_address' in data or 'location_type' in data:
+                    changed_fields.append('location')
+                if 'ticket_types' in data:
+                    changed_fields.append('ticket types')
+                if 'promo_codes' in data:
+                    changed_fields.append('promo codes')
+                if poster_file:
+                    changed_fields.append('poster image')
+                
+                # Create a message describing what was changed
+                if changed_fields:
+                    fields_text = ', '.join(changed_fields)
+                    message = f'Partner "{current_partner.business_name}" edited event "{event.title}". Changed: {fields_text}.'
+                else:
+                    message = f'Partner "{current_partner.business_name}" edited event "{event.title}".'
+                
+                # Create in-app notification
+                create_notification(
+                    admin_id=admin_user.id,
+                    title='Event Edited by Partner',
+                    message=message,
+                    notification_type='event',
+                    event_id=event.id,
+                    action_url=f'/admin/events/{event.id}',
+                    action_text='View Event Details',
+                    send_email=False  # We'll send email separately
+                )
+                
+                # Send email notification to admin
+                try:
+                    send_event_edit_notification_to_admin(current_partner, event, changed_fields)
+                except Exception as email_error:
+                    current_app.logger.warning(f'Failed to send event edit email to admin: {str(email_error)}')
+    except Exception as e:
+        # Don't fail the update if notification fails
+        current_app.logger.error(f'Error creating admin notification for event edit: {str(e)}')
+    
     db.session.commit()
     
     return jsonify({

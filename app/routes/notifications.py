@@ -61,7 +61,17 @@ def get_user_notifications(current_user):
     per_page = request.args.get('per_page', 20, type=int)
     unread_only = request.args.get('unread_only', 'false').lower() == 'true'
     
-    query = Notification.query.filter_by(user_id=current_user.id)
+    # Check if user is admin
+    from flask import current_app
+    is_admin = current_user.email == current_app.config.get('ADMIN_EMAIL')
+    
+    # Get both user and admin notifications if user is admin
+    if is_admin:
+        query = Notification.query.filter(
+            (Notification.user_id == current_user.id) | (Notification.admin_id == current_user.id)
+        )
+    else:
+        query = Notification.query.filter_by(user_id=current_user.id)
     
     if unread_only:
         query = query.filter_by(is_read=False)
@@ -70,13 +80,22 @@ def get_user_notifications(current_user):
         page=page, per_page=per_page, error_out=False
     )
     
+    # Calculate unread count for both user and admin notifications if admin
+    if is_admin:
+        unread_count = Notification.query.filter(
+            ((Notification.user_id == current_user.id) | (Notification.admin_id == current_user.id)),
+            Notification.is_read == False
+        ).count()
+    else:
+        unread_count = Notification.query.filter_by(
+            user_id=current_user.id,
+            is_read=False
+        ).count()
+    
     response = jsonify({
         'notifications': [notif.to_dict() for notif in notifications.items],
         'total': notifications.total,
-        'unread_count': Notification.query.filter_by(
-            user_id=current_user.id,
-            is_read=False
-        ).count(),
+        'unread_count': unread_count,
         'page': notifications.page,
         'pages': notifications.pages
     })
