@@ -1,5 +1,6 @@
 import os
 import uuid
+import requests
 from werkzeug.utils import secure_filename
 from flask import current_app
 
@@ -58,6 +59,78 @@ def delete_file(filepath):
     except Exception as e:
         print(f"Error deleting file: {str(e)}")
     return False
+
+
+def download_image_from_url(image_url, folder='profiles'):
+    """
+    Download image from URL and save to uploads folder
+    
+    Args:
+        image_url: URL of the image to download
+        folder: Subfolder name (e.g., 'profiles', 'events')
+        
+    Returns:
+        str: Relative path to downloaded file or None if failed
+    """
+    if not image_url:
+        return None
+    
+    try:
+        # Download image
+        response = requests.get(image_url, timeout=10, stream=True)
+        response.raise_for_status()
+        
+        # Check content type
+        content_type = response.headers.get('content-type', '')
+        if not content_type.startswith('image/'):
+            print(f"Warning: URL does not point to an image. Content-Type: {content_type}")
+            return None
+        
+        # Determine file extension from content type or URL
+        ext = '.jpg'  # default
+        if 'jpeg' in content_type or 'jpg' in content_type:
+            ext = '.jpg'
+        elif 'png' in content_type:
+            ext = '.png'
+        elif 'gif' in content_type:
+            ext = '.gif'
+        elif 'webp' in content_type:
+            ext = '.webp'
+        else:
+            # Try to get extension from URL
+            url_lower = image_url.lower()
+            if url_lower.endswith('.png'):
+                ext = '.png'
+            elif url_lower.endswith('.jpg') or url_lower.endswith('.jpeg'):
+                ext = '.jpg'
+            elif url_lower.endswith('.gif'):
+                ext = '.gif'
+            elif url_lower.endswith('.webp'):
+                ext = '.webp'
+        
+        # Generate unique filename
+        unique_filename = f"profile_{uuid.uuid4().hex[:12]}{ext}"
+        
+        # Create upload directory
+        upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+        target_folder = os.path.join(upload_folder, folder)
+        os.makedirs(target_folder, exist_ok=True)
+        
+        # Save file
+        filepath = os.path.join(target_folder, unique_filename)
+        with open(filepath, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        # Return relative path
+        return f"/uploads/{folder}/{unique_filename}"
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error downloading image from URL: {str(e)}")
+        return None
+    except Exception as e:
+        print(f"Error saving downloaded image: {str(e)}")
+        return None
 
 
 # For AWS S3 upload (optional)

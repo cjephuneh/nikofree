@@ -42,13 +42,15 @@ def update_profile(current_user):
             if not validate_phone(phone_number):
                 return jsonify({'error': 'Invalid phone number'}), 400
             
-        # Check if phone is already taken
-        existing = User.query.filter(
+            # Check if phone is already taken by another user
+            existing = User.query.filter(
                 User.phone_number == phone_number,
-            User.id != current_user.id
-        ).first()
-        if existing:
-            return jsonify({'error': 'Phone number already in use'}), 409
+                User.id != current_user.id
+            ).first()
+            if existing:
+                return jsonify({'error': 'Phone number already in use'}), 409
+            
+            # Set phone number
             current_user.phone_number = phone_number
         else:
             # Allow clearing phone number by setting to None
@@ -60,8 +62,10 @@ def update_profile(current_user):
         except:
             return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
     
-    if data.get('location'):
-        current_user.location = data['location']
+    if data.get('location') is not None:
+        # Allow setting location to empty string or None
+        location = data['location'].strip() if isinstance(data['location'], str) else None
+        current_user.location = location if location else None
     
     current_user.updated_at = datetime.utcnow()
     db.session.commit()

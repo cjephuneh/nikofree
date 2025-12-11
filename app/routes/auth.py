@@ -227,10 +227,24 @@ def google_login():
         google_id = idinfo.get('sub')
         first_name = idinfo.get('given_name', '')
         last_name = idinfo.get('family_name', '')
-        profile_picture = idinfo.get('picture')
+        profile_picture_url = idinfo.get('picture')
         
         # Check if user exists
         user = User.query.filter_by(email=email).first()
+        
+        # Download and save profile picture if URL is provided
+        profile_picture_path = None
+        if profile_picture_url:
+            try:
+                from app.utils.file_upload import download_image_from_url
+                profile_picture_path = download_image_from_url(profile_picture_url, folder='profiles')
+                if not profile_picture_path:
+                    # If download fails, use the URL directly as fallback
+                    profile_picture_path = profile_picture_url
+            except Exception as e:
+                # If download fails, use the URL directly as fallback
+                print(f"Warning: Failed to download Google profile picture: {str(e)}")
+                profile_picture_path = profile_picture_url
         
         if not user:
             # Create new user
@@ -239,7 +253,7 @@ def google_login():
                 google_id=google_id,
                 first_name=first_name,
                 last_name=last_name,
-                profile_picture=profile_picture,
+                profile_picture=profile_picture_path,
                 oauth_provider='google',
                 is_verified=True,
                 email_verified=True
@@ -254,6 +268,10 @@ def google_login():
             if not user.google_id:
                 user.google_id = google_id
                 user.oauth_provider = 'google'
+            
+            # Update profile picture if not set or if it's still a URL (download it)
+            if profile_picture_path and (not user.profile_picture or user.profile_picture.startswith('http')):
+                user.profile_picture = profile_picture_path
             
             # Update last login
             user.last_login = datetime.utcnow()

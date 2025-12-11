@@ -1,4 +1,5 @@
 import os
+from urllib.parse import quote_plus
 from datetime import timedelta
 from dotenv import load_dotenv
 
@@ -17,8 +18,27 @@ class Config:
     ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'admin@nikofree.com')
     
     # Database
-    # Use the database file from the app directory (will be deployed with the app)
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///nikofree.db')
+    # PostgreSQL connection string format: postgresql://user:password@host:port/database
+    # If DATABASE_URL is not set, construct from individual PostgreSQL environment variables
+    if os.getenv('DATABASE_URL'):
+        SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')
+    else:
+        # Construct from individual PostgreSQL environment variables
+        pg_host = os.getenv('PGHOST', 'localhost')
+        pg_port = os.getenv('PGPORT', '5432')
+        pg_user = os.getenv('PGUSER', 'postgres')
+        pg_password = os.getenv('PGPASSWORD', '')
+        pg_database = os.getenv('PGDATABASE', 'postgres')
+        
+        if pg_host and pg_user and pg_database:
+            # URL-encode password and other components to handle special characters
+            pg_user_encoded = quote_plus(pg_user)
+            pg_password_encoded = quote_plus(pg_password)
+            pg_database_encoded = quote_plus(pg_database)
+            SQLALCHEMY_DATABASE_URI = f"postgresql://{pg_user_encoded}:{pg_password_encoded}@{pg_host}:{pg_port}/{pg_database_encoded}"
+        else:
+            # Fallback to SQLite for local development if PostgreSQL vars not set
+            SQLALCHEMY_DATABASE_URI = 'sqlite:///nikofree.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
@@ -71,9 +91,12 @@ class Config:
     # Set SMS_SUPPRESS_SEND=False in production to enable SMS sending
     SMS_SUPPRESS_SEND = os.getenv('SMS_SUPPRESS_SEND', 'False') == 'True'  # Default: False (enabled), set to 'True' to disable
     
-    # OAuth
-    GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
-    GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
+    # OAuth - Google Sign-In
+    # Set these in .env file for security
+    # Client ID: 1073896486118-9a3r6v5ek96l7gmai05de9mkt1pmo9f2.apps.googleusercontent.com
+    # Client Secret: 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
+    GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '1073896486118-9a3r6v5ek96l7gmai05de9mkt1pmo9f2.apps.googleusercontent.com')
+    GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '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')
     GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI')
     
     APPLE_CLIENT_ID = os.getenv('APPLE_CLIENT_ID')
