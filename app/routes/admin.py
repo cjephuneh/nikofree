@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime, timedelta
 from sqlalchemy import func, desc
 from app import db, limiter
@@ -263,51 +263,129 @@ def get_partner(current_admin, partner_id):
 @admin_required
 def approve_partner(current_admin, partner_id):
     """Approve partner application"""
-    partner = Partner.query.get(partner_id)
-    
-    if not partner:
-        return jsonify({'error': 'Partner not found'}), 404
-    
-    if partner.status != 'pending':
-        return jsonify({'error': 'Partner is not pending approval'}), 400
-    
-    # Extract temporary password if stored, or generate new one
-    import secrets
-    temp_password = None
-    if partner.rejection_reason and partner.rejection_reason.startswith('TEMP_PASS:'):
-        temp_password = partner.rejection_reason.replace('TEMP_PASS:', '')
-    else:
-        # Generate new temporary password if not stored
-        temp_password = secrets.token_urlsafe(12)
-        partner.set_password(temp_password)
-    
-    partner.status = 'approved'
-    partner.approved_by = current_admin.id
-    partner.approved_at = datetime.utcnow()
-    partner.is_verified = True
-    partner.rejection_reason = None  # Clear the temp password field
-    
-    # Log action
-    log_admin_action(
-        current_admin,
-        'approve_partner',
-        'partner',
-        partner_id,
-        f"Approved partner: {partner.business_name}"
-    )
-    
-    db.session.commit()
-    
-    # Send approval email with credentials
-    send_partner_approval_email(partner, approved=True, temp_password=temp_password)
-    
-    # Send approval notification (includes SMS)
-    notify_partner_approved(partner)
-    
-    return jsonify({
-        'message': 'Partner approved successfully. Credentials sent to partner email.',
-        'partner': partner.to_dict()
-    }), 200
+    try:
+        partner = Partner.query.get(partner_id)
+        
+        if not partner:
+            response = jsonify({'error': 'Partner not found'})
+            response.status_code = 404
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+            return response
+        
+        if partner.status != 'pending':
+            response = jsonify({'error': 'Partner is not pending approval'})
+            response.status_code = 400
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+            return response
+        
+        # Extract temporary password if stored, or generate new one
+        import secrets
+        temp_password = None
+        if partner.rejection_reason and partner.rejection_reason.startswith('TEMP_PASS:'):
+            temp_password = partner.rejection_reason.replace('TEMP_PASS:', '')
+        else:
+            # Generate new temporary password if not stored
+            temp_password = secrets.token_urlsafe(12)
+            partner.set_password(temp_password)
+        
+        partner.status = 'approved'
+        partner.approved_by = current_admin.id
+        partner.approved_at = datetime.utcnow()
+        partner.is_verified = True
+        partner.rejection_reason = None  # Clear the temp password field
+        
+        # Log action
+        log_admin_action(
+            current_admin,
+            'approve_partner',
+            'partner',
+            partner_id,
+            f"Approved partner: {partner.business_name}"
+        )
+        
+        db.session.commit()
+        
+        # Prepare response first (return immediately to user)
+        response = jsonify({
+            'message': 'Partner approved successfully. Credentials sent to partner email.',
+            'partner': partner.to_dict()
+        })
+        response.status_code = 200
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+        
+        # Send email and notifications asynchronously (don't block the response)
+        from threading import Thread
+        # Store values to pass to background thread (avoid SQLAlchemy session issues)
+        partner_id_for_thread = partner.id
+        temp_password_for_thread = temp_password
+        
+        def send_notifications_async():
+            """Send notifications in background thread"""
+            with current_app.app_context():
+                # Re-fetch partner in background thread to avoid session issues
+                partner_obj = Partner.query.get(partner_id_for_thread)
+                if not partner_obj:
+                    current_app.logger.error(f'Partner {partner_id_for_thread} not found in background thread')
+                    return
+                
+                # Send approval email with credentials (don't fail if email fails)
+                try:
+                    send_partner_approval_email(partner_obj, approved=True, temp_password=temp_password_for_thread)
+                except Exception as email_error:
+                    current_app.logger.warning(f'Failed to send approval email: {str(email_error)}')
+                
+                # Send approval notification (includes SMS) (don't fail if notification fails)
+                try:
+                    notify_partner_approved(partner_obj)
+                except Exception as notify_error:
+                    current_app.logger.warning(f'Failed to send approval notification: {str(notify_error)}')
+        
+        # Start background thread for notifications (non-blocking)
+        thread = Thread(target=send_notifications_async)
+        thread.daemon = True  # Daemon thread won't block app shutdown
+        thread.start()
+        
+        return response
+    except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        try:
+            current_app.logger.error(f'Error approving partner: {str(e)}', exc_info=True)
+            current_app.logger.error(error_traceback)
+        except:
+            # If logging fails, at least print to console
+            print(f'Error approving partner: {str(e)}')
+            print(error_traceback)
+        
+        # Include error details in development mode
+        error_message = str(e)
+        try:
+            is_debug = current_app.config.get('DEBUG', False)
+        except:
+            is_debug = False
+            
+        if is_debug:
+            response = jsonify({
+                'error': 'Internal server error',
+                'message': f'An error occurred while approving the partner: {error_message}',
+                'traceback': error_traceback.split('\n')[-10:]
+            })
+        else:
+            response = jsonify({
+                'error': 'Internal server error',
+                'message': 'An error occurred while approving the partner. Please try again later.'
+            })
+        response.status_code = 500
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+        return response
 
 
 @bp.route('/partners/<int:partner_id>/reject', methods=['POST'])

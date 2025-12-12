@@ -633,7 +633,8 @@ def admin_login():
     db.session.commit()
 
     # Generate tokens (reuse user JWTs)
-    expires_delta = timedelta(days=30) if data.get('keep_logged_in') else None
+    # Admin tokens always last 30 days for convenience (no need to re-authenticate frequently)
+    expires_delta = timedelta(days=30)
     access_token = create_access_token(identity=user.id, expires_delta=expires_delta)
     refresh_token = create_refresh_token(identity=user.id)
 

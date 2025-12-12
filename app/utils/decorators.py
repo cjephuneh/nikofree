@@ -11,22 +11,42 @@ def user_required(fn):
     def wrapper(*args, **kwargs):
         # Skip authentication for OPTIONS requests (CORS preflight)
         if request.method == 'OPTIONS':
-            return jsonify({}), 200
+            response = jsonify({})
+            response.status_code = 200
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+            return response
         
         try:
             verify_jwt_in_request()
             current_user_id = get_jwt_identity()
             
             if not current_user_id:
-                return jsonify({'msg': 'Invalid authentication token'}), 401
+                response = jsonify({'msg': 'Invalid authentication token'})
+                response.status_code = 401
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
             
             user = User.query.get(current_user_id)
             
             if not user:
-                return jsonify({'msg': 'User not found'}), 404
+                response = jsonify({'msg': 'User not found'})
+                response.status_code = 404
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
             
             if not user.is_active:
-                return jsonify({'msg': 'Account is deactivated'}), 403
+                response = jsonify({'msg': 'Account is deactivated'})
+                response.status_code = 403
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
             
             return fn(current_user=user, *args, **kwargs)
         except Exception as e:
@@ -38,7 +58,12 @@ def user_required(fn):
             # Handle "Not enough segments" error (malformed token)
             if 'not enough segments' in error_msg or 'decodeerror' in error_type:
                 current_app.logger.debug(f'Malformed JWT token: {str(e)}')
-                return jsonify({'msg': 'Invalid authentication token. Please log in again.'}), 401
+                response = jsonify({'msg': 'Invalid authentication token. Please log in again.'})
+                response.status_code = 401
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
             
             # Handle expired tokens and other JWT errors gracefully (don't log as errors)
             if ('expired' in error_msg or 'expired' in error_type or 
@@ -47,11 +72,21 @@ def user_required(fn):
                 'decode' in error_msg):
                 # Log at debug level instead of error level for expired/invalid tokens
                 current_app.logger.debug(f'JWT authentication failed: {str(e)}')
-                return jsonify({'msg': 'Invalid or expired token. Please log in again.'}), 401
+                response = jsonify({'msg': 'Invalid or expired token. Please log in again.'})
+                response.status_code = 401
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
             
             # Log unexpected errors at error level
             current_app.logger.error(f'Error in user_required decorator: {str(e)}', exc_info=True)
-            return jsonify({'msg': 'Authentication failed'}), 401
+            response = jsonify({'msg': 'Authentication failed'})
+            response.status_code = 401
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+            return response
     
     return wrapper
 
@@ -62,22 +97,76 @@ def partner_required(fn):
     def wrapper(*args, **kwargs):
         # Skip authentication for OPTIONS requests (CORS preflight)
         if request.method == 'OPTIONS':
-            return jsonify({}), 200
+            response = jsonify({})
+            response.status_code = 200
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+            return response
         
-        verify_jwt_in_request()
-        current_partner_id = get_jwt_identity()
-        partner = Partner.query.get(current_partner_id)
-        
-        if not partner:
-            return jsonify({'error': 'Partner not found'}), 404
-        
-        if not partner.is_active:
-            return jsonify({'error': 'Account is suspended'}), 403
-        
-        if partner.status != 'approved':
-            return jsonify({'error': 'Account not approved yet'}), 403
+        try:
+            verify_jwt_in_request()
+            current_partner_id = get_jwt_identity()
+            partner = Partner.query.get(current_partner_id)
             
-        return fn(current_partner=partner, *args, **kwargs)
+            if not partner:
+                response = jsonify({'error': 'Partner not found'})
+                response.status_code = 404
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
+            
+            if not partner.is_active:
+                response = jsonify({'error': 'Account is suspended'})
+                response.status_code = 403
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
+            
+            if partner.status != 'approved':
+                response = jsonify({'error': 'Account not approved yet'})
+                response.status_code = 403
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
+                
+            return fn(current_partner=partner, *args, **kwargs)
+        except Exception as e:
+            from flask import current_app
+            error_msg = str(e).lower()
+            error_type = type(e).__name__.lower()
+            
+            if 'not enough segments' in error_msg or 'decodeerror' in error_type:
+                current_app.logger.debug(f'Malformed JWT token: {str(e)}')
+                response = jsonify({'error': 'Invalid authentication token. Please log in again.'})
+                response.status_code = 401
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
+            
+            if ('expired' in error_msg or 'expired' in error_type or 
+                'token' in error_msg or 'jwt' in error_msg or 
+                'unauthorized' in error_msg or 'signature' in error_msg or
+                'decode' in error_msg):
+                current_app.logger.debug(f'JWT authentication failed: {str(e)}')
+                response = jsonify({'error': 'Invalid or expired token. Please log in again.'})
+                response.status_code = 401
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
+            
+            current_app.logger.error(f'Error in partner_required decorator: {str(e)}', exc_info=True)
+            response = jsonify({'error': 'Authentication failed'})
+            response.status_code = 401
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+            return response
     
     return wrapper
 
@@ -88,22 +177,84 @@ def admin_required(fn):
     def wrapper(*args, **kwargs):
         # Skip authentication for OPTIONS requests (CORS preflight)
         if request.method == 'OPTIONS':
-            return jsonify({}), 200
+            response = jsonify({})
+            response.status_code = 200
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+            return response
         
-        verify_jwt_in_request()
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
-        
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-        
-        # Check if user is admin (you can add an is_admin field to User model)
-        # For now, checking if email matches admin email from config
-        from flask import current_app
-        if user.email != current_app.config.get('ADMIN_EMAIL'):
-            return jsonify({'error': 'Admin access required'}), 403
+        try:
+            verify_jwt_in_request()
+            current_user_id = get_jwt_identity()
             
-        return fn(current_admin=user, *args, **kwargs)
+            if not current_user_id:
+                response = jsonify({'error': 'Invalid authentication token'})
+                response.status_code = 401
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
+            
+            user = User.query.get(current_user_id)
+            
+            if not user:
+                response = jsonify({'error': 'User not found'})
+                response.status_code = 404
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
+            
+            # Check if user is admin (you can add an is_admin field to User model)
+            # For now, checking if email matches admin email from config
+            from flask import current_app
+            if user.email != current_app.config.get('ADMIN_EMAIL'):
+                response = jsonify({'error': 'Admin access required'})
+                response.status_code = 403
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
+                
+            return fn(current_admin=user, *args, **kwargs)
+        except Exception as e:
+            from flask import current_app
+            # Check if it's a JWT-related error (expired, invalid, malformed, etc.)
+            error_msg = str(e).lower()
+            error_type = type(e).__name__.lower()
+            
+            # Handle "Not enough segments" error (malformed token)
+            if 'not enough segments' in error_msg or 'decodeerror' in error_type:
+                current_app.logger.debug(f'Malformed JWT token: {str(e)}')
+                response = jsonify({'error': 'Invalid authentication token. Please log in again.'})
+                response.status_code = 401
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
+            
+            # Handle expired tokens and other JWT errors gracefully
+            if ('expired' in error_msg or 'expired' in error_type or 
+                'token' in error_msg or 'jwt' in error_msg or 
+                'unauthorized' in error_msg or 'signature' in error_msg or
+                'decode' in error_msg):
+                current_app.logger.debug(f'JWT authentication failed: {str(e)}')
+                response = jsonify({'error': 'Invalid or expired token. Please log in again.'})
+                response.status_code = 401
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+                return response
+            
+            # Log unexpected errors at error level
+            current_app.logger.error(f'Error in admin_required decorator: {str(e)}', exc_info=True)
+            response = jsonify({'error': 'Authentication failed'})
+            response.status_code = 401
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+            return response
     
     return wrapper
 
