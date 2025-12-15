@@ -316,7 +316,20 @@ def change_password(current_partner):
     # Update password
     current_partner.set_password(data['new_password'])
     current_partner.updated_at = datetime.utcnow()
+    
+    # Ensure password_hash is set
+    if not current_partner.password_hash:
+        return jsonify({'error': 'Failed to update password'}), 500
+    
+    # Refresh the session to ensure changes are persisted
+    db.session.add(current_partner)
     db.session.commit()
+    db.session.refresh(current_partner)
+    
+    # Verify the password was saved correctly by checking it
+    if not current_partner.check_password(data['new_password']):
+        current_app.logger.error(f'Password verification failed after update for partner {current_partner.id}')
+        return jsonify({'error': 'Password update failed verification'}), 500
     
     return jsonify({
         'message': 'Password changed successfully'

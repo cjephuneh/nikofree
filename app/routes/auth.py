@@ -8,7 +8,7 @@ from app.models.user import User
 from app.models.partner import Partner
 from app.utils.validators import validate_email, validate_phone, validate_password
 from app.utils.email import send_welcome_email, send_password_reset_email, send_partner_password_reset_email
-from app.utils.sms import send_welcome_sms, send_partner_welcome_sms, send_password_reset_sms
+from app.utils.sms import send_welcome_sms, send_partner_welcome_sms
 import secrets
 
 bp = Blueprint('auth', __name__)
@@ -167,13 +167,6 @@ def forgot_password():
     except Exception as e:
         current_app.logger.error(f"Failed to send password reset email to {user.email}: {str(e)}", exc_info=True)
         # Don't fail the request if email fails - still return success for security
-    
-    # Send password reset SMS if phone number provided
-    if user.phone_number:
-        try:
-            send_password_reset_sms(user, reset_token)
-        except Exception as e:
-            current_app.logger.warning(f"Failed to send password reset SMS to {user.phone_number}: {str(e)}")
     
     return jsonify({'message': 'If an account with that email exists, a password reset link has been sent'}), 200
 
@@ -509,11 +502,16 @@ def partner_login():
         return jsonify({'error': 'Email and password are required'}), 400
     
     email = data['email'].lower().strip()
+    password = data['password']  # Get password as-is, don't trim (passwords may have intentional spaces)
     
     # Find partner
     partner = Partner.query.filter_by(email=email).first()
     
-    if not partner or not partner.check_password(data['password']):
+    if not partner:
+        return jsonify({'error': 'Invalid email or password'}), 401
+    
+    # Check password - ensure we're checking against the latest password_hash
+    if not partner.check_password(password):
         return jsonify({'error': 'Invalid email or password'}), 401
     
     if not partner.is_active:
@@ -608,7 +606,19 @@ def partner_reset_password():
     partner.reset_token = None
     partner.reset_token_expires = None
     
+    # Ensure password_hash is set
+    if not partner.password_hash:
+        return jsonify({'error': 'Failed to update password'}), 500
+    
+    # Refresh the session to ensure changes are persisted
+    db.session.add(partner)
     db.session.commit()
+    db.session.refresh(partner)
+    
+    # Verify the password was saved correctly by checking it
+    if not partner.check_password(data['password']):
+        current_app.logger.error(f'Password verification failed after reset for partner {partner.id}')
+        return jsonify({'error': 'Password reset failed verification'}), 500
     
     return jsonify({'message': 'Password has been reset successfully'}), 200
 
