@@ -208,9 +208,17 @@ def create_app(config_name='default'):
     # Serve static files from uploads folder
     from flask import send_file, abort
     
-    @app.route('/uploads/<path:filename>')
+    @app.route('/uploads/<path:filename>', methods=['GET', 'OPTIONS'])
     def uploaded_file(filename):
         """Serve uploaded files"""
+        # Handle CORS preflight
+        if request.method == 'OPTIONS':
+            response = make_response()
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            response.headers.add('Access-Control-Max-Age', '3600')
+            return response
         # Block database files and other sensitive files - this prevents CORS issues
         if filename.endswith('.db') or '.db/' in filename or 'nikofree.db' in filename.lower():
             abort(403)  # Forbidden - don't serve database files
@@ -228,6 +236,11 @@ def create_app(config_name='default'):
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         upload_folder = os.path.join(project_root, upload_folder_name)
         
+        # Log upload folder path for debugging (only in development)
+        if app.config.get('DEBUG', False):
+            current_app.logger.debug(f"Upload folder: {upload_folder}")
+            current_app.logger.debug(f"Requested filename: {filename}")
+        
         # Handle nested paths like events/filename.jpg
         # filename will be something like "events/1H5A3558_b3e59fa0.JPG"
         file_path = os.path.join(upload_folder, filename)
@@ -241,12 +254,21 @@ def create_app(config_name='default'):
         
         # Check if file exists
         if not os.path.exists(file_path) or not os.path.isfile(file_path):
+            # Log the missing file for debugging
+            current_app.logger.warning(f"Image not found: {file_path} (requested: {filename})")
             abort(404)  # Not found
         
         # Use send_file for nested paths with proper CORS headers
-        response = make_response(send_file(file_path))
+        try:
+            response = make_response(send_file(file_path))
+        except Exception as e:
+            current_app.logger.error(f"Error serving file {file_path}: {str(e)}", exc_info=True)
+            abort(500)
+        
+        # CORS headers
         response.headers.add('Access-Control-Allow-Origin', '*')
         response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
         
         # Enhanced caching headers for better performance
         # Cache for 1 year (31536000 seconds) with revalidation
@@ -256,15 +278,22 @@ def create_app(config_name='default'):
         # Add ETag for cache validation
         import hashlib
         import time
-        file_stat = os.stat(file_path)
-        etag = hashlib.md5(f"{file_path}{file_stat.st_mtime}".encode()).hexdigest()
-        response.headers.add('ETag', f'"{etag}"')
+        try:
+            file_stat = os.stat(file_path)
+            etag = hashlib.md5(f"{file_path}{file_stat.st_mtime}".encode()).hexdigest()
+            response.headers.add('ETag', f'"{etag}"')
+        except Exception:
+            pass  # If stat fails, skip ETag
         
         # Add content type for better browser handling
         from mimetypes import guess_type
         content_type, _ = guess_type(file_path)
         if content_type:
             response.headers.add('Content-Type', content_type)
+        else:
+            # Default to image/jpeg if type can't be determined
+            if file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
+                response.headers.add('Content-Type', 'image/jpeg')
         
         return response
     
