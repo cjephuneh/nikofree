@@ -63,13 +63,24 @@ def send_email(subject, recipient, html_body, text_body=None):
         
         app = current_app._get_current_object()
         
+        # Check if email sending is suppressed
+        if app.config.get('MAIL_SUPPRESS_SEND', False):
+            print(f"📧 [DEV MODE] Email suppressed: {subject} to {recipient}")
+            return
+        
         # Start thread and don't wait for it
         thread = Thread(target=send_async_email, args=(app, msg))
         thread.daemon = True  # Daemon thread won't block app shutdown
         thread.start()
+        
+        # Log that email was queued
+        print(f"📧 [EMAIL] Email queued: {subject} to {recipient}")
     except Exception as e:
         # Don't let email errors crash the app
-        print(f"❌ Error creating email: {str(e)}")
+        error_msg = f"❌ Error creating email: {str(e)}"
+        print(error_msg)
+        if hasattr(current_app, 'logger'):
+            current_app.logger.error(error_msg, exc_info=True)
 
 
 def send_password_reset_email(user, reset_token):

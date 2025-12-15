@@ -323,6 +323,69 @@ def change_password(current_partner):
     }), 200
 
 
+@bp.route('/account', methods=['DELETE'])
+@partner_required
+def delete_account(current_partner):
+    """Delete partner account and all associated data"""
+    try:
+        partner_id = current_partner.id
+        partner_email = current_partner.email
+        
+        # Delete all events (this will cascade delete related data via foreign keys)
+        # Events cascade to: ticket_types, bookings, tickets, promo_codes, event_hosts, 
+        # event_interests, event_promotions, reviews
+        events = Event.query.filter_by(partner_id=partner_id).all()
+        for event in events:
+            db.session.delete(event)
+        
+        # Delete all payouts
+        payouts = PartnerPayout.query.filter_by(partner_id=partner_id).all()
+        for payout in payouts:
+            db.session.delete(payout)
+        
+        # Delete all support requests
+        support_requests = PartnerSupportRequest.query.filter_by(partner_id=partner_id).all()
+        for request in support_requests:
+            db.session.delete(request)
+        
+        # Delete all team members
+        team_members = PartnerTeamMember.query.filter_by(partner_id=partner_id).all()
+        for member in team_members:
+            db.session.delete(member)
+        
+        # Delete all notifications related to partner
+        from app.models.notification import Notification
+        notifications = Notification.query.filter_by(partner_id=partner_id).all()
+        for notification in notifications:
+            db.session.delete(notification)
+        
+        # Update payments to remove partner_id reference (set to None)
+        # We don't delete payments as they may be needed for financial records
+        payments = Payment.query.filter_by(partner_id=partner_id).all()
+        for payment in payments:
+            payment.partner_id = None
+        
+        # Update bookings checked_in_by to remove partner reference
+        bookings_checked_in = Booking.query.filter_by(checked_in_by=partner_id).all()
+        for booking in bookings_checked_in:
+            booking.checked_in_by = None
+        
+        # Delete the partner account
+        db.session.delete(current_partner)
+        db.session.commit()
+        
+        current_app.logger.info(f'Partner account deleted: {partner_email} (ID: {partner_id})')
+        
+        return jsonify({
+            'message': 'Account deleted successfully. All associated data has been removed.'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error deleting partner account: {str(e)}', exc_info=True)
+        return jsonify({'error': 'Failed to delete account. Please try again.'}), 500
+
+
 @bp.route('/logo', methods=['POST'])
 @partner_required
 def upload_logo(current_partner):

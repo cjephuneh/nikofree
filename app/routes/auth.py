@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -161,11 +161,19 @@ def forgot_password():
     db.session.commit()
     
     # Send password reset email
-    send_password_reset_email(user, reset_token)
+    try:
+        send_password_reset_email(user, reset_token)
+        current_app.logger.info(f"Password reset email sent to {user.email}")
+    except Exception as e:
+        current_app.logger.error(f"Failed to send password reset email to {user.email}: {str(e)}", exc_info=True)
+        # Don't fail the request if email fails - still return success for security
     
     # Send password reset SMS if phone number provided
     if user.phone_number:
-        send_password_reset_sms(user, reset_token)
+        try:
+            send_password_reset_sms(user, reset_token)
+        except Exception as e:
+            current_app.logger.warning(f"Failed to send password reset SMS to {user.phone_number}: {str(e)}")
     
     return jsonify({'message': 'If an account with that email exists, a password reset link has been sent'}), 200
 
@@ -561,7 +569,12 @@ def partner_forgot_password():
     db.session.commit()
     
     # Send password reset email
-    send_partner_password_reset_email(partner, reset_token)
+    try:
+        send_partner_password_reset_email(partner, reset_token)
+        current_app.logger.info(f"Partner password reset email sent to {partner.email}")
+    except Exception as e:
+        current_app.logger.error(f"Failed to send partner password reset email to {partner.email}: {str(e)}", exc_info=True)
+        # Don't fail the request if email fails - still return success for security
     
     return jsonify({'message': 'If an account with that email exists, a password reset link has been sent'}), 200
 

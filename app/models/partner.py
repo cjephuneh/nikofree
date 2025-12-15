@@ -84,11 +84,22 @@ class Partner(db.Model):
     
     def to_dict(self, include_sensitive=False):
         """Convert partner to dictionary"""
+        import json as _json
+        
         # Filter out base64 data URIs from logo (they shouldn't be in DB, but handle if they are)
         logo = self.logo
         if logo and logo.startswith('data:image'):
             # If somehow a base64 string got stored, return None so frontend can handle it
             logo = None
+        
+        # Parse interests from JSON string
+        interests_list = []
+        if self.interests:
+            try:
+                interests_list = _json.loads(self.interests)
+            except:
+                # Fallback if stored as comma-separated string
+                interests_list = [i.strip() for i in self.interests.split(',') if i.strip()]
         
         data = {
             'id': self.id,
@@ -102,6 +113,7 @@ class Partner(db.Model):
             'website': self.website,
             'location': self.location,
             'description': self.description,
+            'interests': interests_list,
             'status': self.status,
             'is_active': self.is_active,
             'is_verified': self.is_verified,

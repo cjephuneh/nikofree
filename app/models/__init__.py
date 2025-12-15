@@ -7,6 +7,7 @@ from app.models.category import Category, Location
 from app.models.notification import Notification
 from app.models.admin import AdminLog
 from app.models.review import Review
+from app.models.message import Feedback, ContactMessage
 
 __all__ = [
     'User',
@@ -25,6 +26,8 @@ __all__ = [
     'Location',
     'Notification',
     'AdminLog',
-    'Review'
+    'Review',
+    'Feedback',
+    'ContactMessage'
 ]
 

@@ -9,6 +9,7 @@ from app.models.ticket import Booking
 from app.models.payment import Payment, PartnerPayout
 from app.models.category import Category, Location
 from app.models.admin import AdminLog
+from app.models.message import Feedback, ContactMessage
 from app.utils.decorators import admin_required
 from app.utils.email import send_partner_approval_email, send_event_approval_email, send_partner_suspension_email, send_partner_activation_email, send_payout_approval_email, send_email
 from app.routes.notifications import notify_event_approved, notify_event_rejected, notify_partner_approved, notify_partner_rejected
@@ -1535,6 +1536,205 @@ def update_support_status(current_admin, request_id):
         'message': 'Support request status updated',
         'support_request': support_request.to_dict()
     }), 200
+
+
+@bp.route('/inbox', methods=['GET'])
+@admin_required
+def get_inbox_messages(current_admin):
+    """Get all feedback and contact messages for inbox"""
+    try:
+        filter_type = request.args.get('type', 'all')  # all, contact, feedback
+        filter_status = request.args.get('status', 'all')  # all, unread, starred
+        search_query = request.args.get('search', '').strip()
+        
+        # Build query for feedback
+        feedback_query = Feedback.query.filter_by(is_archived=False)
+        if filter_type == 'feedback' or filter_type == 'all':
+            if filter_status == 'unread':
+                feedback_query = feedback_query.filter_by(is_read=False)
+            elif filter_status == 'starred':
+                feedback_query = feedback_query.filter_by(is_starred=True)
+            
+            if search_query:
+                feedback_query = feedback_query.filter(
+                    db.or_(
+                        Feedback.name.ilike(f'%{search_query}%'),
+                        Feedback.email.ilike(f'%{search_query}%'),
+                        Feedback.title.ilike(f'%{search_query}%'),
+                        Feedback.description.ilike(f'%{search_query}%')
+                    )
+                )
+        
+        # Build query for contact messages
+        contact_query = ContactMessage.query.filter_by(is_archived=False)
+        if filter_type == 'contact' or filter_type == 'all':
+            if filter_status == 'unread':
+                contact_query = contact_query.filter_by(is_read=False)
+            elif filter_status == 'starred':
+                contact_query = contact_query.filter_by(is_starred=True)
+            
+            if search_query:
+                contact_query = contact_query.filter(
+                    db.or_(
+                        ContactMessage.name.ilike(f'%{search_query}%'),
+                        ContactMessage.email.ilike(f'%{search_query}%'),
+                        ContactMessage.subject.ilike(f'%{search_query}%'),
+                        ContactMessage.message.ilike(f'%{search_query}%')
+                    )
+                )
+        
+        # Get messages
+        feedback_messages = []
+        contact_messages = []
+        
+        if filter_type == 'feedback' or filter_type == 'all':
+            feedback_messages = feedback_query.order_by(Feedback.created_at.desc()).all()
+        
+        if filter_type == 'contact' or filter_type == 'all':
+            contact_messages = contact_query.order_by(ContactMessage.created_at.desc()).all()
+        
+        # Combine and format messages
+        all_messages = []
+        for msg in feedback_messages:
+            all_messages.append(msg.to_dict())
+        for msg in contact_messages:
+            all_messages.append(msg.to_dict())
+        
+        # Sort by date (newest first)
+        all_messages.sort(key=lambda x: x['date'], reverse=True)
+        
+        return jsonify({
+            'messages': all_messages,
+            'total': len(all_messages)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching inbox messages: {str(e)}")
+        return jsonify({'error': 'Failed to fetch messages'}), 500
+
+
+@bp.route('/inbox/<int:message_id>/read', methods=['PUT'])
+@admin_required
+def mark_message_read(current_admin, message_id):
+    """Mark a message as read"""
+    try:
+        message_type = request.args.get('type')  # feedback or contact
+        
+        if message_type == 'feedback':
+            message = Feedback.query.get(message_id)
+        elif message_type == 'contact':
+            message = ContactMessage.query.get(message_id)
+        else:
+            return jsonify({'error': 'Invalid message type'}), 400
+        
+        if not message:
+            return jsonify({'error': 'Message not found'}), 404
+        
+        message.is_read = True
+        message.read_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Message marked as read',
+            'data': message.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error marking message as read: {str(e)}")
+        return jsonify({'error': 'Failed to update message'}), 500
+
+
+@bp.route('/inbox/<int:message_id>/star', methods=['PUT'])
+@admin_required
+def toggle_message_star(current_admin, message_id):
+    """Toggle star status of a message"""
+    try:
+        message_type = request.args.get('type')  # feedback or contact
+        
+        if message_type == 'feedback':
+            message = Feedback.query.get(message_id)
+        elif message_type == 'contact':
+            message = ContactMessage.query.get(message_id)
+        else:
+            return jsonify({'error': 'Invalid message type'}), 400
+        
+        if not message:
+            return jsonify({'error': 'Message not found'}), 404
+        
+        message.is_starred = not message.is_starred
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Message star status updated',
+            'data': message.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error toggling message star: {str(e)}")
+        return jsonify({'error': 'Failed to update message'}), 500
+
+
+@bp.route('/inbox/<int:message_id>/archive', methods=['PUT'])
+@admin_required
+def archive_message(current_admin, message_id):
+    """Archive a message"""
+    try:
+        message_type = request.args.get('type')  # feedback or contact
+        
+        if message_type == 'feedback':
+            message = Feedback.query.get(message_id)
+        elif message_type == 'contact':
+            message = ContactMessage.query.get(message_id)
+        else:
+            return jsonify({'error': 'Invalid message type'}), 400
+        
+        if not message:
+            return jsonify({'error': 'Message not found'}), 404
+        
+        message.is_archived = True
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Message archived',
+            'data': message.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error archiving message: {str(e)}")
+        return jsonify({'error': 'Failed to archive message'}), 500
+
+
+@bp.route('/inbox/<int:message_id>', methods=['DELETE'])
+@admin_required
+def delete_message(current_admin, message_id):
+    """Delete a message"""
+    try:
+        message_type = request.args.get('type')  # feedback or contact
+        
+        if message_type == 'feedback':
+            message = Feedback.query.get(message_id)
+        elif message_type == 'contact':
+            message = ContactMessage.query.get(message_id)
+        else:
+            return jsonify({'error': 'Invalid message type'}), 400
+        
+        if not message:
+            return jsonify({'error': 'Message not found'}), 404
+        
+        db.session.delete(message)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Message deleted'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting message: {str(e)}")
+        return jsonify({'error': 'Failed to delete message'}), 500
 
 
 @bp.route('/test-email', methods=['POST'])

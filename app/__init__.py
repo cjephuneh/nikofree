@@ -192,7 +192,7 @@ def create_app(config_name='default'):
     limiter.init_app(app)
     
     # Register blueprints
-    from app.routes import auth, users, partners, admin, events, tickets, payments, notifications, seo
+    from app.routes import auth, users, partners, admin, events, tickets, payments, notifications, seo, messages
     
     app.register_blueprint(auth.bp, url_prefix='/api/auth')
     app.register_blueprint(users.bp, url_prefix='/api/users')
@@ -202,6 +202,7 @@ def create_app(config_name='default'):
     app.register_blueprint(tickets.bp, url_prefix='/api/tickets')
     app.register_blueprint(payments.bp, url_prefix='/api/payments')
     app.register_blueprint(notifications.bp, url_prefix='/api/notifications')
+    app.register_blueprint(messages.bp, url_prefix='/api/messages')
     app.register_blueprint(seo.bp)  # SEO routes (sitemap.xml, robots.txt)
     
     # Serve static files from uploads folder
