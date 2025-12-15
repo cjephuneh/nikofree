@@ -1,4 +1,4 @@
-from flask import Flask, request, make_response
+from flask import Flask, request, make_response, jsonify, current_app
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
@@ -238,8 +238,8 @@ def create_app(config_name='default'):
         
         # Log upload folder path for debugging (only in development)
         if app.config.get('DEBUG', False):
-            current_app.logger.debug(f"Upload folder: {upload_folder}")
-            current_app.logger.debug(f"Requested filename: {filename}")
+            app.logger.debug(f"Upload folder: {upload_folder}")
+            app.logger.debug(f"Requested filename: {filename}")
         
         # Handle nested paths like events/filename.jpg
         # filename will be something like "events/1H5A3558_b3e59fa0.JPG"
@@ -255,14 +255,14 @@ def create_app(config_name='default'):
         # Check if file exists
         if not os.path.exists(file_path) or not os.path.isfile(file_path):
             # Log the missing file for debugging
-            current_app.logger.warning(f"Image not found: {file_path} (requested: {filename})")
+            app.logger.warning(f"Image not found: {file_path} (requested: {filename})")
             abort(404)  # Not found
         
         # Use send_file for nested paths with proper CORS headers
         try:
             response = make_response(send_file(file_path))
         except Exception as e:
-            current_app.logger.error(f"Error serving file {file_path}: {str(e)}", exc_info=True)
+            app.logger.error(f"Error serving file {file_path}: {str(e)}", exc_info=True)
             abort(500)
         
         # CORS headers
@@ -295,6 +295,51 @@ def create_app(config_name='default'):
             if file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
                 response.headers.add('Content-Type', 'image/jpeg')
         
+        return response
+    
+    # Diagnostic endpoint to check uploads folder
+    @app.route('/api/diagnostics/uploads', methods=['GET'])
+    def check_uploads_folder():
+        """Diagnostic endpoint to check uploads folder status"""
+        upload_folder_name = app.config.get('UPLOAD_FOLDER', 'uploads')
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        upload_folder = os.path.join(project_root, upload_folder_name)
+        
+        result = {
+            'upload_folder_path': upload_folder,
+            'folder_exists': os.path.exists(upload_folder),
+            'is_directory': os.path.isdir(upload_folder) if os.path.exists(upload_folder) else False,
+            'subdirectories': [],
+            'file_count': 0,
+            'total_size_mb': 0
+        }
+        
+        if result['folder_exists'] and result['is_directory']:
+            try:
+                # List subdirectories
+                result['subdirectories'] = [d for d in os.listdir(upload_folder) 
+                                          if os.path.isdir(os.path.join(upload_folder, d))]
+                
+                # Count files
+                file_count = 0
+                total_size = 0
+                for root, dirs, files in os.walk(upload_folder):
+                    file_count += len(files)
+                    for file in files:
+                        try:
+                            file_path = os.path.join(root, file)
+                            total_size += os.path.getsize(file_path)
+                        except:
+                            pass
+                
+                result['file_count'] = file_count
+                result['total_size_mb'] = round(total_size / (1024 * 1024), 2)
+            except Exception as e:
+                result['error'] = str(e)
+        
+        # Add CORS headers
+        response = make_response(jsonify(result))
+        response.headers.add('Access-Control-Allow-Origin', '*')
         return response
     
     # Block direct access to database files - prevents CORS issues
