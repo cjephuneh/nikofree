@@ -8,6 +8,7 @@ from app.models.notification import Notification
 from app.models.admin import AdminLog
 from app.models.review import Review
 from app.models.message import Feedback, ContactMessage
+from app.models.rejection_reason import RejectionReason
 
 __all__ = [
     'User',
@@ -28,6 +29,7 @@ __all__ = [
     'AdminLog',
     'Review',
     'Feedback',
-    'ContactMessage'
+    'ContactMessage',
+    'RejectionReason'
 ]
 

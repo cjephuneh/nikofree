@@ -64,6 +64,9 @@ class Config:
     # Base URL for generating download links
     BASE_URL = os.getenv('BASE_URL', 'https://niko-free.com')
     
+    # Frontend URL for password reset links and other frontend redirects
+    FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://www.niko-free.com')
+    
     # Email Configuration - SendGrid
     # Set these in .env file for security
     # SendGrid SMTP Settings:

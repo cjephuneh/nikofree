@@ -389,37 +389,68 @@ def approve_partner(current_admin, partner_id):
         return response
 
 
+@bp.route('/rejection-reasons', methods=['GET'])
+@admin_required
+def get_rejection_reasons(current_admin):
+    """Get all active rejection reasons"""
+    from app.models.rejection_reason import RejectionReason
+    
+    reasons = RejectionReason.query.filter_by(is_active=True).order_by(RejectionReason.id).all()
+    
+    return jsonify({
+        'reasons': [reason.to_dict() for reason in reasons]
+    }), 200
+
+
 @bp.route('/partners/<int:partner_id>/reject', methods=['POST'])
 @admin_required
 def reject_partner(current_admin, partner_id):
     """Reject partner application"""
+    from app.models.rejection_reason import RejectionReason
+    
     partner = Partner.query.get(partner_id)
     
     if not partner:
         return jsonify({'error': 'Partner not found'}), 404
     
     data = request.get_json()
-    reason = data.get('reason', 'Application does not meet requirements')
+    rejection_reason_id = data.get('rejection_reason_id')
+    internal_note = data.get('internal_note', '')
+    
+    # Get rejection reason
+    rejection_reason = None
+    reason_text = 'Application does not meet requirements'
+    
+    if rejection_reason_id:
+        rejection_reason = RejectionReason.query.get(rejection_reason_id)
+        if rejection_reason:
+            reason_text = rejection_reason.description  # Use full description for partner
+            partner.rejection_reason_id = rejection_reason_id
+            partner.rejection_reason = rejection_reason.title  # Store title for backward compatibility
     
     partner.status = 'rejected'
-    partner.rejection_reason = reason
+    partner.internal_rejection_note = internal_note
     
     # Log action
+    log_message = f"Rejected partner: {partner.business_name}. Reason: {reason_text}"
+    if internal_note:
+        log_message += f" (Internal note: {internal_note})"
+    
     log_admin_action(
         current_admin,
         'reject_partner',
         'partner',
         partner_id,
-        f"Rejected partner: {partner.business_name}. Reason: {reason}"
+        log_message
     )
     
     db.session.commit()
     
-    # Send rejection email
-    send_partner_approval_email(partner, approved=False)
+    # Send rejection email (includes reason and internal note)
+    send_partner_approval_email(partner, approved=False, rejection_reason=rejection_reason, internal_note=internal_note)
     
-    # Send rejection notification (includes SMS)
-    notify_partner_rejected(partner, reason)
+    # Send rejection notification (includes SMS with reason)
+    notify_partner_rejected(partner, reason_text, internal_note)
     
     return jsonify({
         'message': 'Partner rejected',

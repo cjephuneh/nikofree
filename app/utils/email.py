@@ -86,7 +86,8 @@ def send_email(subject, recipient, html_body, text_body=None):
 def send_password_reset_email(user, reset_token):
     """Send password reset email"""
     subject = "Reset Your Niko Free Password"
-    reset_url = f"{current_app.config.get('FRONTEND_URL')}/reset-password?token={reset_token}"
+    frontend_url = current_app.config.get('FRONTEND_URL') or current_app.config.get('BASE_URL') or 'https://www.niko-free.com'
+    reset_url = f"{frontend_url}/reset-password?token={reset_token}"
     
     html_body = f"""
     <html>
@@ -139,7 +140,8 @@ def send_password_reset_email(user, reset_token):
 def send_partner_password_reset_email(partner, reset_token):
     """Send password reset email to partner"""
     subject = "Reset Your Niko Free Partner Password"
-    reset_url = f"{current_app.config.get('FRONTEND_URL')}/partner/reset-password?token={reset_token}"
+    frontend_url = current_app.config.get('FRONTEND_URL') or current_app.config.get('BASE_URL') or 'https://www.niko-free.com'
+    reset_url = f"{frontend_url}/partner/reset-password?token={reset_token}"
     
     partner_name = partner.contact_person or partner.business_name or 'Partner'
     
@@ -276,7 +278,7 @@ def send_booking_confirmation_email(booking, tickets):
     send_email(subject, user.email, html_body)
 
 
-def send_partner_approval_email(partner, approved=True, temp_password=None):
+def send_partner_approval_email(partner, approved=True, temp_password=None, rejection_reason=None, internal_note=None):
     """Send partner approval/rejection email"""
     if approved:
         subject = "Your Partner Account Has Been Approved! 🎉"
@@ -370,6 +372,12 @@ def send_partner_approval_email(partner, approved=True, temp_password=None):
         """
     else:
         subject = "Partner Application Update"
+        
+        # Get rejection reason text
+        reason_text = partner.rejection_reason or 'Application does not meet requirements'
+        if rejection_reason:
+            reason_text = rejection_reason.description
+        
         html_body = f"""
         <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -381,7 +389,8 @@ def send_partner_approval_email(partner, approved=True, temp_password=None):
                     
                     <div style="background-color: #f8d7da; border: 1px solid #f5c6cb; 
                                 padding: 15px; border-radius: 5px; margin: 20px 0;">
-                        <p style="margin: 0;"><strong>Reason:</strong> {partner.rejection_reason}</p>
+                        <p style="margin: 0 0 10px 0;"><strong>Reason:</strong></p>
+                        <p style="margin: 0;">{reason_text}</p>
                     </div>
                     
                     <p>If you believe this is an error or have any questions, please contact our support team.</p>

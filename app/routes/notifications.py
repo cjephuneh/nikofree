@@ -307,8 +307,14 @@ def notify_partner_approved(partner):
     send_partner_approval_sms(partner)
 
 
-def notify_partner_rejected(partner, reason):
-    """Send notification when partner is rejected"""
+def notify_partner_rejected(partner, reason, internal_note=None):
+    """Send notification when partner is rejected
+    
+    Args:
+        partner: Partner object
+        reason: Rejection reason to send to partner
+        internal_note: Internal admin note (NOT sent to partner)
+    """
     create_notification(
         partner_id=partner.id,
         title='Application Update',
@@ -318,7 +324,7 @@ def notify_partner_rejected(partner, reason):
         action_text='Reapply',
         send_email=True
     )
-    # Send SMS notification
+    # Send SMS notification (only reason, not internal note)
     send_partner_rejection_sms(partner, reason)
 
 

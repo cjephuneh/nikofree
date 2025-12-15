@@ -3,6 +3,8 @@ import uuid
 import requests
 from werkzeug.utils import secure_filename
 from flask import current_app
+from PIL import Image
+import io
 
 
 def allowed_file(filename):
@@ -11,13 +13,77 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
 
 
-def upload_file(file, folder='general'):
+def optimize_image(image_path, max_width=1920, max_height=1920, quality=85):
+    """
+    Optimize image by resizing and compressing
+    
+    Args:
+        image_path: Path to the image file
+        max_width: Maximum width in pixels (default: 1920)
+        max_height: Maximum height in pixels (default: 1920)
+        quality: JPEG quality 1-100 (default: 85)
+    
+    Returns:
+        str: Path to optimized image (may be different if PNG converted to JPEG)
+    """
+    try:
+        with Image.open(image_path) as img:
+            # Convert RGBA to RGB if necessary (for JPEG)
+            if img.mode in ('RGBA', 'LA', 'P'):
+                # Create white background
+                rgb_img = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                rgb_img.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                img = rgb_img
+            
+            # Get original dimensions
+            original_width, original_height = img.size
+            
+            # Calculate new dimensions maintaining aspect ratio
+            if original_width > max_width or original_height > max_height:
+                ratio = min(max_width / original_width, max_height / original_height)
+                new_width = int(original_width * ratio)
+                new_height = int(original_height * ratio)
+                img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            
+            # Save optimized image
+            ext = os.path.splitext(image_path)[1].lower()
+            if ext in ['.jpg', '.jpeg']:
+                img.save(image_path, 'JPEG', quality=quality, optimize=True)
+                return image_path
+            elif ext == '.png':
+                # PNG optimization - convert to JPEG if it's a photo (not transparent)
+                if img.mode == 'RGB':
+                    # Convert PNG to JPEG for better compression
+                    jpeg_path = os.path.splitext(image_path)[0] + '.jpg'
+                    img.save(jpeg_path, 'JPEG', quality=quality, optimize=True)
+                    # Replace PNG with JPEG
+                    if os.path.exists(jpeg_path):
+                        os.remove(image_path)
+                        return jpeg_path
+                else:
+                    # Keep PNG if it has transparency
+                    img.save(image_path, 'PNG', optimize=True)
+                    return image_path
+            else:
+                # For other formats, just save as-is
+                img.save(image_path, optimize=True)
+                return image_path
+    except Exception as e:
+        current_app.logger.warning(f"Image optimization failed: {str(e)}")
+        # Return original path if optimization fails
+        return image_path
+
+
+def upload_file(file, folder='general', optimize=True):
     """
     Upload file and return path
     
     Args:
         file: FileStorage object from request
         folder: Subfolder name (e.g., 'events', 'partners', 'logos')
+        optimize: Whether to optimize images (default: True)
         
     Returns:
         str: Relative path to uploaded file or None if failed
@@ -45,6 +111,26 @@ def upload_file(file, folder='general'):
     # Save file
     filepath = os.path.join(target_folder, unique_filename)
     file.save(filepath)
+    
+    # Optimize image if it's an image file
+    if optimize:
+        ext_lower = ext.lower()
+        if ext_lower in ['.jpg', '.jpeg', '.png']:
+            # Set max dimensions based on folder type
+            if folder == 'events':
+                max_width, max_height = 1920, 1920  # Event posters can be larger
+            elif folder == 'logos':
+                max_width, max_height = 800, 800  # Logos should be smaller
+            elif folder == 'profiles':
+                max_width, max_height = 800, 800  # Profile pictures
+            else:
+                max_width, max_height = 1920, 1920  # Default
+            
+            optimized_path = optimize_image(filepath, max_width=max_width, max_height=max_height, quality=85)
+            if optimized_path and optimized_path != filepath:
+                # If PNG was converted to JPEG, update the filename and path
+                unique_filename = os.path.basename(optimized_path)
+                filepath = optimized_path
     
     # Return relative path
     return f"/uploads/{folder}/{unique_filename}"

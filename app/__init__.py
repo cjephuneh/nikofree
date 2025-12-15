@@ -247,7 +247,25 @@ def create_app(config_name='default'):
         response = make_response(send_file(file_path))
         response.headers.add('Access-Control-Allow-Origin', '*')
         response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
-        response.headers.add('Cache-Control', 'public, max-age=86400')  # Cache for 24 hours
+        
+        # Enhanced caching headers for better performance
+        # Cache for 1 year (31536000 seconds) with revalidation
+        response.headers.add('Cache-Control', 'public, max-age=31536000, immutable')
+        response.headers.add('Expires', 'Thu, 31 Dec 2025 23:59:59 GMT')
+        
+        # Add ETag for cache validation
+        import hashlib
+        import time
+        file_stat = os.stat(file_path)
+        etag = hashlib.md5(f"{file_path}{file_stat.st_mtime}".encode()).hexdigest()
+        response.headers.add('ETag', f'"{etag}"')
+        
+        # Add content type for better browser handling
+        from mimetypes import guess_type
+        content_type, _ = guess_type(file_path)
+        if content_type:
+            response.headers.add('Content-Type', content_type)
+        
         return response
     
     # Block direct access to database files - prevents CORS issues

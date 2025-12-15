@@ -40,7 +40,9 @@ class Partner(db.Model):
     status = db.Column(db.String(20), default='pending')  # pending, approved, rejected, suspended
     approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)
-    rejection_reason = db.Column(db.Text, nullable=True)
+    rejection_reason = db.Column(db.Text, nullable=True)  # Legacy field - kept for backward compatibility
+    rejection_reason_id = db.Column(db.Integer, db.ForeignKey('rejection_reasons.id'), nullable=True)
+    internal_rejection_note = db.Column(db.Text, nullable=True)  # Internal admin note (not sent to partner)
     
     # Account Status
     is_active = db.Column(db.Boolean, default=True)
@@ -117,6 +119,8 @@ class Partner(db.Model):
             'status': self.status,
             'is_active': self.is_active,
             'is_verified': self.is_verified,
+            'rejection_reason': self.rejection_reason,
+            'rejection_reason_id': self.rejection_reason_id,
             'created_at': self.created_at.isoformat(),
             'approved_at': self.approved_at.isoformat() if self.approved_at else None
         }
@@ -128,6 +132,7 @@ class Partner(db.Model):
             data['bank_name'] = self.bank_name
             data['bank_account_number'] = self.bank_account_number
             data['mpesa_number'] = self.mpesa_number
+            data['internal_rejection_note'] = self.internal_rejection_note
             
         return data
     
