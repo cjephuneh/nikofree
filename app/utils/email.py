@@ -556,18 +556,18 @@ def send_booking_cancellation_email(user, booking, event):
                     <p style="margin: 5px 0;"><strong>Amount:</strong> KES {booking.total_amount:,.2f}</p>
                 </div>
                 
-                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 30px 0;">
-                    <p style="margin: 0; color: #666; font-size: 14px;">
-                        💡 <strong>Note:</strong> If you paid for this booking, a refund will be processed according to our refund policy. 
-                        You'll receive a notification once the refund is complete.
+                <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); padding: 25px; border-radius: 8px; margin: 30px 0;">
+                    <h3 style="margin: 0 0 15px 0; color: #1e8bb8; font-size: 18px;">✨ Explore Other Events</h3>
+                    <p style="margin: 0; color: #555; font-size: 14px;">
+                        Don't miss out! Discover amazing events happening near you. Browse our collection of exciting experiences and find your next adventure.
                     </p>
                 </div>
                 
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="{frontend_url}/bookings" 
+                    <a href="{frontend_url}" 
                        style="display: inline-block; padding: 14px 35px; background: linear-gradient(135deg, #27aae2 0%, #1e8bb8 100%); 
-                              color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
-                        View My Bookings
+                              color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(39, 170, 226, 0.3);">
+                        Explore Events
                     </a>
                 </div>
                 

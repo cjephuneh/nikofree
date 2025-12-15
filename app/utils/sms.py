@@ -601,7 +601,8 @@ Booking: {booking.booking_number}
 Tickets: {booking.quantity}
 
 Your booking has been cancelled.
-Refund will be processed if payment was made.
+
+Explore other exciting events on Niko Free!
 
 Thank you for using Niko Free!"""
     
