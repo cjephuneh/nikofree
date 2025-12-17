@@ -1200,6 +1200,85 @@ def send_event_edit_notification_to_admin(partner, event, changed_fields):
     send_email(subject, admin_email, html_body)
 
 
+def send_partner_account_deletion_email(partner):
+    """Send account deletion confirmation email to partner"""
+    subject = "We're Sorry to See You Go 😢"
+    base_url = current_app.config.get('BASE_URL', 'https://niko-free.com')
+    frontend_url = current_app.config.get('FRONTEND_URL', base_url)
+    
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 0;">
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%); padding: 40px 30px; text-align: center;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">😢 We're Sorry to See You Go</h1>
+                <p style="color: #ffffff; margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Your Account Has Been Deleted</p>
+            </div>
+            
+            <!-- Content -->
+            <div style="padding: 40px 30px;">
+                <p style="font-size: 16px; color: #333; margin: 0 0 20px 0;">Hi <strong>{partner.business_name}</strong>,</p>
+                <p style="font-size: 16px; color: #555; margin: 0 0 30px 0;">
+                    We're sorry to see you go! Your partner account has been successfully deleted, along with all associated data including events, bookings, and settings.
+                </p>
+                
+                <div style="background-color: #f8f9fa; border-left: 4px solid #6c757d; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                    <h3 style="margin: 0 0 15px 0; color: #495057; font-size: 18px;">📋 What Happened:</h3>
+                    <ul style="margin: 0; padding-left: 20px; color: #555;">
+                        <li style="margin-bottom: 8px;">Your partner account has been permanently deleted</li>
+                        <li style="margin-bottom: 8px;">All your events and associated data have been removed</li>
+                        <li style="margin-bottom: 8px;">Your login credentials are no longer valid</li>
+                    </ul>
+                </div>
+                
+                <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); padding: 25px; border-radius: 8px; margin: 30px 0;">
+                    <h3 style="margin: 0 0 15px 0; color: #1e8bb8; font-size: 18px;">💡 Want to Come Back?</h3>
+                    <p style="margin: 0 0 20px 0; color: #555;">
+                        We'd love to have you back! If you change your mind, you can always rejoin Niko Free and start creating amazing events again.
+                    </p>
+                    <div style="text-align: center;">
+                        <a href="{frontend_url}/become-partner" 
+                           style="display: inline-block; padding: 14px 35px; background: linear-gradient(135deg, #27aae2 0%, #1e8bb8 100%); 
+                                  color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(39, 170, 226, 0.3);">
+                            🚀 Rejoin Niko Free
+                        </a>
+                    </div>
+                </div>
+                
+                <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                    <h3 style="margin: 0 0 15px 0; color: #856404; font-size: 18px;">⚠️ Important Note:</h3>
+                    <p style="margin: 0; color: #856404;">
+                        If you rejoin, you'll need to submit a new partner application. Your previous account data cannot be restored.
+                    </p>
+                </div>
+                
+                <div style="text-align: center; margin-top: 40px; padding-top: 30px; border-top: 1px solid #e5e5e5;">
+                    <p style="font-size: 14px; color: #999; margin: 0;">
+                        If you have any questions or feedback, please contact us at <a href="mailto:support@niko-free.com" style="color: #27aae2;">support@niko-free.com</a>
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div style="background-color: #f8f9fa; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e5e5;">
+                <p style="font-size: 12px; color: #999; margin: 0;">
+                    © {datetime.now().year} Niko Free. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    send_email(subject, partner.email, html_body)
+
+
 def send_promotion_payment_success_email(partner, event):
     """Send promotion payment success email to partner"""
     subject = f"Promotion Payment Successful: {event.title}"

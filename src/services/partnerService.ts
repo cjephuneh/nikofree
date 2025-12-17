@@ -438,3 +438,32 @@ export const uploadPartnerLogo = async (file: File): Promise<any> => {
   return data;
 };
 
+/**
+ * Delete partner account
+ */
+export const deletePartnerAccount = async (): Promise<any> => {
+  const token = getPartnerToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.partner.deleteAccount}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to delete account');
+  }
+
+  // Clear localStorage after successful deletion
+  logoutPartner();
+
+  return data;
+};
+

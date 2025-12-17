@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import { Bell, CreditCard, Shield, Lock, Save, AlertCircle, CheckCircle } from 'lucide-react';
-import { changePartnerPassword } from '../../services/partnerService';
+import { Bell, CreditCard, Shield, Lock, Save, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
+import { changePartnerPassword, deletePartnerAccount } from '../../services/partnerService';
 
-export default function Settings() {
+interface SettingsProps {
+  onNavigate?: (page: string) => void;
+}
+
+export default function Settings({ onNavigate }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<'security' | 'notifications' | 'billing'>('security');
   const [formData, setFormData] = useState({
     // Security
@@ -36,6 +40,9 @@ export default function Settings() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const handleChangePassword = async () => {
     setPasswordError('');
@@ -79,6 +86,25 @@ export default function Settings() {
   const handleSave = () => {
     // Handle save logic here
     alert('Settings saved successfully!');
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      setIsDeletingAccount(true);
+      setDeleteError('');
+      await deletePartnerAccount();
+      // Navigate to home page after successful deletion
+      if (onNavigate) {
+        onNavigate('landing');
+      } else {
+        // Fallback: redirect to home
+        window.location.href = '/';
+      }
+    } catch (err: any) {
+      console.error('Error deleting account:', err);
+      setDeleteError(err.message || 'Failed to delete account. Please try again.');
+      setIsDeletingAccount(false);
+    }
   };
 
   return (
@@ -546,6 +572,76 @@ export default function Settings() {
                 </div>
               </div>
             )}
+
+            {/* Delete Account Section */}
+            <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+              <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-xl p-6">
+                <h3 className="text-lg font-bold text-red-900 dark:text-red-400 mb-2 flex items-center">
+                  <AlertCircle className="w-5 h-5 mr-2" />
+                  Danger Zone
+                </h3>
+                <p className="text-sm text-red-700 dark:text-red-300 mb-4">
+                  Once you delete your account, there is no going back. This action cannot be undone. All your events, bookings, and data will be permanently deleted.
+                </p>
+                
+                {deleteError && (
+                  <div className="mb-4 bg-red-100 dark:bg-red-900/40 border-2 border-red-500 rounded-xl p-3 flex items-start space-x-2">
+                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-700 dark:text-red-400">{deleteError}</p>
+                  </div>
+                )}
+
+                {!showDeleteConfirm ? (
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="px-6 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center space-x-2"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                    <span>Delete Account</span>
+                  </button>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-sm font-semibold text-red-900 dark:text-red-400">
+                      Are you absolutely sure? This action cannot be undone.
+                    </p>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={handleDeleteAccount}
+                        disabled={isDeletingAccount}
+                        className={`px-6 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center space-x-2 ${
+                          isDeletingAccount ? 'opacity-70 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        {isDeletingAccount ? (
+                          <>
+                            <svg className="animate-spin w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Deleting...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="w-5 h-5" />
+                            <span>Yes, Delete My Account</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowDeleteConfirm(false);
+                          setDeleteError('');
+                        }}
+                        disabled={isDeletingAccount}
+                        className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Save Button */}
             <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">

@@ -343,7 +343,7 @@ export default function PartnerDashboard({ onNavigate }: PartnerDashboardProps) 
             {activeTab === 'roles' && <AssignRoles />}
             {activeTab === 'scanner' && <TicketScanner />}
             {activeTab === 'verification' && <PartnerVerification />}
-            {activeTab === 'settings' && <Settings />}
+            {activeTab === 'settings' && <Settings onNavigate={onNavigate} />}
             {activeTab === 'profile' && <MyProfile />}
           </div>
         </main>
