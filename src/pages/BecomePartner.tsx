@@ -118,8 +118,8 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
     setIsGeneratingDescription(true);
     try {
       // Direct import to ensure it's loaded
-      const geminiService = await import('../services/geminiService');
-      const { generatePartnerDescription } = geminiService;
+      const openaiService = await import('../services/openaiService');
+      const { generatePartnerDescription } = openaiService;
       
       const selectedCategory = formData.categories.length > 0 
         ? categories.find(c => c.id === formData.categories[0])?.name 

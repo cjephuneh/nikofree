@@ -1,11 +1,16 @@
 /**
- * Gemini API Service
- * Handles AI content generation using Google Gemini API
+ * OpenAI API Service
+ * Handles AI content generation using OpenAI API
  */
 
-const GEMINI_API_KEY = 'AIzaSyCMg5HbFMj5Hivs2qtXQkWjoLsKvBbYkSk';
-// Using v1beta with gemini-2.0-flash model
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+// Get API key from environment variable (Vite requires VITE_ prefix)
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || '';
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+const OPENAI_MODEL = 'gpt-3.5-turbo';
+
+if (!OPENAI_API_KEY) {
+  console.warn('⚠️ VITE_OPENAI_API_KEY is not set in environment variables');
+}
 
 export interface GenerateEventDescriptionParams {
   eventName: string;
@@ -25,7 +30,7 @@ export interface GeneratePartnerDescriptionParams {
 }
 
 /**
- * Generate event description using Gemini API
+ * Generate event description using OpenAI API
  */
 export const generateEventDescription = async (
   params: GenerateEventDescriptionParams
@@ -49,41 +54,41 @@ Generate a compelling event description (150-300 words) that:
 
 Return only the description text without any additional formatting or explanations.`;
 
-    // Use v1beta with gemini-2.0-flash model and API key in header
     const response = await fetch(
-      GEMINI_API_URL,
+      OPENAI_API_URL,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-goog-api-key': GEMINI_API_KEY,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
-          contents: [
+          model: OPENAI_MODEL,
+          messages: [
             {
-              parts: [
-                {
-                  text: prompt,
-                },
-              ],
+              role: 'user',
+              content: prompt,
             },
           ],
+          temperature: 0.7,
+          max_tokens: 500,
         }),
       }
     );
 
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.statusText}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`OpenAI API error: ${response.statusText} - ${errorData.error?.message || ''}`);
     }
 
     const data = await response.json();
     
-    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-      const generatedText = data.candidates[0].content.parts[0].text;
+    if (data.choices && data.choices[0] && data.choices[0].message) {
+      const generatedText = data.choices[0].message.content;
       return generatedText.trim();
     }
 
-    throw new Error('No content generated from Gemini API');
+    throw new Error('No content generated from OpenAI API');
   } catch (error) {
     console.error('Error generating event description:', error);
     throw error;
@@ -91,7 +96,7 @@ Return only the description text without any additional formatting or explanatio
 };
 
 /**
- * Generate partner business description using Gemini API
+ * Generate partner business description using OpenAI API
  */
 export const generatePartnerDescription = async (
   params: GeneratePartnerDescriptionParams
@@ -112,41 +117,41 @@ Generate a compelling business description (100-200 words) that:
 
 Return only the description text without any additional formatting or explanations.`;
 
-    // Use v1beta with gemini-2.0-flash model and API key in header
     const response = await fetch(
-      GEMINI_API_URL,
+      OPENAI_API_URL,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-goog-api-key': GEMINI_API_KEY,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
-          contents: [
+          model: OPENAI_MODEL,
+          messages: [
             {
-              parts: [
-                {
-                  text: prompt,
-                },
-              ],
+              role: 'user',
+              content: prompt,
             },
           ],
+          temperature: 0.7,
+          max_tokens: 400,
         }),
       }
     );
 
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.statusText}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`OpenAI API error: ${response.statusText} - ${errorData.error?.message || ''}`);
     }
 
     const data = await response.json();
     
-    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-      const generatedText = data.candidates[0].content.parts[0].text;
+    if (data.choices && data.choices[0] && data.choices[0].message) {
+      const generatedText = data.choices[0].message.content;
       return generatedText.trim();
     }
 
-    throw new Error('No content generated from Gemini API');
+    throw new Error('No content generated from OpenAI API');
   } catch (error) {
     console.error('Error generating partner description:', error);
     throw error;

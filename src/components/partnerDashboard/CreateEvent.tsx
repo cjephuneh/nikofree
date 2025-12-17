@@ -297,7 +297,7 @@ export default function CreateEvent({ isOpen, onClose, onEventCreated, eventId }
 
     setIsGeneratingDescription(true);
     try {
-      const { generateEventDescription } = await import('../../services/geminiService');
+      const { generateEventDescription } = await import('../../services/openaiService');
       
       const description = await generateEventDescription({
         eventName: formData.eventName,
