@@ -38,6 +38,12 @@ export default function UserDashboard({ onNavigate }: UserDashboardProps) {
   const [showPhoneCard, setShowPhoneCard] = useState(false);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
 
+  // Check if phone card was dismissed in localStorage (but we'll still show it if phone is missing)
+  const checkPhoneCardDismissed = () => {
+    const dismissed = localStorage.getItem('phone_card_dismissed');
+    return dismissed === 'true';
+  };
+
   const handleEventClick = (event: typeof upcomingEvents[0] | typeof bucketlistEvents[0] | typeof eventHistory[0]) => {
     setSelectedEvent(event);
     setActiveView('eventDetail');
@@ -151,9 +157,18 @@ export default function UserDashboard({ onNavigate }: UserDashboardProps) {
         const data = await getUserProfile();
         const user = data.user || data;
         setUserData(user);
-        // Show phone card if phone number is missing
-        if (!user.phone_number || user.phone_number.trim() === '') {
+        // Show phone card if phone number is missing (always show, ignore dismissal for now)
+        const phoneNumber = user?.phone_number;
+        const hasPhoneNumber = phoneNumber && typeof phoneNumber === 'string' && phoneNumber.trim() !== '';
+        
+        console.log('User phone number check:', { phoneNumber, hasPhoneNumber, user });
+        
+        if (!hasPhoneNumber) {
           setShowPhoneCard(true);
+        } else {
+          setShowPhoneCard(false);
+          // Clear dismissal flag if phone number exists
+          localStorage.removeItem('phone_card_dismissed');
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
@@ -173,10 +188,16 @@ export default function UserDashboard({ onNavigate }: UserDashboardProps) {
           const data = await getUserProfile();
           const user = data.user || data;
           setUserData(user);
-          if (!user.phone_number || user.phone_number.trim() === '') {
-            setShowPhoneCard(true);
-          } else {
+          const phoneNumber = user?.phone_number;
+          const hasPhoneNumber = phoneNumber && typeof phoneNumber === 'string' && phoneNumber.trim() !== '';
+          
+          // If user added phone number, clear the dismissed flag and hide card
+          if (hasPhoneNumber) {
+            localStorage.removeItem('phone_card_dismissed');
             setShowPhoneCard(false);
+          } else {
+            // Always show card if phone number is missing
+            setShowPhoneCard(true);
           }
         } catch (error) {
           console.error('Error fetching user data:', error);
@@ -476,7 +497,11 @@ export default function UserDashboard({ onNavigate }: UserDashboardProps) {
           {showPhoneCard && (
             <div className="mb-6 bg-gradient-to-r from-[#27aae2] to-[#1e8bb8] rounded-2xl shadow-lg border border-[#27aae2]/20 p-6 relative overflow-hidden">
               <button
-                onClick={() => setShowPhoneCard(false)}
+                onClick={() => {
+                  setShowPhoneCard(false);
+                  // Store dismissal in localStorage so it doesn't show again until phone is added
+                  localStorage.setItem('phone_card_dismissed', 'true');
+                }}
                 className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
               >
                 <X className="w-5 h-5" />
