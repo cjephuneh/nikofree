@@ -43,6 +43,7 @@ class TicketType(db.Model):
             'sales_start': self.sales_start.isoformat() if self.sales_start else None,
             'sales_end': self.sales_end.isoformat() if self.sales_end else None,
             'is_active': self.is_active,
+            'is_available': self.is_active,  # Alias for frontend compatibility
             'min_per_order': self.min_per_order,
             'max_per_order': self.max_per_order
         }

@@ -423,6 +423,32 @@ Thank you!"""
     send_sms(phone, message)
 
 
+def send_partner_unrejection_sms(partner, reason):
+    """Send SMS to partner when their account is unrejected/reopened"""
+    phone = partner.phone_number
+    if not phone:
+        return
+    
+    # Format phone number
+    phone = format_phone_for_sms(phone)
+    if not phone:
+        return
+    
+    message = f"""Hi {partner.business_name},
+
+Your email is now available for a new partner application.
+
+What we need: {reason}
+
+Please register again at niko-free.com/become-partner and make sure to include your business bio this time.
+
+Thank you,
+Niko Free Team"""
+    
+    send_sms(phone, message)
+    print(f"📱 Unrejection SMS queued for {phone}")
+
+
 def send_partner_rejection_sms(partner, reason):
     """Send partner rejection SMS"""
     if not partner.phone_number:

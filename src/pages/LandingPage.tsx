@@ -232,6 +232,17 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
             
             const timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
             
+            // Check if event is sold out
+            let isSoldOut = false;
+            if (!event.is_free && event.ticket_types && event.ticket_types.length > 0) {
+              const hasAvailableTickets = event.ticket_types.some((tt: any) => {
+                const isActive = tt.is_active !== false; // Default to true if not set
+                const hasQuantity = tt.quantity_available !== null && tt.quantity_available > 0;
+                return isActive && (tt.quantity_total === null || hasQuantity);
+              });
+              isSoldOut = !hasAvailableTickets;
+            }
+            
             return {
               id: event.id.toString(),
               title: event.title,
@@ -245,7 +256,8 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
               location: event.venue_name || event.venue_address || 'Online',
               attendees: event.attendee_count || 0,
               category: event.category?.name || 'General',
-              price: event.is_free ? 'Free' : (event.ticket_types?.[0]?.price ? `KES ${parseInt(event.ticket_types[0].price).toLocaleString()}` : 'TBA')
+              price: event.is_free ? 'Free' : (event.ticket_types?.[0]?.price ? `KES ${parseInt(event.ticket_types[0].price).toLocaleString()}` : 'TBA'),
+              isSoldOut: isSoldOut
             };
           });
           setUpcomingEvents(events);
@@ -321,6 +333,17 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
           });
           const timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
           
+          // Check if event is sold out
+          let isSoldOut = false;
+          if (!event.is_free && event.ticket_types && event.ticket_types.length > 0) {
+            const hasAvailableTickets = event.ticket_types.some((tt: any) => {
+              const isActive = tt.is_active !== false; // Default to true if not set
+              const hasQuantity = tt.quantity_available !== null && tt.quantity_available > 0;
+              return isActive && (tt.quantity_total === null || hasQuantity);
+            });
+            isSoldOut = !hasAvailableTickets;
+          }
+          
           return {
             id: event.id.toString(),
             title: event.title,
@@ -334,7 +357,8 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
             location: event.venue_name || event.venue_address || 'Online',
             attendees: event.attendee_count || 0,
             category: event.category?.name || 'General',
-            price: event.is_free ? 'Free' : (event.ticket_types?.[0]?.price ? `KES ${parseInt(event.ticket_types[0].price).toLocaleString()}` : 'TBA')
+            price: event.is_free ? 'Free' : (event.ticket_types?.[0]?.price ? `KES ${parseInt(event.ticket_types[0].price).toLocaleString()}` : 'TBA'),
+            isSoldOut: isSoldOut
           };
         });
         setCantMissEvents(events);
@@ -375,6 +399,20 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
           
           const timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
           
+          // Check if event is sold out
+          // Event is sold out if:
+          // 1. It has ticket types AND
+          // 2. All ticket types are either disabled (is_active = false) OR have 0 available tickets
+          let isSoldOut = false;
+          if (!event.is_free && event.ticket_types && event.ticket_types.length > 0) {
+            const hasAvailableTickets = event.ticket_types.some((tt: any) => {
+              const isActive = tt.is_active !== false; // Default to true if not set
+              const hasQuantity = tt.quantity_available !== null && tt.quantity_available > 0;
+              return isActive && (tt.quantity_total === null || hasQuantity);
+            });
+            isSoldOut = !hasAvailableTickets;
+          }
+          
           return {
             id: event.id.toString(),
             title: event.title,
@@ -388,7 +426,8 @@ export default function LandingPage({ onNavigate, onEventClick }: LandingPagePro
             location: event.venue_name || event.venue_address || 'Online',
             attendees: event.attendee_count || 0,
             category: event.category?.name || 'General',
-            price: event.is_free ? 'Free' : (event.ticket_types?.[0]?.price ? `KES ${parseInt(event.ticket_types[0].price).toLocaleString()}` : 'TBA')
+            price: event.is_free ? 'Free' : (event.ticket_types?.[0]?.price ? `KES ${parseInt(event.ticket_types[0].price).toLocaleString()}` : 'TBA'),
+            isSoldOut: isSoldOut
           };
         });
         setUpcomingEvents(events);

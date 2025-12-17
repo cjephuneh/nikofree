@@ -58,8 +58,27 @@ def get_dashboard(current_admin):
             Payment.status == 'completed'
         ).scalar() or 0
         
+        # Platform fees (7% commission from ticket payments)
         platform_fees = db.session.query(func.sum(Payment.platform_fee)).filter(
-            Payment.status == 'completed'
+            Payment.status == 'completed',
+            Payment.payment_type == 'ticket'  # Only from ticket sales
+        ).scalar() or 0
+        
+        # Withdrawal fees revenue (from completed payouts)
+        from app.models.payment import PartnerPayout
+        try:
+            withdrawal_fees_revenue = db.session.query(func.sum(PartnerPayout.withdrawal_fee)).filter(
+                PartnerPayout.status == 'completed'
+            ).scalar() or 0
+        except Exception as e:
+            # If column doesn't exist yet, return 0
+            current_app.logger.warning(f'withdrawal_fee column may not exist: {str(e)}')
+            withdrawal_fees_revenue = 0
+        
+        # Promotion payments revenue (all promotion payments)
+        promotion_revenue = db.session.query(func.sum(Payment.amount)).filter(
+            Payment.status == 'completed',
+            Payment.payment_type == 'promotion'
         ).scalar() or 0
         
         # Recent activity - get recent users, partners, events
@@ -149,6 +168,8 @@ def get_dashboard(current_admin):
                 'pending_events': pending_events_count,
                 'total_revenue': float(total_revenue),
                 'platform_fees': float(platform_fees),
+                'withdrawal_fees': float(withdrawal_fees_revenue),
+                'promotion_revenue': float(promotion_revenue),
                 'users_change': round(users_change, 1),
                 'partners_change': round(partners_change, 1),
                 'events_change': events_change
@@ -184,6 +205,9 @@ def get_partner_stats(current_admin):
     # Suspended partners
     suspended_partners = Partner.query.filter_by(status='suspended').count()
     
+    # Rejected partners
+    rejected_partners = Partner.query.filter_by(status='rejected').count()
+    
     # Active/Approved partners
     active_partners = Partner.query.filter_by(status='approved').count()
     
@@ -191,6 +215,7 @@ def get_partner_stats(current_admin):
         'total_partners': total_partners,
         'pending_partners': pending_partners,
         'suspended_partners': suspended_partners,
+        'rejected_partners': rejected_partners,
         'active_partners': active_partners
     }), 200
 
@@ -596,6 +621,84 @@ def reject_partner(current_admin, partner_id):
     return jsonify({
         'message': 'Partner rejected',
         'partner': partner.to_dict()
+    }), 200
+
+
+@bp.route('/partners/<int:partner_id>/unreject', methods=['POST'])
+@admin_required
+def unreject_partner(current_admin, partner_id):
+    """Unreject partner application - delete record to allow fresh registration"""
+    partner = Partner.query.get(partner_id)
+    
+    if not partner:
+        return jsonify({'error': 'Partner not found'}), 404
+    
+    if partner.status != 'rejected':
+        return jsonify({'error': 'Partner is not in rejected status'}), 400
+    
+    data = request.get_json()
+    unreject_reason = data.get('reason', '')
+    
+    if not unreject_reason or not unreject_reason.strip():
+        return jsonify({'error': 'Reason for unrejecting is required'}), 400
+    
+    # Store partner info for email/SMS before deletion
+    partner_email = partner.email
+    partner_business_name = partner.business_name
+    partner_phone = partner.phone_number
+    
+    # Clean up foreign key references that don't have CASCADE
+    # Nullify payment references
+    from app.models.payment import Payment
+    payments = Payment.query.filter_by(partner_id=partner_id).all()
+    for payment in payments:
+        payment.partner_id = None
+    
+    # Nullify booking checked_in_by references
+    from app.models.ticket import Booking
+    bookings = Booking.query.filter_by(checked_in_by=partner_id).all()
+    for booking in bookings:
+        booking.checked_in_by = None
+    
+    # Log action before deletion
+    log_admin_action(
+        current_admin,
+        'unreject_partner',
+        'partner',
+        partner_id,
+        f"Unrejected partner: {partner_business_name} (deleted record to allow fresh registration). Reason: {unreject_reason}"
+    )
+    
+    # Delete the partner record (cascade will handle events, payouts, support_requests, team_members, notifications)
+    db.session.delete(partner)
+    db.session.commit()
+    
+    # Create a temporary partner object for email/SMS (without saving to DB)
+    class TempPartner:
+        def __init__(self, email, business_name, phone_number):
+            self.email = email
+            self.business_name = business_name
+            self.phone_number = phone_number
+    
+    temp_partner = TempPartner(partner_email, partner_business_name, partner_phone)
+    
+    # Send unrejection email with reason
+    try:
+        from app.utils.email import send_partner_unrejection_email
+        send_partner_unrejection_email(temp_partner, unreject_reason)
+    except Exception as email_error:
+        current_app.logger.warning(f'Failed to send unrejection email: {str(email_error)}')
+    
+    # Send unrejection SMS with reason
+    try:
+        from app.utils.sms import send_partner_unrejection_sms
+        send_partner_unrejection_sms(temp_partner, unreject_reason)
+    except Exception as sms_error:
+        current_app.logger.warning(f'Failed to send unrejection SMS: {str(sms_error)}')
+    
+    return jsonify({
+        'message': 'Partner record deleted. Email is now available for fresh registration.',
+        'email': partner_email
     }), 200
 
 
@@ -1136,6 +1239,137 @@ def get_user(current_admin, user_id):
     }), 200
 
 
+@bp.route('/users/<int:user_id>/flag', methods=['POST'])
+@admin_required
+def flag_user(current_admin, user_id):
+    """Flag a user with notes"""
+    user = User.query.get(user_id)
+    
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    data = request.get_json()
+    notes = data.get('notes', '').strip()
+    
+    if not notes:
+        return jsonify({'error': 'Notes are required when flagging a user'}), 400
+    
+    # Add flagged status - we'll use is_active=False to flag them
+    # You might want to add a separate 'is_flagged' field in the future
+    user.is_active = False
+    
+    # Log action with notes
+    log_admin_action(
+        current_admin,
+        'flag_user',
+        'user',
+        user_id,
+        f"Flagged user: {user.email}. Notes: {notes}",
+        changes={'is_active': False, 'flag_notes': notes}
+    )
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'User flagged successfully',
+        'user': user.to_dict()
+    }), 200
+
+
+@bp.route('/users/<int:user_id>/unflag', methods=['POST'])
+@admin_required
+def unflag_user(current_admin, user_id):
+    """Unflag a user"""
+    user = User.query.get(user_id)
+    
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    user.is_active = True
+    
+    # Log action
+    log_admin_action(
+        current_admin,
+        'unflag_user',
+        'user',
+        user_id,
+        f"Unflagged user: {user.email}"
+    )
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'User unflagged successfully',
+        'user': user.to_dict()
+    }), 200
+
+
+@bp.route('/users/<int:user_id>', methods=['DELETE'])
+@admin_required
+def delete_user(current_admin, user_id):
+    """Delete user and all associated data"""
+    user = User.query.get(user_id)
+    
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    if user.email == current_admin.email:
+        return jsonify({'error': 'Cannot delete your own account'}), 400
+    
+    try:
+        user_email = user.email
+        user_id_val = user.id
+        
+        # Get all booking IDs for this user
+        booking_ids = [b.id for b in Booking.query.filter_by(user_id=user_id_val).with_entities(Booking.id).all()]
+        
+        # Delete tickets first (they reference bookings)
+        from app.models.ticket import Ticket
+        if booking_ids:
+            tickets = Ticket.query.filter(Ticket.booking_id.in_(booking_ids)).all()
+            for ticket in tickets:
+                db.session.delete(ticket)
+        
+        # Delete bookings
+        bookings = Booking.query.filter_by(user_id=user_id_val).all()
+        for booking in bookings:
+            db.session.delete(booking)
+        
+        # Delete notifications
+        from app.models.notification import Notification
+        notifications = Notification.query.filter_by(user_id=user_id_val).all()
+        for notification in notifications:
+            db.session.delete(notification)
+        
+        # Remove from bucketlist (many-to-many relationship)
+        user.bucketlist = []
+        
+        # Delete the user
+        db.session.delete(user)
+        db.session.commit()
+        
+        # Log action
+        log_admin_action(
+            current_admin,
+            'delete_user',
+            'user',
+            user_id_val,
+            f"Deleted user: {user_email}"
+        )
+        db.session.commit()
+        
+        current_app.logger.info(f'User deleted by admin: {user_email} (ID: {user_id_val})')
+        
+        return jsonify({
+            'message': 'User deleted successfully. All associated data has been removed.'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error deleting user: {str(e)}', exc_info=True)
+        return jsonify({'error': 'Failed to delete user. Please try again.'}), 500
+
+
 # ============ CATEGORY & LOCATION MANAGEMENT ============
 
 @bp.route('/categories', methods=['GET'])
@@ -1295,6 +1529,7 @@ def create_location(current_admin):
 # ============ ANALYTICS ============
 
 @bp.route('/analytics', methods=['GET'])
+@limiter.exempt
 @admin_required
 def get_analytics(current_admin):
     """Get platform analytics"""
@@ -1366,6 +1601,7 @@ def get_analytics(current_admin):
 
 
 @bp.route('/analytics/charts', methods=['GET'])
+@limiter.exempt
 @admin_required
 def get_chart_data(current_admin):
     """Get chart data for reports with time filters"""
@@ -1548,6 +1784,139 @@ def get_chart_data(current_admin):
         'partners': create_chart_data(partners_data, group_by, start_date_for_fill, end_date_for_fill),
         'users': create_chart_data(users_data, group_by, start_date_for_fill, end_date_for_fill),
         'revenue': create_chart_data(revenue_data, group_by, start_date_for_fill, end_date_for_fill)
+    }), 200
+
+
+@bp.route('/revenue/charts', methods=['GET'])
+@limiter.exempt
+@admin_required
+def get_revenue_chart_data(current_admin):
+    """Get revenue chart data by type (platform_fees, withdrawal_fees, promotions)"""
+    revenue_type = request.args.get('type', 'platform_fees')  # platform_fees, withdrawal_fees, promotions
+    period = request.args.get('period', '30_days')  # today, 7_days, 30_days, all_time
+    now = datetime.utcnow()
+    
+    # Calculate date ranges
+    if period == 'today':
+        start_date = datetime(now.year, now.month, now.day)
+        group_by = 'hour'
+    elif period == '7_days':
+        start_date = now - timedelta(days=7)
+        group_by = 'day'
+    elif period == '30_days':
+        start_date = now - timedelta(days=30)
+        group_by = 'day'
+    else:  # all_time
+        start_date = None
+        group_by = 'month'
+    
+    # Helper function to format date for grouping
+    def format_date_for_group(date_obj, group_type):
+        if group_type == 'hour':
+            return date_obj.strftime('%Y-%m-%d %H:00')
+        elif group_type == 'day':
+            return date_obj.strftime('%Y-%m-%d')
+        elif group_type == 'month':
+            return date_obj.strftime('%Y-%m')
+        return date_obj.strftime('%Y-%m-%d')
+    
+    revenue_data = {}
+    
+    if revenue_type == 'platform_fees':
+        # Platform fees from ticket payments
+        query = Payment.query.filter(
+            Payment.status == 'completed',
+            Payment.payment_type == 'ticket'
+        )
+        if start_date:
+            query = query.filter(Payment.created_at >= start_date)
+        payments = query.all()
+        
+        for payment in payments:
+            key = format_date_for_group(payment.created_at, group_by)
+            revenue_data[key] = revenue_data.get(key, 0) + float(payment.platform_fee)
+    
+    elif revenue_type == 'withdrawal_fees':
+        # Withdrawal fees from completed payouts
+        from app.models.payment import PartnerPayout
+        query = PartnerPayout.query.filter(PartnerPayout.status == 'completed')
+        if start_date:
+            query = query.filter(PartnerPayout.created_at >= start_date)
+        payouts = query.all()
+        
+        for payout in payouts:
+            key = format_date_for_group(payout.created_at, group_by)
+            # Handle case where withdrawal_fee might not exist
+            fee = getattr(payout, 'withdrawal_fee', 0) or 0
+            revenue_data[key] = revenue_data.get(key, 0) + float(fee)
+    
+    elif revenue_type == 'promotions':
+        # Promotion payments
+        query = Payment.query.filter(
+            Payment.status == 'completed',
+            Payment.payment_type == 'promotion'
+        )
+        if start_date:
+            query = query.filter(Payment.created_at >= start_date)
+        payments = query.all()
+        
+        for payment in payments:
+            key = format_date_for_group(payment.created_at, group_by)
+            revenue_data[key] = revenue_data.get(key, 0) + float(payment.amount)
+    
+    # Use the same create_chart_data function from above
+    def create_chart_data(data_dict, group_type, start_dt=None, end_dt=None):
+        items = []
+        
+        if start_dt and end_dt:
+            current = start_dt
+            while current <= end_dt:
+                if group_type == 'hour':
+                    key = current.strftime('%Y-%m-%d %H:00')
+                    label = current.strftime('%H:00')
+                    value = data_dict.get(key, 0)
+                    items.append({'date': key, 'label': label, 'value': value})
+                    current += timedelta(hours=1)
+                    if current > end_dt:
+                        break
+                elif group_type == 'day':
+                    key = current.strftime('%Y-%m-%d')
+                    label = current.strftime('%b %d')
+                    value = data_dict.get(key, 0)
+                    items.append({'date': key, 'label': label, 'value': value})
+                    current += timedelta(days=1)
+                elif group_type == 'month':
+                    key = current.strftime('%Y-%m')
+                    label = current.strftime('%b %Y')
+                    value = data_dict.get(key, 0)
+                    items.append({'date': key, 'label': label, 'value': value})
+                    # Move to next month
+                    if current.month == 12:
+                        current = datetime(current.year + 1, 1, 1)
+                    else:
+                        current = datetime(current.year, current.month + 1, 1)
+        else:
+            # All time - just use the data we have
+            for key in sorted(data_dict.keys()):
+                value = data_dict[key]
+                if group_type == 'month':
+                    label = datetime.strptime(key, '%Y-%m').strftime('%b %Y')
+                elif group_type == 'day':
+                    label = datetime.strptime(key, '%Y-%m-%d').strftime('%b %d')
+                else:
+                    label = key
+                items.append({'date': key, 'label': label, 'value': value})
+        
+        return items
+    
+    end_date = now if start_date else None
+    chart_data = create_chart_data(revenue_data, group_by, start_date, end_date)
+    
+    return jsonify({
+        'type': revenue_type,
+        'period': period,
+        'data': chart_data,
+        'total': sum(item['value'] for item in chart_data)
     }), 200
 
 
@@ -1907,6 +2276,75 @@ def delete_message(current_admin, message_id):
         db.session.rollback()
         current_app.logger.error(f"Error deleting message: {str(e)}")
         return jsonify({'error': 'Failed to delete message'}), 500
+
+
+@bp.route('/invite-admin', methods=['POST'])
+@admin_required
+def invite_admin(current_admin):
+    """Invite a new admin user"""
+    data = request.get_json()
+    email = data.get('email', '').lower().strip()
+    
+    if not email:
+        return jsonify({'error': 'Email is required'}), 400
+    
+    # Validate email
+    from app.utils.validators import validate_email
+    if not validate_email(email):
+        return jsonify({'error': 'Invalid email address'}), 400
+    
+    # Check if user already exists
+    existing_user = User.query.filter_by(email=email).first()
+    import secrets
+    temp_password = secrets.token_urlsafe(12)
+    
+    if existing_user:
+        if existing_user.is_admin:
+            return jsonify({'error': 'This email is already an admin'}), 409
+        # If user exists but is not admin, make them admin and set new password
+        user = existing_user
+        user.is_admin = True
+        user.is_active = True
+        user.is_verified = True
+        user.set_password(temp_password)
+    else:
+        # Create new user
+        user = User(
+            email=email,
+            first_name=data.get('first_name', 'Admin'),
+            last_name=data.get('last_name', 'User'),
+            oauth_provider='email',
+            is_active=True,
+            is_verified=True,
+            is_admin=True
+        )
+        user.set_password(temp_password)
+        db.session.add(user)
+    
+    # Log action
+    log_admin_action(
+        current_admin,
+        'invite_admin',
+        'user',
+        user.id,
+        f"Invited admin: {email}"
+    )
+    
+    db.session.commit()
+    
+    # Send invitation email with credentials
+    try:
+        from app.utils.email import send_admin_invitation_email
+        inviter_name = f"{current_admin.first_name} {current_admin.last_name}" if current_admin.first_name else None
+        send_admin_invitation_email(email, temp_password, inviter_name)
+    except Exception as email_error:
+        current_app.logger.warning(f'Failed to send admin invitation email: {str(email_error)}')
+        # Don't fail the invitation if email fails
+    
+    return jsonify({
+        'message': 'Admin invitation sent successfully. Credentials have been emailed.',
+        'email': email
+    }), 200
 
 
 @bp.route('/test-email', methods=['POST'])

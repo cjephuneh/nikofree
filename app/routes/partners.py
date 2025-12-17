@@ -1139,7 +1139,7 @@ def update_event(current_partner, event_id):
                     message=message,
                     notification_type='event',
                     event_id=event.id,
-                    action_url=f'/admin/events/{event.id}',
+                    action_url=f'/event-detail/{event.id}',
                     action_text='View Event Details',
                     send_email=False  # We'll send email separately
                 )
@@ -1373,6 +1373,33 @@ def create_ticket_type(current_partner, event_id):
         'message': 'Ticket type created successfully',
         'ticket_type': ticket_type.to_dict()
     }), 201
+
+
+@bp.route('/ticket-types/<int:ticket_type_id>/toggle', methods=['PATCH'])
+@partner_required
+def toggle_ticket_type(current_partner, ticket_type_id):
+    """Toggle ticket type availability (enable/disable)"""
+    from app.models.ticket import TicketType
+    
+    ticket_type = TicketType.query.get(ticket_type_id)
+    
+    if not ticket_type:
+        return jsonify({'error': 'Ticket type not found'}), 404
+    
+    # Verify the ticket type belongs to an event owned by the partner
+    event = ticket_type.event
+    if not event or event.partner_id != current_partner.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    # Toggle is_active status
+    ticket_type.is_active = not ticket_type.is_active
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': f'Ticket type {"enabled" if ticket_type.is_active else "disabled"} successfully',
+        'ticket_type': ticket_type.to_dict()
+    }), 200
 
 
 @bp.route('/events/<int:event_id>/promo-codes', methods=['POST'])
@@ -1874,6 +1901,18 @@ def request_payout(current_partner):
     if amount > float(current_partner.pending_earnings):
         return jsonify({'error': 'Insufficient balance'}), 400
     
+    # Calculate withdrawal fee based on amount range
+    # 1,000 - 25,000: 50 KES fee
+    # 25,001 - 50,000: 100 KES fee
+    if 1000 <= amount <= 25000:
+        withdrawal_fee = 50.00
+    elif 25001 <= amount <= 50000:
+        withdrawal_fee = 100.00
+    else:
+        # For amounts outside these ranges, default to 100 or calculate differently
+        # You may want to add more ranges here
+        withdrawal_fee = 100.00
+    
     # Validate payout method
     payout_method = data.get('payout_method', 'mpesa')
     
@@ -1895,6 +1934,7 @@ def request_payout(current_partner):
         reference_number=f"PO-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}",
         partner_id=current_partner.id,
         amount=amount,
+        withdrawal_fee=withdrawal_fee,
         payout_method=payout_method,
         account_number=account_number,
         account_name=current_partner.bank_account_name or current_partner.business_name,
@@ -1918,11 +1958,14 @@ def request_payout(current_partner):
                 db.session.commit()
                 return jsonify({'error': 'Invalid phone number format'}), 400
             
-            # Initiate B2C payment
+            # Calculate amount to send (subtract withdrawal fee)
+            amount_to_send = amount - withdrawal_fee
+            
+            # Initiate B2C payment (send amount minus fee)
             mpesa = MPesaClient()
             b2c_response = mpesa.b2c_payment(
                 phone_number=formatted_phone,
-                amount=amount,
+                amount=amount_to_send,  # Send amount minus withdrawal fee
                 occasion=f'Payout {payout.reference_number}'
             )
             

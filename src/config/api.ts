@@ -29,10 +29,17 @@ export const API_ENDPOINTS = {
     partner: (id: number) => `${API_BASE_URL}/api/admin/partners/${id}`,
     approvePartner: (id: number) => `${API_BASE_URL}/api/admin/partners/${id}/approve`,
     rejectPartner: (id: number) => `${API_BASE_URL}/api/admin/partners/${id}/reject`,
+    unrejectPartner: (id: number) => `${API_BASE_URL}/api/admin/partners/${id}/unreject`,
     resendPartnerCredentials: (id: number) => `${API_BASE_URL}/api/admin/partners/${id}/resend-credentials`,
     events: `${API_BASE_URL}/api/admin/events`,
     approveEvent: (id: number) => `${API_BASE_URL}/api/admin/events/${id}/approve`,
     rejectEvent: (id: number) => `${API_BASE_URL}/api/admin/events/${id}/reject`,
+    revenueCharts: (type: string, period?: string) => `${API_BASE_URL}/api/admin/revenue/charts?type=${type}${period ? `&period=${period}` : ''}`,
+    users: `${API_BASE_URL}/api/admin/users`,
+    user: (id: number) => `${API_BASE_URL}/api/admin/users/${id}`,
+    flagUser: (id: number) => `${API_BASE_URL}/api/admin/users/${id}/flag`,
+    unflagUser: (id: number) => `${API_BASE_URL}/api/admin/users/${id}/unflag`,
+    deleteUser: (id: number) => `${API_BASE_URL}/api/admin/users/${id}`,
   },
   
   // Partner

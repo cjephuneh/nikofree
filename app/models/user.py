@@ -28,6 +28,7 @@ class User(db.Model):
     is_verified = db.Column(db.Boolean, default=False)
     email_verified = db.Column(db.Boolean, default=False)
     phone_verified = db.Column(db.Boolean, default=False)
+    is_admin = db.Column(db.Boolean, default=False, index=True)  # Admin access flag
     
     # Preferences
     keep_logged_in = db.Column(db.Boolean, default=False)
@@ -72,6 +73,7 @@ class User(db.Model):
             'oauth_provider': self.oauth_provider,
             'is_active': self.is_active,
             'is_verified': self.is_verified,
+            'is_admin': self.is_admin,
             'location': self.location,
             'created_at': self.created_at.isoformat(),
             'last_login': self.last_login.isoformat() if self.last_login else None

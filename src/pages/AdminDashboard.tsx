@@ -1,4 +1,4 @@
-import { Users, Calendar, DollarSign, CheckCircle, XCircle, Clock, Ban, Settings, Menu, X, Search, User, LogOut, Shield, FileText, BarChart3, Mail, MessageSquare, Building2, Phone, MapPin, Globe, Loader } from 'lucide-react';
+import { Users, Calendar, DollarSign, CheckCircle, XCircle, Clock, Ban, Settings, Menu, X, Search, User, LogOut, Shield, FileText, BarChart3, Mail, MessageSquare, Building2, Phone, MapPin, Globe, Loader, TrendingUp, Wallet, Zap, AlertCircle, UserPlus } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { API_BASE_URL, API_ENDPOINTS } from '../config/api';
 
@@ -7,7 +7,7 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'partners' | 'events' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'partners' | 'events' | 'users' | 'settings'>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -18,6 +18,29 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
   const [isLoadingPartner, setIsLoadingPartner] = useState(false);
   const [approvedPartners, setApprovedPartners] = useState<any[]>([]);
   const [isLoadingPartners, setIsLoadingPartners] = useState(false);
+  const [dashboardStats, setDashboardStats] = useState<any>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [selectedRevenueType, setSelectedRevenueType] = useState<string | null>(null);
+  const [revenueChartData, setRevenueChartData] = useState<any>(null);
+  const [isLoadingChart, setIsLoadingChart] = useState(false);
+  const [rejectedPartners, setRejectedPartners] = useState<any[]>([]);
+  const [isLoadingRejected, setIsLoadingRejected] = useState(false);
+  const [isUnrejectModalOpen, setIsUnrejectModalOpen] = useState(false);
+  const [selectedPartnerForUnreject, setSelectedPartnerForUnreject] = useState<any | null>(null);
+  const [unrejectReason, setUnrejectReason] = useState('');
+  const [isUnrejecting, setIsUnrejecting] = useState(false);
+  const [users, setUsers] = useState<any[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [isFlagModalOpen, setIsFlagModalOpen] = useState(false);
+  const [selectedUserForFlag, setSelectedUserForFlag] = useState<any | null>(null);
+  const [flagNotes, setFlagNotes] = useState('');
+  const [isFlagging, setIsFlagging] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedUserForDelete, setSelectedUserForDelete] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [inviteAdminEmail, setInviteAdminEmail] = useState('');
+  const [isInvitingAdmin, setIsInvitingAdmin] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleViewPartnerDetails = async (partnerId: number) => {
     setIsLoadingPartner(true);
@@ -97,11 +120,26 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     }
   };
 
-  const stats = [
-    { label: 'Total Users', value: '15,234', icon: Users, color: 'from-[#27aae2] to-[#1e8bb8]', change: '+12% this month' },
-    { label: 'Active Partners', value: '342', icon: Users, color: 'from-green-500 to-green-600', change: '+8% this month' },
-    { label: 'Total Events', value: '1,847', icon: Calendar, color: 'from-gray-700 to-gray-900', change: '+156 this month' },
-    { label: 'Platform Revenue', value: 'KES 1.2M', icon: DollarSign, color: 'from-orange-500 to-orange-600', change: '7% commission' }
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    if (amount >= 1000000) {
+      return `KES ${(amount / 1000000).toFixed(2)}M`;
+    } else if (amount >= 1000) {
+      return `KES ${(amount / 1000).toFixed(1)}K`;
+    }
+    return `KES ${amount.toLocaleString()}`;
+  };
+
+  const stats = dashboardStats ? [
+    { label: 'Total Users', value: dashboardStats.total_users?.toLocaleString() || '0', icon: Users, color: 'from-[#27aae2] to-[#1e8bb8]', change: `${dashboardStats.users_change >= 0 ? '+' : ''}${dashboardStats.users_change?.toFixed(1) || 0}% this month` },
+    { label: 'Active Partners', value: dashboardStats.total_partners?.toLocaleString() || '0', icon: Users, color: 'from-green-500 to-green-600', change: `${dashboardStats.partners_change >= 0 ? '+' : ''}${dashboardStats.partners_change?.toFixed(1) || 0}% this month` },
+    { label: 'Total Events', value: dashboardStats.total_events?.toLocaleString() || '0', icon: Calendar, color: 'from-gray-700 to-gray-900', change: `${dashboardStats.events_change >= 0 ? '+' : ''}${dashboardStats.events_change || 0} this month` },
+    { label: 'Total Revenue', value: formatCurrency(dashboardStats.total_revenue || 0), icon: DollarSign, color: 'from-orange-500 to-orange-600', change: 'All sources' }
+  ] : [
+    { label: 'Total Users', value: '...', icon: Users, color: 'from-[#27aae2] to-[#1e8bb8]', change: 'Loading...' },
+    { label: 'Active Partners', value: '...', icon: Users, color: 'from-green-500 to-green-600', change: 'Loading...' },
+    { label: 'Total Events', value: '...', icon: Calendar, color: 'from-gray-700 to-gray-900', change: 'Loading...' },
+    { label: 'Total Revenue', value: '...', icon: DollarSign, color: 'from-orange-500 to-orange-600', change: 'Loading...' }
   ];
 
   const pendingPartners = [
@@ -141,6 +179,85 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
       status: 'pending'
     }
   ];
+
+  // Fetch dashboard stats
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      setIsLoadingStats(true);
+      try {
+        const token = localStorage.getItem('niko_free_admin_token');
+        if (!token) {
+          console.error('No admin token found');
+          setIsLoadingStats(false);
+          return;
+        }
+
+        const response = await fetch(API_ENDPOINTS.admin.dashboard, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch dashboard stats');
+        }
+
+        setDashboardStats(data.stats || {});
+      } catch (error: any) {
+        console.error('Error fetching dashboard stats:', error);
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+
+    if (activeTab === 'overview') {
+      fetchDashboardStats();
+    }
+  }, [activeTab]);
+
+  // Fetch revenue chart data when a revenue card is clicked
+  useEffect(() => {
+    const fetchRevenueChart = async () => {
+      if (!selectedRevenueType) {
+        setRevenueChartData(null);
+        return;
+      }
+
+      setIsLoadingChart(true);
+      try {
+        const token = localStorage.getItem('niko_free_admin_token');
+        if (!token) {
+          throw new Error('Not authenticated');
+        }
+
+        const response = await fetch(API_ENDPOINTS.admin.revenueCharts(selectedRevenueType, '30_days'), {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch chart data');
+        }
+
+        setRevenueChartData(data);
+      } catch (error: any) {
+        console.error('Error fetching revenue chart:', error);
+      } finally {
+        setIsLoadingChart(false);
+      }
+    };
+
+    fetchRevenueChart();
+  }, [selectedRevenueType]);
 
   // Fetch approved partners from API
   useEffect(() => {
@@ -194,6 +311,268 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
     fetchApprovedPartners();
   }, [activeTab]);
+
+  // Fetch rejected partners from API
+  useEffect(() => {
+    const fetchRejectedPartners = async () => {
+      if (activeTab !== 'partners') return;
+      
+      setIsLoadingRejected(true);
+      try {
+        const token = localStorage.getItem('niko_free_admin_token');
+        if (!token) {
+          console.error('No admin token found');
+          setIsLoadingRejected(false);
+          return;
+        }
+
+        const response = await fetch(`${API_ENDPOINTS.admin.partners}?status=rejected`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch rejected partners');
+        }
+
+        // Transform API data
+        const formattedPartners = (data.partners || []).map((partner: any) => ({
+          id: partner.id,
+          name: partner.business_name || partner.name,
+          email: partner.email,
+          category: partner.category?.name || 'N/A',
+          rejectionReason: partner.rejection_reason || 'No reason provided',
+          submittedDate: partner.created_at ? new Date(partner.created_at).toLocaleDateString() : 'N/A',
+          status: partner.status || 'rejected'
+        }));
+
+        setRejectedPartners(formattedPartners);
+      } catch (error: any) {
+        console.error('Error fetching rejected partners:', error);
+        setRejectedPartners([]);
+      } finally {
+        setIsLoadingRejected(false);
+      }
+    };
+
+    fetchRejectedPartners();
+  }, [activeTab]);
+
+  // Fetch users from API
+  useEffect(() => {
+    const fetchUsers = async () => {
+      if (activeTab !== 'users') return;
+      
+      setIsLoadingUsers(true);
+      try {
+        const token = localStorage.getItem('niko_free_admin_token');
+        if (!token) {
+          console.error('No admin token found');
+          setIsLoadingUsers(false);
+          return;
+        }
+
+        const response = await fetch(API_ENDPOINTS.admin.users, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch users');
+        }
+
+        setUsers(data.users || []);
+      } catch (error: any) {
+        console.error('Error fetching users:', error);
+        setUsers([]);
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    };
+
+    fetchUsers();
+  }, [activeTab]);
+
+  const handleFlagUser = async () => {
+    if (!selectedUserForFlag || !flagNotes.trim()) {
+      alert('Please provide notes when flagging a user');
+      return;
+    }
+
+    setIsFlagging(true);
+    try {
+      const token = localStorage.getItem('niko_free_admin_token');
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(API_ENDPOINTS.admin.flagUser(selectedUserForFlag.id), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          notes: flagNotes.trim()
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to flag user');
+      }
+
+      // Refresh users list
+      const usersResponse = await fetch(API_ENDPOINTS.admin.users, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const usersData = await usersResponse.json();
+      if (usersResponse.ok) {
+        setUsers(usersData.users || []);
+      }
+
+      setIsFlagModalOpen(false);
+      setSelectedUserForFlag(null);
+      setFlagNotes('');
+      alert('User flagged successfully');
+    } catch (error: any) {
+      console.error('Error flagging user:', error);
+      alert(error.message || 'Failed to flag user. Please try again.');
+    } finally {
+      setIsFlagging(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!selectedUserForDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const token = localStorage.getItem('niko_free_admin_token');
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(API_ENDPOINTS.admin.deleteUser(selectedUserForDelete.id), {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete user');
+      }
+
+      // Refresh users list
+      const usersResponse = await fetch(API_ENDPOINTS.admin.users, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const usersData = await usersResponse.json();
+      if (usersResponse.ok) {
+        setUsers(usersData.users || []);
+      }
+
+      setIsDeleteModalOpen(false);
+      setSelectedUserForDelete(null);
+      alert('User deleted successfully');
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      alert(error.message || 'Failed to delete user. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleUnrejectPartner = async () => {
+    if (!selectedPartnerForUnreject || !unrejectReason.trim()) {
+      alert('Please provide a reason for unrejecting this partner');
+      return;
+    }
+
+    setIsUnrejecting(true);
+    try {
+      const token = localStorage.getItem('niko_free_admin_token');
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(API_ENDPOINTS.admin.unrejectPartner(selectedPartnerForUnreject.id), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          reason: unrejectReason.trim()
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to unreject partner');
+      }
+
+      // Refresh rejected partners list
+      const rejectedResponse = await fetch(`${API_ENDPOINTS.admin.partners}?status=rejected`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const rejectedData = await rejectedResponse.json();
+      if (rejectedResponse.ok) {
+        const formattedPartners = (rejectedData.partners || []).map((partner: any) => ({
+          id: partner.id,
+          name: partner.business_name || partner.name,
+          email: partner.email,
+          category: partner.category?.name || 'N/A',
+          rejectionReason: partner.rejection_reason || 'No reason provided',
+          submittedDate: partner.created_at ? new Date(partner.created_at).toLocaleDateString() : 'N/A',
+          status: partner.status || 'rejected'
+        }));
+        setRejectedPartners(formattedPartners);
+      }
+
+      // Close modal and reset
+      setIsUnrejectModalOpen(false);
+      setSelectedPartnerForUnreject(null);
+      setUnrejectReason('');
+      alert('Partner account has been reopened. They will receive an email with the reason.');
+    } catch (error: any) {
+      console.error('Error unrejecting partner:', error);
+      alert(error.message || 'Failed to unreject partner. Please try again.');
+    } finally {
+      setIsUnrejecting(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200 relative">
@@ -332,6 +711,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
                     {activeTab === 'overview' && 'Dashboard Overview'}
                     {activeTab === 'partners' && 'Partner Management'}
                     {activeTab === 'events' && 'Event Management'}
+                    {activeTab === 'users' && 'User Management'}
                     {activeTab === 'settings' && 'Platform Settings'}
                   </h1>
                   <p className="text-sm text-gray-500 dark:text-gray-400 hidden sm:block">Manage platform operations</p>
@@ -425,6 +805,81 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
               })}
             </div>
 
+            {/* Revenue Breakdown Cards - Always show, even if loading */}
+            {isLoadingStats ? (
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Revenue Breakdown</h3>
+                <div className="flex items-center justify-center py-8">
+                  <Loader className="w-6 h-6 animate-spin text-[#27aae2]" />
+                  <span className="ml-2 text-gray-600 dark:text-gray-400">Loading revenue data...</span>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Revenue Breakdown</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Platform Fees Card */}
+                <div
+                  onClick={() => setSelectedRevenueType('platform_fees')}
+                  className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 cursor-pointer hover:shadow-lg transition-all transform hover:scale-105"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                      <TrendingUp className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
+                  <p className="text-white/80 text-sm mb-1">Platform Fees</p>
+                  <p className="text-2xl font-bold text-white mb-2">
+                    {dashboardStats ? formatCurrency(dashboardStats.platform_fees || 0) : 'KES 0'}
+                  </p>
+                  <p className="text-white/70 text-xs">7% commission from ticket sales</p>
+                </div>
+
+                {/* Withdrawal Fees Card */}
+                <div
+                  onClick={() => setSelectedRevenueType('withdrawal_fees')}
+                  className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 cursor-pointer hover:shadow-lg transition-all transform hover:scale-105"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                      <Wallet className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
+                  <p className="text-white/80 text-sm mb-1">Withdrawal Fees</p>
+                  <p className="text-2xl font-bold text-white mb-2">
+                    {dashboardStats ? formatCurrency(dashboardStats.withdrawal_fees || 0) : 'KES 0'}
+                  </p>
+                  <p className="text-white/70 text-xs">Fees from partner withdrawals</p>
+                </div>
+
+                {/* Promotions Revenue Card */}
+                <div
+                  onClick={() => setSelectedRevenueType('promotions')}
+                  className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 cursor-pointer hover:shadow-lg transition-all transform hover:scale-105"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                      <Zap className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
+                  <p className="text-white/80 text-sm mb-1">Promotions</p>
+                  <p className="text-2xl font-bold text-white mb-2">
+                    {dashboardStats ? formatCurrency(dashboardStats.promotion_revenue || 0) : 'KES 0'}
+                  </p>
+                  <p className="text-white/70 text-xs">Revenue from event promotions</p>
+                </div>
+              </div>
+            </div>
+            )}
+
+            {/* Revenue Trend Chart (Keep existing) */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Revenue Trend</h3>
+              <div className="h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                <p>Revenue trend chart will be displayed here</p>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-6">
@@ -486,6 +941,71 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
         {activeTab === 'partners' && (
           <div className="space-y-8">
+            {/* Rejected Partners Section - Show First */}
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Rejected Partner Applications</h2>
+              {isLoadingRejected ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader className="w-8 h-8 animate-spin text-[#27aae2]" />
+                  <span className="ml-3 text-gray-600 dark:text-gray-400">Loading rejected partners...</span>
+                </div>
+              ) : rejectedPartners.length === 0 ? (
+                <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                  No rejected partners found
+                </div>
+              ) : (
+                <div className="space-y-4 mb-8">
+                  {rejectedPartners.map((partner) => (
+                    <div
+                      key={partner.id}
+                      className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm hover:shadow-lg transition-all p-6 border border-gray-100 dark:border-gray-700"
+                    >
+                      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{partner.name}</h3>
+                            <span className="px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400 rounded-full text-xs font-semibold">
+                              REJECTED
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-6 text-sm text-gray-600 dark:text-gray-400 mt-3">
+                            <span>{partner.email}</span>
+                            <span>Category: {partner.category}</span>
+                            <span>Rejected: {partner.submittedDate}</span>
+                          </div>
+                          {partner.rejectionReason && (
+                            <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg">
+                              <p className="text-sm text-red-700 dark:text-red-400">
+                                <strong>Reason:</strong> {partner.rejectionReason}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-2 flex-wrap w-full lg:w-auto">
+                          <button
+                            onClick={() => {
+                              setSelectedPartnerForUnreject(partner);
+                              setIsUnrejectModalOpen(true);
+                            }}
+                            className="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-all flex items-center space-x-2 text-sm whitespace-nowrap"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            <span>Unreject</span>
+                          </button>
+                          <button 
+                            onClick={() => handleViewPartnerDetails(Number(partner.id))}
+                            className="px-4 py-2.5 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:border-[#27aae2] hover:text-[#27aae2] transition-all text-sm"
+                          >
+                            View Details
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Pending Partner Applications</h2>
               <div className="space-y-4">
@@ -630,32 +1150,237 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
           </div>
         )}
 
+        {activeTab === 'users' && (
+          <div className="space-y-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">User Management</h2>
+              <div className="flex items-center space-x-4">
+                <input
+                  type="text"
+                  placeholder="Search users..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 dark:text-white border-0 rounded-lg focus:ring-2 focus:ring-[#27aae2] focus:bg-white dark:focus:bg-gray-600 transition-all"
+                />
+              </div>
+            </div>
+
+            {isLoadingUsers ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader className="w-8 h-8 animate-spin text-[#27aae2]" />
+                <span className="ml-3 text-gray-600 dark:text-gray-400">Loading users...</span>
+              </div>
+            ) : users.length === 0 ? (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                No users found
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {users
+                  .filter((user) => {
+                    if (!searchQuery) return true;
+                    const query = searchQuery.toLowerCase();
+                    return (
+                      user.email?.toLowerCase().includes(query) ||
+                      user.first_name?.toLowerCase().includes(query) ||
+                      user.last_name?.toLowerCase().includes(query) ||
+                      `${user.first_name} ${user.last_name}`.toLowerCase().includes(query)
+                    );
+                  })
+                  .map((user) => (
+                    <div
+                      key={user.id}
+                      className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm hover:shadow-lg transition-all p-6 border border-gray-100 dark:border-gray-700"
+                    >
+                      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                              {user.first_name} {user.last_name}
+                            </h3>
+                            {!user.is_active && (
+                              <span className="px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400 rounded-full text-xs font-semibold">
+                                FLAGGED
+                              </span>
+                            )}
+                            {user.is_active && (
+                              <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400 rounded-full text-xs font-semibold">
+                                ACTIVE
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-6 text-sm text-gray-600 dark:text-gray-400 mt-3">
+                            <span>{user.email}</span>
+                            {user.phone_number && <span>{user.phone_number}</span>}
+                            <span>
+                              Joined: {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+                            </span>
+                            <span>
+                              Last Active: {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 flex-wrap w-full lg:w-auto">
+                          {user.is_active ? (
+                            <button
+                              onClick={() => {
+                                setSelectedUserForFlag(user);
+                                setIsFlagModalOpen(true);
+                              }}
+                              className="px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold transition-all flex items-center space-x-2 text-sm"
+                            >
+                              <Ban className="w-4 h-4" />
+                              <span>Flag User</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const token = localStorage.getItem('niko_free_admin_token');
+                                  if (!token) throw new Error('Not authenticated');
+
+                                  const response = await fetch(API_ENDPOINTS.admin.unflagUser(user.id), {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      'Authorization': `Bearer ${token}`,
+                                    },
+                                  });
+
+                                  if (!response.ok) throw new Error('Failed to unflag user');
+
+                                  // Refresh users
+                                  const usersResponse = await fetch(API_ENDPOINTS.admin.users, {
+                                    headers: {
+                                      'Authorization': `Bearer ${token}`,
+                                    },
+                                  });
+                                  const usersData = await usersResponse.json();
+                                  if (usersResponse.ok) setUsers(usersData.users || []);
+                                } catch (error: any) {
+                                  alert(error.message || 'Failed to unflag user');
+                                }
+                              }}
+                              className="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-all flex items-center space-x-2 text-sm"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                              <span>Unflag</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setSelectedUserForDelete(user);
+                              setIsDeleteModalOpen(true);
+                            }}
+                            className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-all flex items-center space-x-2 text-sm"
+                          >
+                            <XCircle className="w-4 h-4" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'settings' && (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Platform Settings</h2>
 
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Categories Management</h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">Manage event categories and classifications</p>
-              <button className="px-6 py-2.5 bg-[#27aae2] text-white rounded-lg font-semibold hover:bg-[#1e8bb8] transition-colors">
-                Manage Categories
-              </button>
-            </div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-[#27aae2]" />
+                Invite Admin
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">Invite a new administrator to join the Niko Free admin dashboard. They will receive login credentials via email.</p>
+              
+              {inviteMessage && (
+                <div className={`mb-4 p-4 rounded-lg ${
+                  inviteMessage.type === 'success' 
+                    ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400' 
+                    : 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+                }`}>
+                  {inviteMessage.text}
+                </div>
+              )}
+              
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                if (!inviteAdminEmail.trim()) {
+                  setInviteMessage({ type: 'error', text: 'Please enter an email address' });
+                  return;
+                }
 
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Locations Management</h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">Add or remove supported locations</p>
-              <button className="px-6 py-2.5 bg-[#27aae2] text-white rounded-lg font-semibold hover:bg-[#1e8bb8] transition-colors">
-                Manage Locations
-              </button>
-            </div>
+                setIsInvitingAdmin(true);
+                setInviteMessage(null);
+                
+                try {
+                  const token = localStorage.getItem('niko_free_admin_token');
+                  if (!token) {
+                    throw new Error('Not authenticated');
+                  }
 
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Commission Settings</h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">Current platform commission: 7%</p>
-              <button className="px-6 py-2.5 bg-[#27aae2] text-white rounded-lg font-semibold hover:bg-[#1e8bb8] transition-colors">
-                Adjust Commission
-              </button>
+                  const response = await fetch(API_ENDPOINTS.admin.inviteAdmin, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ email: inviteAdminEmail.trim() }),
+                  });
+
+                  const data = await response.json();
+
+                  if (response.ok) {
+                    setInviteMessage({ type: 'success', text: `Admin invitation sent successfully! Credentials have been emailed to ${inviteAdminEmail}.` });
+                    setInviteAdminEmail('');
+                  } else {
+                    setInviteMessage({ type: 'error', text: data.error || 'Failed to invite admin' });
+                  }
+                } catch (error: any) {
+                  console.error('Error inviting admin:', error);
+                  setInviteMessage({ type: 'error', text: error.message || 'Error inviting admin' });
+                } finally {
+                  setIsInvitingAdmin(false);
+                }
+              }} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Admin Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={inviteAdminEmail}
+                    onChange={(e) => setInviteAdminEmail(e.target.value)}
+                    placeholder="Enter email address to invite as admin"
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#27aae2] focus:border-transparent"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    The invited admin will receive an email with their login credentials.
+                  </p>
+                </div>
+                <button
+                  type="submit"
+                  disabled={isInvitingAdmin}
+                  className="w-full px-6 py-2.5 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-lg font-semibold hover:from-green-700 hover:to-green-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isInvitingAdmin ? (
+                    <>
+                      <Loader className="w-5 h-5 animate-spin" />
+                      <span>Sending Invitation...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-5 h-5" />
+                      <span>Send Admin Invitation</span>
+                    </>
+                  )}
+                </button>
+              </form>
             </div>
           </div>
         )}
@@ -812,6 +1537,264 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
               ) : (
                 <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                   No partner data available
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Flag User Modal */}
+      {isFlagModalOpen && selectedUserForFlag && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-2xl w-full">
+            <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Flag User</h2>
+              <button
+                onClick={() => {
+                  setIsFlagModalOpen(false);
+                  setSelectedUserForFlag(null);
+                  setFlagNotes('');
+                }}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-6">
+                <p className="text-gray-700 dark:text-gray-300 mb-2">
+                  You are about to flag <strong>{selectedUserForFlag.first_name} {selectedUserForFlag.last_name}</strong> ({selectedUserForFlag.email}).
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Please provide notes explaining why this user is being flagged. This will help track the reason for flagging.
+                </p>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Notes *
+                </label>
+                <textarea
+                  value={flagNotes}
+                  onChange={(e) => setFlagNotes(e.target.value)}
+                  placeholder="Enter notes explaining why this user is being flagged..."
+                  rows={6}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#27aae2] resize-none"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  These notes will be logged in the admin activity log
+                </p>
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setIsFlagModalOpen(false);
+                    setSelectedUserForFlag(null);
+                    setFlagNotes('');
+                  }}
+                  className="px-6 py-2.5 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:border-gray-300 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleFlagUser}
+                  disabled={isFlagging || !flagNotes.trim()}
+                  className={`px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold transition-all flex items-center space-x-2 ${
+                    isFlagging || !flagNotes.trim() ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {isFlagging ? (
+                    <>
+                      <Loader className="w-4 h-4 animate-spin" />
+                      <span>Flagging...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Ban className="w-4 h-4" />
+                      <span>Flag User</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete User Confirmation Modal */}
+      {isDeleteModalOpen && selectedUserForDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-2xl w-full">
+            <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-red-600 dark:text-red-400">Confirm User Deletion</h2>
+              <button
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setSelectedUserForDelete(null);
+                }}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-6">
+                <div className="flex items-start space-x-3 mb-4">
+                  <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-gray-700 dark:text-gray-300 mb-2">
+                      Are you absolutely sure you want to delete <strong>{selectedUserForDelete.first_name} {selectedUserForDelete.last_name}</strong> ({selectedUserForDelete.email})?
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      This action is <strong className="text-red-600 dark:text-red-400">irreversible</strong> and will permanently remove:
+                    </p>
+                    <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 mt-2 ml-4">
+                      <li>User account and profile</li>
+                      <li>All bookings and tickets</li>
+                      <li>All notifications</li>
+                      <li>All associated data</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setIsDeleteModalOpen(false);
+                    setSelectedUserForDelete(null);
+                  }}
+                  className="px-6 py-2.5 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:border-gray-300 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteUser}
+                  disabled={isDeleting}
+                  className={`px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-all flex items-center space-x-2 ${
+                    isDeleting ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader className="w-4 h-4 animate-spin" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4" />
+                      <span>Delete User</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revenue Chart Modal */}
+      {selectedRevenueType && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                {selectedRevenueType === 'platform_fees' && 'Platform Fees Revenue'}
+                {selectedRevenueType === 'withdrawal_fees' && 'Withdrawal Fees Revenue'}
+                {selectedRevenueType === 'promotions' && 'Promotions Revenue'}
+              </h2>
+              <button
+                onClick={() => {
+                  setSelectedRevenueType(null);
+                  setRevenueChartData(null);
+                }}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {isLoadingChart ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader className="w-8 h-8 animate-spin text-[#27aae2]" />
+                  <span className="ml-3 text-gray-600 dark:text-gray-400">Loading chart data...</span>
+                </div>
+              ) : revenueChartData ? (
+                <div className="space-y-6">
+                  {/* Total Summary */}
+                  <div className="bg-gradient-to-r from-[#27aae2] to-[#1e8bb8] rounded-xl p-6 text-white">
+                    <p className="text-sm opacity-90 mb-1">Total Revenue</p>
+                    <p className="text-3xl font-bold">{formatCurrency(revenueChartData.total || 0)}</p>
+                    <p className="text-sm opacity-80 mt-1">Last 30 days</p>
+                  </div>
+
+                  {/* Chart */}
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Revenue Trend</h3>
+                    <div className="h-64 flex items-center justify-center">
+                      {revenueChartData.data && revenueChartData.data.length > 0 ? (
+                        <div className="w-full">
+                          {/* Simple bar chart visualization */}
+                          <div className="flex items-end justify-between h-48 space-x-1">
+                            {revenueChartData.data.map((item: any, index: number) => {
+                              const maxValue = Math.max(...revenueChartData.data.map((d: any) => d.value));
+                              const height = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
+                              return (
+                                <div key={index} className="flex-1 flex flex-col items-center">
+                                  <div
+                                    className="w-full bg-gradient-to-t from-[#27aae2] to-[#1e8bb8] rounded-t transition-all hover:opacity-80"
+                                    style={{ height: `${height}%` }}
+                                    title={`${item.label}: ${formatCurrency(item.value)}`}
+                                  ></div>
+                                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 transform -rotate-45 origin-top-left whitespace-nowrap">
+                                    {item.label.length > 8 ? item.label.substring(0, 8) + '...' : item.label}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-gray-500 dark:text-gray-400">No data available for this period</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Data Table */}
+                  {revenueChartData.data && revenueChartData.data.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Detailed Data</h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-gray-200 dark:border-gray-700">
+                              <th className="text-left py-3 px-4 text-gray-700 dark:text-gray-300">Date</th>
+                              <th className="text-right py-3 px-4 text-gray-700 dark:text-gray-300">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {revenueChartData.data.map((item: any, index: number) => (
+                              <tr key={index} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td className="py-3 px-4 text-gray-900 dark:text-white">{item.label}</td>
+                                <td className="py-3 px-4 text-right font-semibold text-gray-900 dark:text-white">
+                                  {formatCurrency(item.value)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                  No chart data available
                 </div>
               )}
             </div>

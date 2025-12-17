@@ -11,6 +11,7 @@ interface EventCardProps {
   attendees: number;
   category: string;
   price: string;
+  isSoldOut?: boolean;
   onClick: (id: string) => void;
 }
 
@@ -24,6 +25,7 @@ export default function EventCard({
   attendees,
   category,
   price,
+  isSoldOut = false,
   onClick
 }: EventCardProps) {
   const [isFavorited, setIsFavorited] = useState(false);
@@ -56,7 +58,13 @@ export default function EventCard({
             {category}
           </span>
         </div>
-        {price === 'Free' ? (
+        {isSoldOut ? (
+          <div className="absolute bottom-1 sm:bottom-1.5 md:bottom-2 lg:bottom-3 left-1 sm:left-1.5 md:left-2 lg:left-3">
+            <span className="px-1.5 py-0.5 sm:px-2 sm:py-0.5 md:px-2.5 md:py-1 lg:px-3 lg:py-1 bg-red-500/90 backdrop-blur-sm text-white text-[9px] sm:text-[10px] md:text-xs font-bold rounded-full shadow-lg">
+              SOLD OUT
+            </span>
+          </div>
+        ) : price === 'Free' ? (
           <div className="absolute bottom-1 sm:bottom-1.5 md:bottom-2 lg:bottom-3 left-1 sm:left-1.5 md:left-2 lg:left-3">
             <span className="px-1.5 py-0.5 sm:px-2 sm:py-0.5 md:px-2.5 md:py-1 lg:px-3 lg:py-1 bg-green-500/90 backdrop-blur-sm text-white text-[9px] sm:text-[10px] md:text-xs font-bold rounded-full shadow-lg">
               FREE

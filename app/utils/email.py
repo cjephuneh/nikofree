@@ -492,6 +492,84 @@ def send_partner_approval_email(partner, approved=True, temp_password=None, reje
     send_email(subject, partner.email, html_body)
 
 
+def send_partner_unrejection_email(partner, reason):
+    """Send email to partner when their account is unrejected/reopened"""
+    subject = "Your Partner Account Has Been Reopened - Action Required"
+    base_url = current_app.config.get('BASE_URL', 'https://niko-free.com')
+    frontend_url = current_app.config.get('FRONTEND_URL', base_url)
+    
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 0;">
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%); padding: 40px 30px; text-align: center;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">✅ New Opportunity</h1>
+                <p style="color: #ffffff; margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Your Email is Available for Partner Registration</p>
+            </div>
+            
+            <!-- Content -->
+            <div style="padding: 40px 30px;">
+                <p style="font-size: 16px; color: #333; margin: 0 0 20px 0;">Hi <strong>{partner.business_name}</strong>,</p>
+                <p style="font-size: 16px; color: #555; margin: 0 0 30px 0;">Good news! We've reviewed your application and would like to give you another opportunity to become a partner with Niko Free.</p>
+                
+                <div style="background-color: #e8f5e9; border-left: 4px solid #4caf50; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                    <h3 style="margin: 0 0 15px 0; color: #2e7d32; font-size: 18px;">📝 What We Need:</h3>
+                    <p style="margin: 0; color: #555; white-space: pre-wrap;">{reason}</p>
+                </div>
+                
+                <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                    <h3 style="margin: 0 0 15px 0; color: #856404; font-size: 18px;">⚠️ Important: Please Register Again</h3>
+                    <p style="margin: 0 0 15px 0; color: #856404; font-weight: 600;">Your email is now available for a new partner application.</p>
+                    <p style="margin: 0; color: #856404;">Please complete a new registration and make sure to include your business bio/description this time.</p>
+                </div>
+                
+                <div style="background-color: #f8f9fa; border-left: 4px solid #27aae2; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                    <h3 style="margin: 0 0 15px 0; color: #27aae2; font-size: 18px;">📋 Registration Steps:</h3>
+                    <ol style="margin: 0; padding-left: 20px; color: #555;">
+                        <li style="margin-bottom: 10px;">Click the button below to go to the partner registration page</li>
+                        <li style="margin-bottom: 10px;"><strong>Add Your Bio</strong> - Include your complete business bio/description (this was missing before)</li>
+                        <li style="margin-bottom: 10px;">Fill out all required fields in the registration form</li>
+                        <li style="margin-bottom: 10px;">Submit your application</li>
+                        <li style="margin-bottom: 10px;">Our team will review your application and notify you of the decision</li>
+                    </ol>
+                </div>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{frontend_url}/become-partner" 
+                       style="display: inline-block; padding: 14px 35px; background: linear-gradient(135deg, #27aae2 0%, #1e8bb8 100%); 
+                              color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(39, 170, 226, 0.3);">
+                        🚀 Register as Partner
+                    </a>
+                </div>
+                
+                <p style="font-size: 16px; color: #555; margin: 0 0 30px 0;">We're here to help you succeed! If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
+                
+                <div style="text-align: center; margin-top: 40px; padding-top: 30px; border-top: 1px solid #e5e5e5;">
+                    <p style="font-size: 14px; color: #999; margin: 0;">
+                        Need help? Contact us at <a href="mailto:support@niko-free.com" style="color: #27aae2;">support@niko-free.com</a>
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div style="background-color: #f8f9fa; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e5e5;">
+                <p style="font-size: 12px; color: #999; margin: 0;">
+                    © {datetime.now().year} Niko Free. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    send_email(subject, partner.email, html_body)
+
+
 def send_event_approval_email(event, approved=True):
     """Send event approval/rejection email"""
     partner = event.organizer
@@ -1198,6 +1276,93 @@ def send_event_edit_notification_to_admin(partner, event, changed_fields):
     """
     
     send_email(subject, admin_email, html_body)
+
+
+def send_admin_invitation_email(email, temp_password, inviter_name=None):
+    """Send admin invitation email with credentials"""
+    subject = "You've Been Invited to Join Niko Free Admin Dashboard"
+    base_url = current_app.config.get('BASE_URL', 'https://niko-free.com')
+    frontend_url = current_app.config.get('FRONTEND_URL', base_url)
+    
+    inviter_text = f" by {inviter_name}" if inviter_name else ""
+    
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 0;">
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #27aae2 0%, #1e8bb8 100%); padding: 40px 30px; text-align: center;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">🔐 Admin Access Granted</h1>
+                <p style="color: #ffffff; margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Welcome to Niko Free Admin Dashboard</p>
+            </div>
+            
+            <!-- Content -->
+            <div style="padding: 40px 30px;">
+                <p style="font-size: 16px; color: #333; margin: 0 0 20px 0;">Hello,</p>
+                <p style="font-size: 16px; color: #555; margin: 0 0 30px 0;">
+                    You have been invited{inviter_text} to join the Niko Free Admin Dashboard. Your admin account has been created and you can now access the platform.
+                </p>
+                
+                <div style="background-color: #e8f5e9; border-left: 4px solid #4caf50; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                    <h3 style="margin: 0 0 15px 0; color: #2e7d32; font-size: 18px;">🔑 Your Login Credentials</h3>
+                    <div style="background-color: #ffffff; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <p style="margin: 0 0 10px 0; color: #555;"><strong>Email:</strong></p>
+                        <p style="margin: 0 0 20px 0; font-size: 18px; font-weight: bold; color: #27aae2;">{email}</p>
+                        <p style="margin: 0 0 10px 0; color: #555;"><strong>Temporary Password:</strong></p>
+                        <p style="margin: 0; font-size: 18px; font-weight: bold; color: #27aae2; font-family: monospace; letter-spacing: 1px;">{temp_password}</p>
+                    </div>
+                    <p style="margin: 15px 0 0 0; color: #856404; font-size: 14px;">
+                        ⚠️ <strong>Important:</strong> Please change your password after your first login for security.
+                    </p>
+                </div>
+                
+                <div style="background-color: #f8f9fa; border-left: 4px solid #27aae2; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                    <h3 style="margin: 0 0 15px 0; color: #27aae2; font-size: 18px;">📋 Next Steps:</h3>
+                    <ol style="margin: 0; padding-left: 20px; color: #555;">
+                        <li style="margin-bottom: 10px;">Click the button below to go to the Admin Dashboard login page</li>
+                        <li style="margin-bottom: 10px;">Log in using the email and temporary password provided above</li>
+                        <li style="margin-bottom: 10px;">Change your password immediately after logging in</li>
+                        <li style="margin-bottom: 10px;">Start managing the Niko Free platform!</li>
+                    </ol>
+                </div>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{frontend_url}/admin/login" 
+                       style="display: inline-block; padding: 14px 35px; background: linear-gradient(135deg, #27aae2 0%, #1e8bb8 100%); 
+                              color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(39, 170, 226, 0.3);">
+                        🚀 Login to Admin Dashboard
+                    </a>
+                </div>
+                
+                <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 30px 0; border-radius: 4px;">
+                    <p style="margin: 0; color: #856404; font-size: 14px;">
+                        <strong>Security Note:</strong> Keep your credentials secure and do not share them with anyone. If you did not expect this invitation, please contact support immediately.
+                    </p>
+                </div>
+                
+                <div style="text-align: center; margin-top: 40px; padding-top: 30px; border-top: 1px solid #e5e5e5;">
+                    <p style="font-size: 14px; color: #999; margin: 0;">
+                        Need help? Contact us at <a href="mailto:support@niko-free.com" style="color: #27aae2;">support@niko-free.com</a>
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div style="background-color: #f8f9fa; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e5e5;">
+                <p style="font-size: 12px; color: #999; margin: 0;">
+                    © {datetime.now().year} Niko Free. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    send_email(subject, email, html_body)
 
 
 def send_partner_account_deletion_email(partner):

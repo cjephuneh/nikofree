@@ -689,10 +689,8 @@ def admin_login():
     if not user.is_active:
         return jsonify({'error': 'Account is deactivated'}), 403
 
-    # Check if this user is allowed to be admin
-    from flask import current_app
-    admin_email = current_app.config.get('ADMIN_EMAIL')
-    if not admin_email or user.email.lower() != admin_email.lower():
+    # Check if this user is an admin
+    if not user.is_admin:
         return jsonify({'error': 'Admin access required'}), 403
 
     # Update last login
