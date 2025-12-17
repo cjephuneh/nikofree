@@ -271,6 +271,7 @@ def mpesa_callback():
                 booking.payment_status = 'paid'
                 booking.status = 'confirmed'
                 booking.confirmed_at = datetime.utcnow()
+                booking.reserved_until = None  # Clear reservation timer on payment
                 
                 # Create tickets
                 tickets = []

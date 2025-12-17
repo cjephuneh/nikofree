@@ -14,10 +14,11 @@ interface TicketData {
   ticketId: string;
   ticketType: string;
   price: string;
-  status: 'active' | 'used' | 'cancelled';
+  status: 'active' | 'used' | 'cancelled' | 'pending';
   qrCode?: string;
   orderNumber: string;
   purchaseDate: string;
+  reservedUntil?: string | null;
 }
 
 export default function MyTickets() {
@@ -27,11 +28,7 @@ export default function MyTickets() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    fetchTickets();
-  }, [selectedFilter]);
-
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
     try {
       setIsLoading(true);
       setError('');
@@ -48,10 +45,12 @@ export default function MyTickets() {
         const firstTicket = booking.tickets?.[0] || {};
         const ticketType = firstTicket.ticket_type || {};
         
-        // Determine status
-        let status: 'active' | 'used' | 'cancelled' = 'active';
+        // Determine status - check for pending bookings
+        let status: 'active' | 'used' | 'cancelled' | 'pending' = 'active';
         if (booking.status === 'cancelled') {
           status = 'cancelled';
+        } else if (booking.status === 'pending' && booking.payment_status === 'unpaid') {
+          status = 'pending';
         } else if (event.start_date && new Date(event.start_date) < new Date()) {
           status = 'used';
         }
@@ -79,7 +78,8 @@ export default function MyTickets() {
           price: booking.total_amount > 0 ? `KES ${booking.total_amount.toLocaleString()}` : 'Free',
           status: status,
           orderNumber: booking.booking_number || `ORD-${booking.id}`,
-          purchaseDate: booking.created_at ? new Date(booking.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
+          purchaseDate: booking.created_at ? new Date(booking.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
+          reservedUntil: booking.reserved_until || null
         };
       });
       
@@ -90,15 +90,98 @@ export default function MyTickets() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedFilter]);
+
+  useEffect(() => {
+    fetchTickets();
+    
+    // Set up interval to check and release expired bookings every 30 seconds
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/tickets/release-expired`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.released_count > 0) {
+            // Refresh tickets if any were released
+            fetchTickets();
+          }
+        }
+      } catch (err) {
+        // Silently fail - this is a background task
+        console.error('Error releasing expired bookings:', err);
+      }
+    }, 30000); // Check every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [fetchTickets]);
 
   const filteredTickets = tickets.filter(ticket => {
     if (selectedFilter === 'all') return true;
     return ticket.status === selectedFilter;
   });
 
-  const getStatusBadge = (status: string) => {
+  // Countdown timer component for pending bookings
+  const CountdownTimer = ({ reservedUntil, onExpire }: { reservedUntil: string; onExpire?: () => void }) => {
+    const [timeLeft, setTimeLeft] = useState<number>(0);
+    
+    useEffect(() => {
+      if (!reservedUntil) return;
+      
+      const calculateTimeLeft = () => {
+        const now = new Date().getTime();
+        const reserved = new Date(reservedUntil).getTime();
+        const difference = reserved - now;
+        return Math.max(0, Math.floor(difference / 1000)); // seconds
+      };
+      
+      setTimeLeft(calculateTimeLeft());
+      
+      const interval = setInterval(() => {
+        const newTimeLeft = calculateTimeLeft();
+        setTimeLeft(newTimeLeft);
+        
+        if (newTimeLeft <= 0) {
+          clearInterval(interval);
+          // Refresh tickets when timer expires
+          if (onExpire) {
+            onExpire();
+          }
+        }
+      }, 1000);
+      
+      return () => clearInterval(interval);
+    }, [reservedUntil, onExpire]);
+    
+    if (timeLeft <= 0) return null;
+    
+    const minutes = Math.floor(timeLeft / 60);
+    const seconds = timeLeft % 60;
+    
+    return (
+      <div className="flex items-center space-x-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-2 py-1 rounded-full">
+        <Clock className="w-3 h-3 animate-pulse" />
+        <span className="text-xs font-bold">{minutes}:{seconds.toString().padStart(2, '0')}</span>
+      </div>
+    );
+  };
+
+  const getStatusBadge = (status: string, reservedUntil?: string | null) => {
     switch (status) {
+      case 'pending':
+        return (
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center space-x-0.5 sm:space-x-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full">
+              <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+              <span className="text-xs font-semibold">Pending</span>
+            </div>
+            {reservedUntil && <CountdownTimer reservedUntil={reservedUntil} onExpire={fetchTickets} />}
+          </div>
+        );
       case 'active':
         return (
           <div className="flex items-center space-x-0.5 sm:space-x-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full">
@@ -270,7 +353,7 @@ export default function MyTickets() {
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute top-1.5 sm:top-2 right-1.5 sm:right-2">
-                  {getStatusBadge(ticket.status)}
+                  {getStatusBadge(ticket.status, ticket.reservedUntil)}
                 </div>
               </div>
 
@@ -304,13 +387,26 @@ export default function MyTickets() {
                   </div>
                 </div>
 
+                {/* Pending Payment Warning */}
+                {ticket.status === 'pending' && ticket.reservedUntil && (
+                  <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                    <p className="text-xs sm:text-sm text-orange-800 dark:text-orange-300 font-medium mb-1 flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      Payment Required
+                    </p>
+                    <p className="text-xs text-orange-700 dark:text-orange-400">
+                      Complete payment within <CountdownTimer reservedUntil={ticket.reservedUntil} onExpire={fetchTickets} /> or your reservation will be released.
+                    </p>
+                  </div>
+                )}
+
                 {/* Action Buttons - Mobile Optimized */}
                 <div className="flex gap-1.5 sm:gap-2 pt-2.5 sm:pt-3 border-t border-gray-200 dark:border-gray-700">
                   <button
                     onClick={() => handleViewQR(ticket)}
-                    disabled={ticket.status === 'cancelled'}
+                    disabled={ticket.status === 'cancelled' || ticket.status === 'pending'}
                     className={`flex-1 py-1.5 sm:py-2 rounded-md sm:rounded-lg font-semibold text-xs sm:text-sm transition-all flex items-center justify-center space-x-1 sm:space-x-1.5 ${
-                      ticket.status === 'cancelled'
+                      ticket.status === 'cancelled' || ticket.status === 'pending'
                         ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                         : 'bg-[#27aae2] text-white hover:bg-[#1e8bb8]'
                     }`}

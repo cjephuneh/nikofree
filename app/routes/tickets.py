@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
-from datetime import datetime
+from datetime import datetime, timedelta
+from sqlalchemy import func
 from app import db
 from app.models.event import Event
 from app.models.ticket import TicketType, Booking, Ticket, PromoCode
@@ -189,9 +190,22 @@ def book_event(current_user):
     if quantity > ticket_type.max_per_order:
         return jsonify({'error': f'Maximum {ticket_type.max_per_order} tickets allowed'}), 400
     
-    # Check availability
+    # Check availability (accounting for reserved but not expired tickets)
     if ticket_type.quantity_available is not None:
-        if quantity > ticket_type.quantity_available:
+        # Count tickets reserved by pending bookings that haven't expired
+        from datetime import datetime
+        reserved_count = db.session.query(func.sum(Booking.quantity)).filter(
+            Booking.event_id == event.id,
+            Booking.status == 'pending',
+            Booking.payment_status == 'unpaid',
+            Booking.reserved_until.isnot(None),
+            Booking.reserved_until >= datetime.utcnow()
+        ).scalar() or 0
+        
+        # Available tickets = total available - reserved (non-expired) tickets
+        actually_available = ticket_type.quantity_available - reserved_count
+        
+        if quantity > actually_available:
             return jsonify({'error': 'Not enough tickets available'}), 400
     
     # Check sales period
@@ -251,7 +265,12 @@ def book_event(current_user):
                 # Commit phone number update immediately so it's available for SMS
                 db.session.commit()
     
-    # Create booking
+    # Create booking with 5-minute reservation timer for paid events
+    from datetime import timedelta
+    reserved_until = None
+    if not event.is_free:
+        reserved_until = datetime.utcnow() + timedelta(minutes=5)
+    
     booking = Booking(
         user_id=current_user.id,
         event_id=event.id,
@@ -262,7 +281,8 @@ def book_event(current_user):
         discount_amount=discount_amount,
         promo_code_id=promo_code.id if promo_code else None,
         status='pending',
-        payment_status='unpaid' if not event.is_free else 'paid'
+        payment_status='unpaid' if not event.is_free else 'paid',
+        reserved_until=reserved_until
     )
     
     db.session.add(booking)
@@ -803,4 +823,43 @@ def download_ticket_public(booking_number):
             'details': str(e),
             'message': 'Please try again or contact support if the issue persists'
         }), 500
+
+
+@bp.route('/release-expired', methods=['POST'])
+def release_expired_bookings():
+    """Release expired pending bookings (called by background task or frontend)"""
+    try:
+        # Find all pending bookings that have expired (reserved_until < now)
+        expired_bookings = Booking.query.filter(
+            Booking.status == 'pending',
+            Booking.payment_status == 'unpaid',
+            Booking.reserved_until.isnot(None),
+            Booking.reserved_until < datetime.utcnow()
+        ).all()
+        
+        released_count = 0
+        for booking in expired_bookings:
+            # Cancel the expired booking
+            booking.status = 'cancelled'
+            booking.cancelled_at = datetime.utcnow()
+            
+            # Restore promo code usage if applicable
+            if booking.promo_code:
+                booking.promo_code.current_uses = max(0, booking.promo_code.current_uses - 1)
+            
+            released_count += 1
+        
+        if released_count > 0:
+            db.session.commit()
+            current_app.logger.info(f'Released {released_count} expired bookings')
+        
+        return jsonify({
+            'message': f'Released {released_count} expired booking(s)',
+            'released_count': released_count
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error releasing expired bookings: {str(e)}')
+        return jsonify({'error': 'Failed to release expired bookings'}), 500
 

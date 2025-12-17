@@ -84,6 +84,7 @@ class Booking(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     confirmed_at = db.Column(db.DateTime, nullable=True)
     cancelled_at = db.Column(db.DateTime, nullable=True)
+    reserved_until = db.Column(db.DateTime, nullable=True, index=True)  # When reservation expires (5 minutes for payment)
     
     # Relationships
     tickets = db.relationship('Ticket', backref='booking', lazy='dynamic', cascade='all, delete-orphan')
@@ -139,6 +140,7 @@ class Booking(db.Model):
             'checked_in_at': self.checked_in_at.isoformat() if self.checked_in_at else None,
                 'created_at': self.created_at.isoformat() if self.created_at else None,
             'confirmed_at': self.confirmed_at.isoformat() if self.confirmed_at else None,
+            'reserved_until': self.reserved_until.isoformat() if self.reserved_until else None,
                 'tickets': tickets_list
             }
         except Exception as e:
