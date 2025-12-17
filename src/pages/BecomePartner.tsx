@@ -1,4 +1,4 @@
-import { Upload, CheckCircle, Building2, Mail, Phone, Tag, FileText, ArrowRight, ArrowLeft, MapPin, PenTool, Plus, Minus, AlertCircle } from 'lucide-react';
+import { Upload, CheckCircle, Building2, Mail, Phone, Tag, FileText, ArrowRight, ArrowLeft, MapPin, PenTool, Plus, Minus, AlertCircle, Sparkles } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -16,6 +16,7 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
     location: '',
     categories: [] as string[],
     interests: '',
+    description: '',
     email: '',
     phone: '',
     signature: '',
@@ -33,6 +34,7 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
   const [customInterests, setCustomInterests] = useState<string[]>([]);
   const [businessNameError, setBusinessNameError] = useState('');
   const [logoError, setLogoError] = useState('');
+  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Categories matching backend database IDs
@@ -88,6 +90,7 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
         location: formData.location,
         category_id: formData.categories[0], // Use first selected category as primary
         interests: allInterests.length > 0 ? JSON.stringify(allInterests) : undefined,
+        description: formData.description || undefined,
         signature_name: formData.signature,
         terms_accepted: 'true',
         logo: formData.logo || undefined,
@@ -103,6 +106,57 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
       setSubmitError(error.message || 'Failed to submit application. Please try again.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const generateAIDescription = async () => {
+    if (!formData.businessName) {
+      alert('Please enter your business name first');
+      return;
+    }
+
+    setIsGeneratingDescription(true);
+    try {
+      // Direct import to ensure it's loaded
+      const geminiService = await import('../services/geminiService');
+      const { generatePartnerDescription } = geminiService;
+      
+      const selectedCategory = formData.categories.length > 0 
+        ? categories.find(c => c.id === formData.categories[0])?.name 
+        : undefined;
+      
+      const allInterests = [...customInterests];
+      if (formData.interests && formData.interests.trim()) {
+        allInterests.push(formData.interests.trim());
+      }
+      
+      console.log('Generating description with params:', {
+        businessName: formData.businessName,
+        category: selectedCategory,
+        location: formData.location,
+        interests: allInterests.length > 0 ? allInterests : undefined,
+      });
+      
+      const description = await generatePartnerDescription({
+        businessName: formData.businessName,
+        category: selectedCategory,
+        location: formData.location,
+        interests: allInterests.length > 0 ? allInterests : undefined,
+      });
+      
+      console.log('Generated description:', description);
+      
+      if (description && description.trim()) {
+        setFormData(prev => ({ ...prev, description: description.trim() }));
+      } else {
+        throw new Error('Empty description received from AI');
+      }
+    } catch (error: any) {
+      console.error('Error generating description:', error);
+      const errorMessage = error?.message || 'Failed to generate description. Please try again.';
+      alert(errorMessage);
+    } finally {
+      setIsGeneratingDescription(false);
     }
   };
 
@@ -640,6 +694,37 @@ export default function BecomePartner({ onNavigate }: BecomePartnerProps) {
                     ))}
                   </div>
                 )}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="flex items-center space-x-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    <FileText className="w-4 h-4" />
+                    <span>Business Description (Optional)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={generateAIDescription}
+                    disabled={isGeneratingDescription || !formData.businessName}
+                    className="flex items-center gap-1 px-3 py-1 text-sm bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Sparkles className={`w-4 h-4 ${isGeneratingDescription ? 'animate-spin' : ''}`} />
+                    {isGeneratingDescription ? 'Generating...' : 'AI Generate'}
+                  </button>
+                </div>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  rows={6}
+                  placeholder="Describe your business, what you do, and what makes you unique..."
+                  className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-xl focus:outline-none transition-colors resize-none"
+                  onFocus={(e) => e.target.style.borderColor = '#27aae2'}
+                  onBlur={(e) => { if (!formData.description) e.target.style.borderColor = ''; }}
+                  style={{ borderColor: formData.description ? '#27aae2' : '' }}
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Help us understand your business better. This will be reviewed during your application.
+                </p>
               </div>
 
               <div className="flex justify-between pt-4">

@@ -260,6 +260,134 @@ def get_partner(current_admin, partner_id):
     }), 200
 
 
+@bp.route('/partners/<int:partner_id>/resend-credentials', methods=['POST'])
+@admin_required
+def resend_partner_credentials(current_admin, partner_id):
+    """Resend login credentials to partner via email and SMS"""
+    try:
+        partner = Partner.query.get(partner_id)
+        
+        if not partner:
+            return jsonify({'error': 'Partner not found'}), 404
+        
+        if partner.status != 'approved':
+            return jsonify({'error': 'Partner must be approved to resend credentials'}), 400
+        
+        # Generate new temporary password (ensure no whitespace)
+        import secrets
+        temp_password = secrets.token_urlsafe(12).strip()
+        
+        # Log the password being set (for debugging)
+        current_app.logger.info(f'Setting new password for partner {partner.id} (email: {partner.email})')
+        current_app.logger.info(f'Generated password: {temp_password}')
+        current_app.logger.info(f'Generated password length: {len(temp_password)}')
+        
+        # Set password
+        partner.set_password(temp_password)
+        
+        # Ensure password_hash is set
+        if not partner.password_hash:
+            current_app.logger.error(f'Password hash not set for partner {partner.id}')
+            return jsonify({'error': 'Failed to set password'}), 500
+        
+        current_app.logger.info(f'Password hash created: {partner.password_hash[:30]}...')
+        
+        # Log action
+        log_admin_action(
+            current_admin,
+            'resend_credentials',
+            'partner',
+            partner_id,
+            f"Resent login credentials to partner: {partner.business_name}"
+        )
+        
+        # Commit the password change
+        db.session.add(partner)
+        db.session.commit()
+        
+        # Expire and re-query to ensure we have the latest data from database
+        db.session.expire(partner)
+        partner = Partner.query.get(partner_id)
+        if not partner:
+            return jsonify({'error': 'Partner not found after password update'}), 500
+        
+        # Verify the password was saved correctly by checking it
+        current_app.logger.info(f'Verifying password for partner {partner.id}...')
+        current_app.logger.info(f'Password hash after re-query: {partner.password_hash[:30] if partner.password_hash else "None"}...')
+        
+        if not partner.check_password(temp_password):
+            current_app.logger.error(f'Password verification failed after reset for partner {partner.id}')
+            current_app.logger.error(f'Password hash exists: {bool(partner.password_hash)}')
+            current_app.logger.error(f'Password hash length: {len(partner.password_hash) if partner.password_hash else 0}')
+            current_app.logger.error(f'Attempted password: {temp_password}')
+            return jsonify({'error': 'Password reset failed verification. Please try again.'}), 500
+        
+        current_app.logger.info(f'✅ Password successfully set and verified for partner {partner.id}')
+        current_app.logger.info(f'Password that was set: {temp_password}')
+        current_app.logger.info(f'Password characters: {[c for c in temp_password]}')
+        current_app.logger.info(f'Password repr: {repr(temp_password)}')
+        
+        # Send email and SMS asynchronously
+        from threading import Thread
+        partner_id_for_thread = partner.id
+        temp_password_for_thread = temp_password
+        # Get the app object before creating the thread (current_app is a proxy that doesn't work in threads)
+        app = current_app._get_current_object()
+        
+        def send_credentials_async():
+            """Send credentials in background thread"""
+            with app.app_context():
+                partner_obj = Partner.query.get(partner_id_for_thread)
+                if not partner_obj:
+                    current_app.logger.error(f'Partner {partner_id_for_thread} not found in background thread')
+                    return
+                
+                # Send email with credentials
+                try:
+                    print(f"📧 Resending credentials email to {partner_obj.email}")
+                    print(f"📧 Password being sent in email: {temp_password_for_thread}")
+                    current_app.logger.info(f'Sending email with password: {temp_password_for_thread}')
+                    send_partner_approval_email(partner_obj, approved=True, temp_password=temp_password_for_thread)
+                    print(f"✅ Credentials email sent successfully")
+                except Exception as email_error:
+                    error_msg = f'Failed to send credentials email: {str(email_error)}'
+                    print(f"❌ {error_msg}")
+                    current_app.logger.warning(error_msg)
+                
+                # Send SMS with credentials
+                try:
+                    print(f"📱 Resending credentials SMS to {partner_obj.phone_number}")
+                    print(f"📱 Password being sent in SMS: {temp_password_for_thread}")
+                    current_app.logger.info(f'Sending SMS with password: {temp_password_for_thread}')
+                    notify_partner_approved(partner_obj, temp_password=temp_password_for_thread)
+                    print(f"✅ Credentials SMS sent successfully")
+                except Exception as notify_error:
+                    error_msg = f'Failed to send credentials SMS: {str(notify_error)}'
+                    print(f"❌ {error_msg}")
+                    current_app.logger.warning(error_msg)
+        
+        # Start background thread
+        thread = Thread(target=send_credentials_async)
+        thread.daemon = True
+        thread.start()
+        
+        # For debugging: include password in response (REMOVE IN PRODUCTION)
+        # In production, only send password via email/SMS, not in API response
+        return jsonify({
+            'message': 'Login credentials have been sent to partner via email and SMS',
+            'partner': partner.to_dict(),
+            'temp_password': temp_password  # TODO: Remove this in production - only for debugging
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        current_app.logger.error(f'Error resending credentials: {str(e)}', exc_info=True)
+        return jsonify({
+            'error': 'Internal server error',
+            'message': f'An error occurred while resending credentials: {str(e)}'
+        }), 500
+
+
 @bp.route('/partners/<int:partner_id>/approve', methods=['POST'])
 @admin_required
 def approve_partner(current_admin, partner_id):
@@ -283,21 +411,17 @@ def approve_partner(current_admin, partner_id):
             response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
             return response
         
-        # Extract temporary password if stored, or generate new one
+        # Generate new temporary password
         import secrets
-        temp_password = None
-        if partner.rejection_reason and partner.rejection_reason.startswith('TEMP_PASS:'):
-            temp_password = partner.rejection_reason.replace('TEMP_PASS:', '')
-        else:
-            # Generate new temporary password if not stored
-            temp_password = secrets.token_urlsafe(12)
-            partner.set_password(temp_password)
+        temp_password = secrets.token_urlsafe(12)
+        partner.set_password(temp_password)
         
         partner.status = 'approved'
         partner.approved_by = current_admin.id
         partner.approved_at = datetime.utcnow()
         partner.is_verified = True
-        partner.rejection_reason = None  # Clear the temp password field
+        # Keep rejection_reason temporarily to store password for email/SMS
+        # We'll clear it after sending notifications
         
         # Log action
         log_admin_action(
@@ -325,10 +449,12 @@ def approve_partner(current_admin, partner_id):
         # Store values to pass to background thread (avoid SQLAlchemy session issues)
         partner_id_for_thread = partner.id
         temp_password_for_thread = temp_password
+        # Get the app object before creating the thread (current_app is a proxy that doesn't work in threads)
+        app = current_app._get_current_object()
         
         def send_notifications_async():
             """Send notifications in background thread"""
-            with current_app.app_context():
+            with app.app_context():
                 # Re-fetch partner in background thread to avoid session issues
                 partner_obj = Partner.query.get(partner_id_for_thread)
                 if not partner_obj:
@@ -337,15 +463,30 @@ def approve_partner(current_admin, partner_id):
                 
                 # Send approval email with credentials (don't fail if email fails)
                 try:
+                    print(f"📧 Sending approval email to {partner_obj.email} with password")
                     send_partner_approval_email(partner_obj, approved=True, temp_password=temp_password_for_thread)
+                    print(f"✅ Approval email sent successfully")
                 except Exception as email_error:
-                    current_app.logger.warning(f'Failed to send approval email: {str(email_error)}')
+                    error_msg = f'Failed to send approval email: {str(email_error)}'
+                    print(f"❌ {error_msg}")
+                    current_app.logger.warning(error_msg)
                 
                 # Send approval notification (includes SMS with credentials) (don't fail if notification fails)
                 try:
+                    print(f"📱 Sending approval SMS to {partner_obj.phone_number} with password")
                     notify_partner_approved(partner_obj, temp_password=temp_password_for_thread)
+                    print(f"✅ Approval SMS sent successfully")
                 except Exception as notify_error:
-                    current_app.logger.warning(f'Failed to send approval notification: {str(notify_error)}')
+                    error_msg = f'Failed to send approval notification: {str(notify_error)}'
+                    print(f"❌ {error_msg}")
+                    current_app.logger.warning(error_msg)
+                
+                # Clear the temporary password storage after sending
+                try:
+                    partner_obj.rejection_reason = None
+                    db.session.commit()
+                except Exception as e:
+                    current_app.logger.warning(f'Failed to clear temp password storage: {str(e)}')
         
         # Start background thread for notifications (non-blocking)
         thread = Thread(target=send_notifications_async)

@@ -103,6 +103,7 @@ export default function CreateEvent({ isOpen, onClose, onEventCreated, eventId }
   const [isLoadingEvent, setIsLoadingEvent] = useState(false);
   const [error, setError] = useState('');
   const [categories, setCategories] = useState<any[]>([]);
+  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
   const isEditMode = !!eventId;
   const [formData, setFormData] = useState<EventFormData>({
     locationType: 'physical',
@@ -286,10 +287,35 @@ export default function CreateEvent({ isOpen, onClose, onEventCreated, eventId }
     }
   };
 
-  const generateAIDescription = () => {
-    // Simulate AI generation
-    const aiDescription = `Join us for an unforgettable experience at ${formData.eventName}! This exciting ${formData.closedCategories.join(', ')} event promises to deliver amazing moments and connections. Whether you're looking to ${formData.openInterests.join(', ')}, this is the perfect opportunity for you. Don't miss out on this incredible gathering!`;
-    setFormData(prev => ({ ...prev, description: aiDescription }));
+  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+
+  const generateAIDescription = async () => {
+    if (!formData.eventName) {
+      alert('Please enter an event name first');
+      return;
+    }
+
+    setIsGeneratingDescription(true);
+    try {
+      const { generateEventDescription } = await import('../../services/geminiService');
+      
+      const description = await generateEventDescription({
+        eventName: formData.eventName,
+        categories: formData.closedCategories,
+        interests: formData.openInterests,
+        locationType: formData.locationType,
+        locationName: formData.locationName,
+        startDate: formData.startDate,
+        startTime: formData.startTime,
+      });
+      
+      setFormData(prev => ({ ...prev, description }));
+    } catch (error) {
+      console.error('Error generating description:', error);
+      alert('Failed to generate description. Please try again.');
+    } finally {
+      setIsGeneratingDescription(false);
+    }
   };
 
   const addTicketType = () => {
@@ -950,10 +976,11 @@ export default function CreateEvent({ isOpen, onClose, onEventCreated, eventId }
                       </label>
                       <button
                         onClick={generateAIDescription}
-                        className="flex items-center gap-1 px-3 py-1 text-sm bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all"
+                        disabled={isGeneratingDescription}
+                        className="flex items-center gap-1 px-3 py-1 text-sm bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Sparkles className="w-4 h-4" />
-                        AI Generate
+                        <Sparkles className={`w-4 h-4 ${isGeneratingDescription ? 'animate-spin' : ''}`} />
+                        {isGeneratingDescription ? 'Generating...' : 'AI Generate'}
                       </button>
                     </div>
                     <textarea

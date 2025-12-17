@@ -504,14 +504,48 @@ def partner_login():
     email = data['email'].lower().strip()
     password = data['password']  # Get password as-is, don't trim (passwords may have intentional spaces)
     
-    # Find partner
+    # Find partner - re-query to ensure we have the latest data from database
     partner = Partner.query.filter_by(email=email).first()
     
     if not partner:
         return jsonify({'error': 'Invalid email or password'}), 401
     
-    # Check password - ensure we're checking against the latest password_hash
-    if not partner.check_password(password):
+    # Re-query partner to ensure we have the latest password_hash from database
+    # This is important if password was recently reset
+    db.session.expire(partner)
+    partner = Partner.query.filter_by(email=email).first()
+    
+    # Log password check attempt (for debugging)
+    current_app.logger.info(f'Login attempt for partner {partner.id} (email: {email})')
+    current_app.logger.info(f'Password hash exists: {bool(partner.password_hash)}')
+    current_app.logger.info(f'Password hash length: {len(partner.password_hash) if partner.password_hash else 0}')
+    if partner.password_hash:
+        current_app.logger.info(f'Password hash prefix: {partner.password_hash[:50]}...')
+    current_app.logger.info(f'Password provided length: {len(password)}')
+    current_app.logger.info(f'Password provided (first 3 chars): {password[:3] if len(password) >= 3 else password}')
+    current_app.logger.info(f'Password provided (last 3 chars): {password[-3:] if len(password) >= 3 else password}')
+    current_app.logger.info(f'Password provided repr: {repr(password)}')
+    current_app.logger.info(f'Password provided characters: {[c for c in password]}')
+    
+    # Check password
+    password_check_result = partner.check_password(password)
+    current_app.logger.info(f'Password check result: {password_check_result}')
+    
+    # Also try checking with stripped password in case of whitespace issues
+    if not password_check_result and password != password.strip():
+        current_app.logger.info(f'Trying password check with stripped password...')
+        password_check_result = partner.check_password(password.strip())
+        current_app.logger.info(f'Password check result (stripped): {password_check_result}')
+    
+    if not password_check_result:
+        current_app.logger.warning(f'Login failed for partner {partner.id} (email: {email}) - password mismatch')
+        # Try to verify the password hash is valid
+        if partner.password_hash:
+            current_app.logger.warning(f'Password hash exists but check failed. Hash prefix: {partner.password_hash[:30]}...')
+            # Try checking with a test password to see if check_password works at all
+            from werkzeug.security import check_password_hash
+            test_check = check_password_hash(partner.password_hash, 'test')
+            current_app.logger.warning(f'Test password check (should be False): {test_check}')
         return jsonify({'error': 'Invalid email or password'}), 401
     
     if not partner.is_active:

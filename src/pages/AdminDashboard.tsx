@@ -1,5 +1,6 @@
-import { Users, Calendar, DollarSign, CheckCircle, XCircle, Clock, Ban, Settings, Menu, X, Search, User, LogOut, Shield, FileText, BarChart3 } from 'lucide-react';
-import { useState } from 'react';
+import { Users, Calendar, DollarSign, CheckCircle, XCircle, Clock, Ban, Settings, Menu, X, Search, User, LogOut, Shield, FileText, BarChart3, Mail, MessageSquare, Building2, Phone, MapPin, Globe, Loader } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { API_BASE_URL, API_ENDPOINTS } from '../config/api';
 
 interface AdminDashboardProps {
   onNavigate: (page: string) => void;
@@ -10,6 +11,91 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [resendingCredentials, setResendingCredentials] = useState<number | null>(null);
+  const [resendMessage, setResendMessage] = useState<{ partnerId: number; message: string } | null>(null);
+  const [selectedPartner, setSelectedPartner] = useState<any | null>(null);
+  const [isPartnerModalOpen, setIsPartnerModalOpen] = useState(false);
+  const [isLoadingPartner, setIsLoadingPartner] = useState(false);
+  const [approvedPartners, setApprovedPartners] = useState<any[]>([]);
+  const [isLoadingPartners, setIsLoadingPartners] = useState(false);
+
+  const handleViewPartnerDetails = async (partnerId: number) => {
+    setIsLoadingPartner(true);
+    setIsPartnerModalOpen(true);
+    setSelectedPartner(null);
+    
+    try {
+      const token = localStorage.getItem('niko_free_admin_token');
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(API_ENDPOINTS.admin.partner(partnerId), {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch partner details');
+      }
+
+      setSelectedPartner(data.partner || data);
+    } catch (error: any) {
+      console.error('Error fetching partner details:', error);
+      alert(error.message || 'Failed to load partner details');
+      setIsPartnerModalOpen(false);
+    } finally {
+      setIsLoadingPartner(false);
+    }
+  };
+
+  const handleResendCredentials = async (partnerId: number) => {
+    setResendingCredentials(partnerId);
+    setResendMessage(null);
+    
+    try {
+      const token = localStorage.getItem('niko_free_admin_token');
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(API_ENDPOINTS.admin.resendPartnerCredentials(partnerId), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to resend credentials');
+      }
+
+      setResendMessage({
+        partnerId,
+        message: data.message || 'Credentials have been sent to partner via email and SMS'
+      });
+
+      // Clear message after 5 seconds
+      setTimeout(() => {
+        setResendMessage(null);
+      }, 5000);
+    } catch (error: any) {
+      setResendMessage({
+        partnerId,
+        message: error.message || 'Failed to resend credentials. Please try again.'
+      });
+    } finally {
+      setResendingCredentials(null);
+    }
+  };
 
   const stats = [
     { label: 'Total Users', value: '15,234', icon: Users, color: 'from-[#27aae2] to-[#1e8bb8]', change: '+12% this month' },
@@ -56,24 +142,58 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     }
   ];
 
-  const approvedPartners = [
-    {
-      id: '3',
-      name: 'Creative Arts Kenya',
-      totalEvents: 12,
-      totalRevenue: 'KES 284,700',
-      rating: 4.8,
-      status: 'active'
-    },
-    {
-      id: '4',
-      name: 'Music Matters',
-      totalEvents: 8,
-      totalRevenue: 'KES 156,000',
-      rating: 4.6,
-      status: 'active'
-    }
-  ];
+  // Fetch approved partners from API
+  useEffect(() => {
+    const fetchApprovedPartners = async () => {
+      if (activeTab !== 'partners') return;
+      
+      setIsLoadingPartners(true);
+      try {
+        const token = localStorage.getItem('niko_free_admin_token');
+        if (!token) {
+          console.error('No admin token found');
+          setIsLoadingPartners(false);
+          return;
+        }
+
+        const response = await fetch(`${API_ENDPOINTS.admin.partners}?status=approved`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch partners');
+        }
+
+        // Transform API data to match component expectations
+        const formattedPartners = (data.partners || []).map((partner: any) => ({
+          id: partner.id,
+          name: partner.business_name || partner.name,
+          email: partner.email,
+          totalEvents: partner.total_events || 0,
+          totalRevenue: partner.total_revenue ? `KES ${partner.total_revenue.toLocaleString()}` : 'KES 0',
+          rating: 4.5, // Default rating if not available
+          status: partner.status || 'approved'
+        }));
+
+        console.log('Fetched approved partners:', formattedPartners);
+        setApprovedPartners(formattedPartners);
+      } catch (error: any) {
+        console.error('Error fetching approved partners:', error);
+        // Fallback to empty array on error
+        setApprovedPartners([]);
+      } finally {
+        setIsLoadingPartners(false);
+      }
+    };
+
+    fetchApprovedPartners();
+  }, [activeTab]);
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200 relative">
@@ -407,6 +527,16 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
             <div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Active Partners</h2>
+              {isLoadingPartners ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader className="w-8 h-8 animate-spin text-[#27aae2]" />
+                  <span className="ml-3 text-gray-600 dark:text-gray-400">Loading partners...</span>
+                </div>
+              ) : approvedPartners.length === 0 ? (
+                <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                  No approved partners found
+                </div>
+              ) : (
               <div className="space-y-4">
                 {approvedPartners.map((partner) => (
                   <div
@@ -427,19 +557,36 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
                           <span>Rating: {partner.rating}/5.0</span>
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button className="px-6 py-2.5 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:border-[#27aae2] hover:text-[#27aae2] transition-all">
+                      <div className="flex gap-2 flex-wrap w-full lg:w-auto">
+                        <button 
+                          onClick={() => handleViewPartnerDetails(Number(partner.id))}
+                          className="px-4 py-2.5 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:border-[#27aae2] hover:text-[#27aae2] transition-all text-sm"
+                        >
                           View Details
                         </button>
-                        <button className="px-6 py-2.5 border-2 border-red-200 dark:border-red-700 text-red-600 rounded-lg font-semibold hover:border-red-500 transition-all flex items-center space-x-2">
+                        <button
+                          onClick={() => handleResendCredentials(Number(partner.id))}
+                          disabled={resendingCredentials === Number(partner.id)}
+                          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                        >
+                          <Mail className="w-4 h-4" />
+                          <span>{resendingCredentials === Number(partner.id) ? 'Sending...' : 'Resend Credentials'}</span>
+                        </button>
+                        <button className="px-4 py-2.5 border-2 border-red-200 dark:border-red-700 text-red-600 rounded-lg font-semibold hover:border-red-500 transition-all flex items-center space-x-2 text-sm">
                           <Ban className="w-4 h-4" />
                           <span>Suspend</span>
                         </button>
                       </div>
+                      {resendMessage && resendMessage.partnerId === Number(partner.id) && (
+                        <div className="mt-2 p-2 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded text-sm">
+                          {resendMessage.message}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
+              )}
             </div>
           </div>
         )}
@@ -515,6 +662,162 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
         </main>
       </div>
       </div>
+
+      {/* Partner Details Modal */}
+      {isPartnerModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Partner Details</h2>
+              <button
+                onClick={() => {
+                  setIsPartnerModalOpen(false);
+                  setSelectedPartner(null);
+                }}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {isLoadingPartner ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader className="w-8 h-8 animate-spin text-[#27aae2]" />
+                  <span className="ml-3 text-gray-600 dark:text-gray-400">Loading partner details...</span>
+                </div>
+              ) : selectedPartner ? (
+                <div className="space-y-6">
+                  {/* Partner Info */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                        <Building2 className="w-5 h-5 mr-2" />
+                        Business Information
+                      </h3>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Business Name</label>
+                          <p className="text-gray-900 dark:text-white">{selectedPartner.business_name || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Contact Person</label>
+                          <p className="text-gray-900 dark:text-white">{selectedPartner.contact_person || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Category</label>
+                          <p className="text-gray-900 dark:text-white">{selectedPartner.category?.name || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Description</label>
+                          <p className="text-gray-900 dark:text-white">{selectedPartner.description || 'No description provided'}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                        <User className="w-5 h-5 mr-2" />
+                        Contact Information
+                      </h3>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center">
+                            <Mail className="w-4 h-4 mr-1" />
+                            Email
+                          </label>
+                          <p className="text-gray-900 dark:text-white">{selectedPartner.email || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center">
+                            <Phone className="w-4 h-4 mr-1" />
+                            Phone
+                          </label>
+                          <p className="text-gray-900 dark:text-white">{selectedPartner.phone_number || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center">
+                            <MapPin className="w-4 h-4 mr-1" />
+                            Location
+                          </label>
+                          <p className="text-gray-900 dark:text-white">{selectedPartner.location || 'N/A'}</p>
+                        </div>
+                        {selectedPartner.website && (
+                          <div>
+                            <label className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center">
+                              <Globe className="w-4 h-4 mr-1" />
+                              Website
+                            </label>
+                            <a href={selectedPartner.website} target="_blank" rel="noopener noreferrer" className="text-[#27aae2] hover:underline">
+                              {selectedPartner.website}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Status and Actions */}
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Status</label>
+                        <div className="mt-1">
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            selectedPartner.status === 'approved' 
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                              : selectedPartner.status === 'pending'
+                              ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400'
+                              : 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
+                          }`}>
+                            {selectedPartner.status?.toUpperCase() || 'UNKNOWN'}
+                          </span>
+                        </div>
+                      </div>
+                      {selectedPartner.status === 'approved' && (
+                        <button
+                          onClick={() => handleResendCredentials(selectedPartner.id)}
+                          disabled={resendingCredentials === selectedPartner.id}
+                          className="px-6 py-2.5 border-2 border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400 rounded-lg font-semibold hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Mail className="w-4 h-4" />
+                          <span>{resendingCredentials === selectedPartner.id ? 'Sending...' : 'Resend Login Credentials'}</span>
+                        </button>
+                      )}
+                    </div>
+                    {resendMessage && resendMessage.partnerId === selectedPartner.id && (
+                      <div className="mt-2 p-3 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded text-sm">
+                        {resendMessage.message}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Events List */}
+                  {selectedPartner.events && selectedPartner.events.length > 0 && (
+                    <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Events ({selectedPartner.events.length})</h3>
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {selectedPartner.events.map((event: any) => (
+                          <div key={event.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <p className="font-medium text-gray-900 dark:text-white">{event.title}</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {event.start_date ? new Date(event.start_date).toLocaleDateString() : 'Date TBA'}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                  No partner data available
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

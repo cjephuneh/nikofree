@@ -12,12 +12,27 @@ export const API_ENDPOINTS = {
   auth: {
     register: `${API_BASE_URL}/api/auth/register`,
     login: `${API_BASE_URL}/api/auth/login`,
+    adminLogin: `${API_BASE_URL}/api/auth/admin/login`,
     googleLogin: `${API_BASE_URL}/api/auth/google`,
     appleLogin: `${API_BASE_URL}/api/auth/apple`,
     refresh: `${API_BASE_URL}/api/auth/refresh`,
     verify: `${API_BASE_URL}/api/auth/verify`,
     forgotPassword: `${API_BASE_URL}/api/auth/forgot-password`,
     resetPassword: `${API_BASE_URL}/api/auth/reset-password`,
+  },
+  
+  // Admin
+  admin: {
+    dashboard: `${API_BASE_URL}/api/admin/dashboard`,
+    partners: `${API_BASE_URL}/api/admin/partners`,
+    partnerStats: `${API_BASE_URL}/api/admin/partners/stats`,
+    partner: (id: number) => `${API_BASE_URL}/api/admin/partners/${id}`,
+    approvePartner: (id: number) => `${API_BASE_URL}/api/admin/partners/${id}/approve`,
+    rejectPartner: (id: number) => `${API_BASE_URL}/api/admin/partners/${id}/reject`,
+    resendPartnerCredentials: (id: number) => `${API_BASE_URL}/api/admin/partners/${id}/resend-credentials`,
+    events: `${API_BASE_URL}/api/admin/events`,
+    approveEvent: (id: number) => `${API_BASE_URL}/api/admin/events/${id}/approve`,
+    rejectEvent: (id: number) => `${API_BASE_URL}/api/admin/events/${id}/reject`,
   },
   
   // Partner

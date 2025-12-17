@@ -291,8 +291,15 @@ def send_partner_approval_email(partner, approved=True, temp_password=None, reje
                         border-radius: 5px; margin: 20px 0;">
                 <h3 style="margin-top: 0; color: #856404;">Your Login Credentials</h3>
                 <p><strong>Email:</strong> {partner.email}</p>
-                <p><strong>Temporary Password:</strong> <code style="background-color: #fff; 
-                   padding: 5px 10px; border-radius: 3px; font-size: 16px;">{temp_password}</code></p>
+                <p><strong>Temporary Password:</strong></p>
+                <div style="background-color: #f8f9fa; border: 2px solid #dee2e6; padding: 15px; 
+                            border-radius: 5px; margin: 10px 0; font-family: 'Courier New', monospace; 
+                            font-size: 18px; font-weight: bold; letter-spacing: 2px; text-align: center;">
+                    {temp_password}
+                </div>
+                <p style="color: #856404; font-size: 12px; margin-top: 10px;">
+                    <strong>⚠️ Important:</strong> Copy this password exactly as shown. Do not add or remove any spaces or characters.
+                </p>
                 <p style="color: #856404; font-size: 14px; margin-top: 15px;">
                     ⚠️ <strong>Important:</strong> Please change this password immediately after your first login for security. 
                     You can change it in your Profile section after logging in.

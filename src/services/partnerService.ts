@@ -12,6 +12,7 @@ export interface PartnerApplicationData {
   location: string;
   category_id: string;
   interests?: string; // JSON string or comma-separated
+  description?: string; // Business description
   signature_name: string;
   terms_accepted: string; // 'true' or 'false'
   logo?: File;
@@ -47,6 +48,10 @@ export const applyAsPartner = async (
   // Append optional fields
   if (data.interests) {
     formData.append('interests', data.interests);
+  }
+  
+  if (data.description) {
+    formData.append('description', data.description);
   }
   
   if (data.logo) {
