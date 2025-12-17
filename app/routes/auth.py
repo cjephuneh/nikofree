@@ -7,7 +7,7 @@ from app import db, limiter
 from app.models.user import User
 from app.models.partner import Partner
 from app.utils.validators import validate_email, validate_phone, validate_password
-from app.utils.email import send_welcome_email, send_password_reset_email, send_partner_password_reset_email
+from app.utils.email import send_welcome_email, send_password_reset_email, send_partner_password_reset_email, send_partner_welcome_email
 from app.utils.sms import send_welcome_sms, send_partner_welcome_sms
 import secrets
 
@@ -421,8 +421,13 @@ def partner_apply():
     db.session.add(partner)
     db.session.commit()
     
-    # Send welcome SMS to partner
+    # Send welcome SMS and email to partner
     send_partner_welcome_sms(partner)
+    try:
+        send_partner_welcome_email(partner)
+    except Exception as email_error:
+        # Log error but don't fail the application submission
+        current_app.logger.warning(f'Failed to send welcome email to partner {partner.id}: {str(email_error)}')
     
     return jsonify({
         'message': 'Application submitted successfully! You will receive an email within 24 hours with login credentials if approved.',
@@ -483,8 +488,13 @@ def partner_register():
     db.session.add(partner)
     db.session.commit()
     
-    # Send welcome SMS to partner
+    # Send welcome SMS and email to partner
     send_partner_welcome_sms(partner)
+    try:
+        send_partner_welcome_email(partner)
+    except Exception as email_error:
+        # Log error but don't fail the registration
+        current_app.logger.warning(f'Failed to send welcome email to partner {partner.id}: {str(email_error)}')
     
     return jsonify({
         'message': 'Partner registration submitted. Please wait for admin approval (within 24 hours).',

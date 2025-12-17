@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Calendar, Heart, Download, QrCode, Bell, MessageCircle, Users, Check, Moon, Sun } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Heart, Download, QrCode, Bell, MessageCircle, Users, Check, Moon, Sun, Phone, X } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import MyTickets from '../components/userDashboard/MyTickets';
 import Notifications from '../components/userDashboard/Notifications';
@@ -9,6 +9,7 @@ import MyProfile from '../components/userDashboard/MyProfile';
 import Settings from '../components/userDashboard/Settings';
 import EventsBooked from '../components/userDashboard/EventsBooked';
 import BucketList from '../components/userDashboard/BucketList';
+import { getUserProfile } from '../services/userService';
 
 interface UserDashboardProps {
   onNavigate: (page: string) => void;
@@ -33,6 +34,9 @@ export default function UserDashboard({ onNavigate }: UserDashboardProps) {
   const { isDarkMode, toggleTheme } = useTheme();
   const accountMenuRef = React.useRef<HTMLDivElement>(null);
   const accountButtonRef = React.useRef<HTMLButtonElement>(null);
+  const [userData, setUserData] = useState<any>(null);
+  const [showPhoneCard, setShowPhoneCard] = useState(false);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
 
   const handleEventClick = (event: typeof upcomingEvents[0] | typeof bucketlistEvents[0] | typeof eventHistory[0]) => {
     setSelectedEvent(event);
@@ -138,6 +142,49 @@ export default function UserDashboard({ onNavigate }: UserDashboardProps) {
       rating: 5
     }
   ];
+
+  // Fetch user profile data
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        setIsLoadingUser(true);
+        const data = await getUserProfile();
+        const user = data.user || data;
+        setUserData(user);
+        // Show phone card if phone number is missing
+        if (!user.phone_number || user.phone_number.trim() === '') {
+          setShowPhoneCard(true);
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      } finally {
+        setIsLoadingUser(false);
+      }
+    };
+    
+    fetchUserData();
+  }, []);
+
+  // Re-check phone number when returning to dashboard from profile
+  useEffect(() => {
+    if (activeView === 'dashboard' && userData) {
+      const fetchUserData = async () => {
+        try {
+          const data = await getUserProfile();
+          const user = data.user || data;
+          setUserData(user);
+          if (!user.phone_number || user.phone_number.trim() === '') {
+            setShowPhoneCard(true);
+          } else {
+            setShowPhoneCard(false);
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+        }
+      };
+      fetchUserData();
+    }
+  }, [activeView]);
 
   React.useEffect(() => {
     if (!accountMenuOpen) return;
@@ -425,6 +472,35 @@ export default function UserDashboard({ onNavigate }: UserDashboardProps) {
           <main className="lg:col-span-9">
           {activeView === 'dashboard' ? (
             <>
+          {/* Phone Number Update Card */}
+          {showPhoneCard && (
+            <div className="mb-6 bg-gradient-to-r from-[#27aae2] to-[#1e8bb8] rounded-2xl shadow-lg border border-[#27aae2]/20 p-6 relative overflow-hidden">
+              <button
+                onClick={() => setShowPhoneCard(false)}
+                className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                  <Phone className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-white mb-2">Update Your Phone Number</h3>
+                  <p className="text-white/90 text-sm mb-4">
+                    Add your phone number to receive important updates, booking confirmations, and event reminders via SMS.
+                  </p>
+                  <button
+                    onClick={() => setActiveView('profile')}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 bg-white text-[#27aae2] rounded-lg font-semibold hover:bg-gray-50 transition-colors shadow-md hover:shadow-lg"
+                  >
+                    <Phone className="w-4 h-4" />
+                    <span>Update Phone Number</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Events Booked Section */}
           <section className="mb-12">
             <div className="flex items-center justify-between mb-6">

@@ -557,22 +557,22 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
                           <span>Rating: {partner.rating}/5.0</span>
                         </div>
                       </div>
-                      <div className="flex gap-2 flex-wrap w-full lg:w-auto">
+                      <div className="flex gap-2 flex-wrap w-full lg:w-auto items-center">
                         <button 
                           onClick={() => handleViewPartnerDetails(Number(partner.id))}
-                          className="px-4 py-2.5 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:border-[#27aae2] hover:text-[#27aae2] transition-all text-sm"
+                          className="px-4 py-2.5 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:border-[#27aae2] hover:text-[#27aae2] transition-all text-sm whitespace-nowrap"
                         >
                           View Details
                         </button>
                         <button
                           onClick={() => handleResendCredentials(Number(partner.id))}
                           disabled={resendingCredentials === Number(partner.id)}
-                          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm whitespace-nowrap min-w-[160px] justify-center"
                         >
                           <Mail className="w-4 h-4" />
-                          <span>{resendingCredentials === Number(partner.id) ? 'Sending...' : 'Resend Credentials'}</span>
+                          <span>{resendingCredentials === Number(partner.id) ? 'Sending...' : 'Resend Login Details'}</span>
                         </button>
-                        <button className="px-4 py-2.5 border-2 border-red-200 dark:border-red-700 text-red-600 rounded-lg font-semibold hover:border-red-500 transition-all flex items-center space-x-2 text-sm">
+                        <button className="px-4 py-2.5 border-2 border-red-200 dark:border-red-700 text-red-600 rounded-lg font-semibold hover:border-red-500 transition-all flex items-center space-x-2 text-sm whitespace-nowrap">
                           <Ban className="w-4 h-4" />
                           <span>Suspend</span>
                         </button>
@@ -778,10 +778,10 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
                         <button
                           onClick={() => handleResendCredentials(selectedPartner.id)}
                           disabled={resendingCredentials === selectedPartner.id}
-                          className="px-6 py-2.5 border-2 border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400 rounded-lg font-semibold hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
                         >
                           <Mail className="w-4 h-4" />
-                          <span>{resendingCredentials === selectedPartner.id ? 'Sending...' : 'Resend Login Credentials'}</span>
+                          <span>{resendingCredentials === selectedPartner.id ? 'Sending...' : 'Resend Login Details'}</span>
                         </button>
                       )}
                     </div>

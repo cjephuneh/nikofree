@@ -278,6 +278,84 @@ def send_booking_confirmation_email(booking, tickets):
     send_email(subject, user.email, html_body)
 
 
+def send_partner_welcome_email(partner):
+    """Send welcome email to new partner when they submit application"""
+    subject = "Welcome to Niko Free - Application Received! 🎉"
+    base_url = current_app.config.get('BASE_URL', 'https://niko-free.com')
+    frontend_url = current_app.config.get('FRONTEND_URL', base_url)
+    
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 0;">
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #27aae2 0%, #1e8bb8 100%); padding: 40px 30px; text-align: center;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">🎉 Welcome to Niko Free!</h1>
+                <p style="color: #ffffff; margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Your Application Has Been Received</p>
+            </div>
+            
+            <!-- Content -->
+            <div style="padding: 40px 30px;">
+                <p style="font-size: 16px; color: #333; margin: 0 0 20px 0;">Hi <strong>{partner.business_name}</strong>,</p>
+                <p style="font-size: 16px; color: #555; margin: 0 0 30px 0;">Thank you for your interest in becoming a partner with Niko Free! We're excited to have you join our platform.</p>
+                
+                <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                    <h3 style="margin: 0 0 15px 0; color: #856404; font-size: 18px;">📋 Application Status</h3>
+                    <p style="margin: 0; color: #856404;">
+                        Your partner application has been received and is <strong>under review</strong>.
+                    </p>
+                    <p style="margin: 15px 0 0 0; color: #856404;">
+                        You will receive an email within 24 hours with your login credentials if approved.
+                    </p>
+                </div>
+                
+                <div style="background-color: #f8f9fa; border-left: 4px solid #27aae2; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                    <h3 style="margin: 0 0 15px 0; color: #27aae2; font-size: 18px;">⏱️ What Happens Next?</h3>
+                    <ol style="margin: 0; padding-left: 20px; color: #555;">
+                        <li style="margin-bottom: 10px;">Our team will review your application</li>
+                        <li style="margin-bottom: 10px;">You'll receive an email notification within 24 hours</li>
+                        <li style="margin-bottom: 10px;">If approved, you'll get login credentials to access your partner dashboard</li>
+                        <li style="margin-bottom: 10px;">Start creating events and reaching thousands of attendees!</li>
+                    </ol>
+                </div>
+                
+                <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); padding: 25px; border-radius: 8px; margin: 30px 0;">
+                    <h3 style="margin: 0 0 15px 0; color: #1e8bb8; font-size: 18px;">✨ What You Can Do as a Partner</h3>
+                    <ul style="margin: 0; padding-left: 20px; color: #555;">
+                        <li style="margin-bottom: 8px;">📈 Reach over 2 Million potential attendees</li>
+                        <li style="margin-bottom: 8px;">🔔 Get instant notifications on bookings and RSVPs</li>
+                        <li style="margin-bottom: 8px;">📊 Access real-time analytics and attendance tracking</li>
+                        <li style="margin-bottom: 8px;">🎫 Set attendee limits or unlimited tickets</li>
+                        <li style="margin-bottom: 8px;">💰 Easy earnings withdrawal via M-Pesa</li>
+                    </ul>
+                </div>
+                
+                <div style="text-align: center; margin-top: 40px; padding-top: 30px; border-top: 1px solid #e5e5e5;">
+                    <p style="font-size: 14px; color: #999; margin: 0;">
+                        Questions? Contact us at <a href="mailto:support@niko-free.com" style="color: #27aae2;">support@niko-free.com</a>
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div style="background-color: #f8f9fa; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e5e5;">
+                <p style="font-size: 12px; color: #999; margin: 0;">
+                    © {datetime.now().year} Niko Free. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    send_email(subject, partner.email, html_body)
+
+
 def send_partner_approval_email(partner, approved=True, temp_password=None, rejection_reason=None, internal_note=None):
     """Send partner approval/rejection email"""
     if approved:

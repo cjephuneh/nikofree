@@ -344,7 +344,32 @@ def delete_account(current_partner):
         partner_id = current_partner.id
         partner_email = current_partner.email
         
-        # Delete all events (this will cascade delete related data via foreign keys)
+        # Get all event IDs for this partner first
+        event_ids = [e.id for e in Event.query.filter_by(partner_id=partner_id).with_entities(Event.id).all()]
+        
+        # IMPORTANT: Update payments to remove event_id references BEFORE deleting events
+        # This prevents foreign key constraint violations
+        # We don't delete payments as they may be needed for financial records
+        if event_ids:
+            with db.session.no_autoflush:
+                payments_with_events = Payment.query.filter(Payment.event_id.in_(event_ids)).all()
+                for payment in payments_with_events:
+                    payment.event_id = None
+                    payment.partner_id = None  # Also remove partner_id reference
+        
+        # Update all other payments to remove partner_id reference
+        with db.session.no_autoflush:
+            payments = Payment.query.filter_by(partner_id=partner_id).all()
+            for payment in payments:
+                payment.partner_id = None
+        
+        # Update bookings checked_in_by to remove partner reference
+        with db.session.no_autoflush:
+            bookings_checked_in = Booking.query.filter_by(checked_in_by=partner_id).all()
+            for booking in bookings_checked_in:
+                booking.checked_in_by = None
+        
+        # Now safe to delete events (this will cascade delete related data via foreign keys)
         # Events cascade to: ticket_types, bookings, tickets, promo_codes, event_hosts, 
         # event_interests, event_promotions, reviews
         events = Event.query.filter_by(partner_id=partner_id).all()
@@ -371,17 +396,6 @@ def delete_account(current_partner):
         notifications = Notification.query.filter_by(partner_id=partner_id).all()
         for notification in notifications:
             db.session.delete(notification)
-        
-        # Update payments to remove partner_id reference (set to None)
-        # We don't delete payments as they may be needed for financial records
-        payments = Payment.query.filter_by(partner_id=partner_id).all()
-        for payment in payments:
-            payment.partner_id = None
-        
-        # Update bookings checked_in_by to remove partner reference
-        bookings_checked_in = Booking.query.filter_by(checked_in_by=partner_id).all()
-        for booking in bookings_checked_in:
-            booking.checked_in_by = None
         
         # Delete the partner account
         db.session.delete(current_partner)
