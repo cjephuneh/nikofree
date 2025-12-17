@@ -397,6 +397,15 @@ def delete_account(current_partner):
         for notification in notifications:
             db.session.delete(notification)
         
+        # Send account deletion email BEFORE deleting the partner
+        # (we need the partner object to send the email)
+        try:
+            from app.utils.email import send_partner_account_deletion_email
+            send_partner_account_deletion_email(current_partner)
+        except Exception as email_error:
+            # Log error but don't fail the deletion
+            current_app.logger.warning(f'Failed to send deletion email to partner {partner_id}: {str(email_error)}')
+        
         # Delete the partner account
         db.session.delete(current_partner)
         db.session.commit()
