@@ -292,7 +292,7 @@ def notify_booking_confirmed(booking):
     )
 
 
-def notify_partner_approved(partner):
+def notify_partner_approved(partner, temp_password=None):
     """Send notification when partner is approved"""
     create_notification(
         partner_id=partner.id,
@@ -303,8 +303,8 @@ def notify_partner_approved(partner):
         action_text='Go to Dashboard',
         send_email=True
     )
-    # Send SMS notification
-    send_partner_approval_sms(partner)
+    # Send SMS notification with credentials
+    send_partner_approval_sms(partner, temp_password=temp_password)
 
 
 def notify_partner_rejected(partner, reason, internal_note=None):

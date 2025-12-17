@@ -341,9 +341,9 @@ def approve_partner(current_admin, partner_id):
                 except Exception as email_error:
                     current_app.logger.warning(f'Failed to send approval email: {str(email_error)}')
                 
-                # Send approval notification (includes SMS) (don't fail if notification fails)
+                # Send approval notification (includes SMS with credentials) (don't fail if notification fails)
                 try:
-                    notify_partner_approved(partner_obj)
+                    notify_partner_approved(partner_obj, temp_password=temp_password_for_thread)
                 except Exception as notify_error:
                     current_app.logger.warning(f'Failed to send approval notification: {str(notify_error)}')
         

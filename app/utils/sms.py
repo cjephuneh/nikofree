@@ -350,19 +350,30 @@ Check it out!"""
     send_sms(phone, message)
 
 
-def send_partner_approval_sms(partner):
-    """Send partner approval SMS"""
+def send_partner_approval_sms(partner, temp_password=None):
+    """Send partner approval SMS with credentials"""
     if not partner.phone_number:
         print(f"⚠️ No phone number for partner {partner.id}, skipping SMS")
         return
     
     phone = format_phone_for_sms(partner.phone_number)
     
+    # Include credentials if provided
+    credentials_text = ""
+    if temp_password:
+        credentials_text = f"""
+
+Login Credentials:
+Email: {partner.email}
+Password: {temp_password}
+
+⚠️ Please change your password after first login for security."""
+    
     message = f"""Congratulations! 🎉
 
 Your partner account for {partner.business_name} has been approved!
 
-You can now start creating events and reach thousands of attendees.
+You can now start creating events and reach thousands of attendees.{credentials_text}
 
 Login to your dashboard to get started!"""
     

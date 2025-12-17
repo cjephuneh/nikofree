@@ -38,3 +38,4 @@ CREATE TABLE IF NOT EXISTS contact_messages (
 CREATE INDEX IF NOT EXISTS ix_contact_messages_created_at ON contact_messages(created_at);
 
 
+
