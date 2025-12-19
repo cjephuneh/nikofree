@@ -12,15 +12,17 @@ class MPesaClient:
         self.consumer_key = current_app.config.get('MPESA_CONSUMER_KEY')
         self.consumer_secret = current_app.config.get('MPESA_CONSUMER_SECRET')
         self.shortcode = current_app.config.get('MPESA_SHORTCODE')
+        self.business_shortcode = current_app.config.get('MPESA_BUSINESS_SHORTCODE', self.shortcode)
         self.passkey = current_app.config.get('MPESA_PASSKEY')
         self.callback_url = current_app.config.get('MPESA_CALLBACK_URL')
         
-        # Set API URLs based on environment
-        env = current_app.config.get('MPESA_ENVIRONMENT', 'sandbox')
+        # Set API URLs - Production only
+        env = current_app.config.get('MPESA_ENVIRONMENT', 'production')
         if env == 'production':
             self.base_url = 'https://api.safaricom.co.ke'
         else:
-            self.base_url = 'https://sandbox.safaricom.co.ke'
+            # Fallback to production even if misconfigured
+            self.base_url = 'https://api.safaricom.co.ke'
     
     def get_access_token(self):
         """Get OAuth access token"""
@@ -63,8 +65,8 @@ class MPesaClient:
         # Generate timestamp
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
         
-        # Generate password
-        password_string = f"{self.shortcode}{self.passkey}{timestamp}"
+        # Generate password (use business_shortcode for production)
+        password_string = f"{self.business_shortcode}{self.passkey}{timestamp}"
         password_bytes = password_string.encode('ascii')
         password = base64.b64encode(password_bytes).decode('ascii')
         
@@ -77,13 +79,13 @@ class MPesaClient:
         }
         
         payload = {
-            'BusinessShortCode': self.shortcode,
+            'BusinessShortCode': self.business_shortcode,
             'Password': password,
             'Timestamp': timestamp,
             'TransactionType': 'CustomerPayBillOnline',
             'Amount': int(amount),
             'PartyA': phone_number,
-            'PartyB': self.shortcode,
+            'PartyB': self.business_shortcode,
             'PhoneNumber': phone_number,
             'CallBackURL': self.callback_url,
             'AccountReference': account_reference,
@@ -115,7 +117,7 @@ class MPesaClient:
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
         
         # Generate password
-        password_string = f"{self.shortcode}{self.passkey}{timestamp}"
+        password_string = f"{self.business_shortcode}{self.passkey}{timestamp}"
         password_bytes = password_string.encode('ascii')
         password = base64.b64encode(password_bytes).decode('ascii')
         
@@ -127,7 +129,7 @@ class MPesaClient:
         }
         
         payload = {
-            'BusinessShortCode': self.shortcode,
+            'BusinessShortCode': self.business_shortcode,
             'Password': password,
             'Timestamp': timestamp,
             'CheckoutRequestID': checkout_request_id
@@ -163,19 +165,21 @@ class MPesaClient:
             'Content-Type': 'application/json'
         }
         
-        # Security credential - for sandbox, use the initiator password directly
-        # For production, this should be encrypted with MPesa public key
+        # Security credential - for production, must be encrypted with MPesa public key
+        # This should be set in environment variables as MPESA_SECURITY_CREDENTIAL
         from flask import current_app
-        initiator_name = current_app.config.get('MPESA_INITIATOR_NAME', 'testapi')
-        initiator_password = current_app.config.get('MPESA_INITIATOR_PASSWORD', 'Safaricom999!*!')
-        security_credential = current_app.config.get('MPESA_SECURITY_CREDENTIAL', initiator_password)
+        initiator_name = current_app.config.get('MPESA_INITIATOR_NAME')
+        security_credential = current_app.config.get('MPESA_SECURITY_CREDENTIAL')
+        
+        if not initiator_name or not security_credential:
+            return {'error': 'MPESA_INITIATOR_NAME and MPESA_SECURITY_CREDENTIAL must be configured for B2C payments'}
         
         payload = {
             'InitiatorName': initiator_name,
             'SecurityCredential': security_credential,
             'CommandID': 'BusinessPayment',
             'Amount': int(amount),
-            'PartyA': self.shortcode,
+            'PartyA': self.business_shortcode,
             'PartyB': phone_number,
             'Remarks': occasion or 'Partner Payout',
             'QueueTimeOutURL': f"{self.callback_url}/timeout",

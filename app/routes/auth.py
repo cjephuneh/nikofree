@@ -505,57 +505,28 @@ def partner_register():
 @bp.route('/partner/login', methods=['POST'])
 @limiter.limit("10 per hour")
 def partner_login():
-    """Partner login"""
+    """Partner login - same simple approach as user login"""
     data = request.get_json()
     
     if not data.get('email') or not data.get('password'):
         return jsonify({'error': 'Email and password are required'}), 400
     
     email = data['email'].lower().strip()
-    password = data['password']  # Get password as-is, don't trim (passwords may have intentional spaces)
+    password = data['password']
     
-    # Find partner - re-query to ensure we have the latest data from database
+    # Find partner - same simple approach as user login
     partner = Partner.query.filter_by(email=email).first()
     
     if not partner:
+        current_app.logger.warning(f'Partner login failed: Partner not found for email {email}')
         return jsonify({'error': 'Invalid email or password'}), 401
     
-    # Re-query partner to ensure we have the latest password_hash from database
-    # This is important if password was recently reset
-    db.session.expire(partner)
-    partner = Partner.query.filter_by(email=email).first()
-    
-    # Log password check attempt (for debugging)
-    current_app.logger.info(f'Login attempt for partner {partner.id} (email: {email})')
-    current_app.logger.info(f'Password hash exists: {bool(partner.password_hash)}')
-    current_app.logger.info(f'Password hash length: {len(partner.password_hash) if partner.password_hash else 0}')
-    if partner.password_hash:
-        current_app.logger.info(f'Password hash prefix: {partner.password_hash[:50]}...')
-    current_app.logger.info(f'Password provided length: {len(password)}')
-    current_app.logger.info(f'Password provided (first 3 chars): {password[:3] if len(password) >= 3 else password}')
-    current_app.logger.info(f'Password provided (last 3 chars): {password[-3:] if len(password) >= 3 else password}')
-    current_app.logger.info(f'Password provided repr: {repr(password)}')
-    current_app.logger.info(f'Password provided characters: {[c for c in password]}')
-    
     # Check password
-    password_check_result = partner.check_password(password)
-    current_app.logger.info(f'Password check result: {password_check_result}')
+    password_valid = partner.check_password(password)
+    current_app.logger.info(f'Partner login attempt for {email}: password_valid={password_valid}, partner_id={partner.id}')
     
-    # Also try checking with stripped password in case of whitespace issues
-    if not password_check_result and password != password.strip():
-        current_app.logger.info(f'Trying password check with stripped password...')
-        password_check_result = partner.check_password(password.strip())
-        current_app.logger.info(f'Password check result (stripped): {password_check_result}')
-    
-    if not password_check_result:
-        current_app.logger.warning(f'Login failed for partner {partner.id} (email: {email}) - password mismatch')
-        # Try to verify the password hash is valid
-        if partner.password_hash:
-            current_app.logger.warning(f'Password hash exists but check failed. Hash prefix: {partner.password_hash[:30]}...')
-            # Try checking with a test password to see if check_password works at all
-            from werkzeug.security import check_password_hash
-            test_check = check_password_hash(partner.password_hash, 'test')
-            current_app.logger.warning(f'Test password check (should be False): {test_check}')
+    if not password_valid:
+        current_app.logger.warning(f'Partner login failed for {email}: Invalid password')
         return jsonify({'error': 'Invalid email or password'}), 401
     
     if not partner.is_active:
@@ -568,6 +539,8 @@ def partner_login():
     # Generate tokens
     access_token = create_access_token(identity=partner.id)
     refresh_token = create_refresh_token(identity=partner.id)
+    
+    current_app.logger.info(f'Partner login successful for {email}')
     
     return jsonify({
         'message': 'Login successful',
@@ -645,24 +618,12 @@ def partner_reset_password():
     if partner.reset_token_expires < datetime.utcnow():
         return jsonify({'error': 'Reset token has expired. Please request a new one'}), 400
     
-    # Update password
+    # Update password - EXACTLY like user reset (no extra verification, no re-querying)
     partner.set_password(data['password'])
     partner.reset_token = None
     partner.reset_token_expires = None
     
-    # Ensure password_hash is set
-    if not partner.password_hash:
-        return jsonify({'error': 'Failed to update password'}), 500
-    
-    # Refresh the session to ensure changes are persisted
-    db.session.add(partner)
     db.session.commit()
-    db.session.refresh(partner)
-    
-    # Verify the password was saved correctly by checking it
-    if not partner.check_password(data['password']):
-        current_app.logger.error(f'Password verification failed after reset for partner {partner.id}')
-        return jsonify({'error': 'Password reset failed verification'}), 500
     
     return jsonify({'message': 'Password has been reset successfully'}), 200
 

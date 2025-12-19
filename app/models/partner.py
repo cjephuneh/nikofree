@@ -82,6 +82,8 @@ class Partner(db.Model):
     
     def check_password(self, password):
         """Check if password matches hash"""
+        if not self.password_hash:
+            return False
         return check_password_hash(self.password_hash, password)
     
     def to_dict(self, include_sensitive=False):

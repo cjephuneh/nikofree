@@ -193,7 +193,6 @@ def book_event(current_user):
     # Check availability (accounting for reserved but not expired tickets)
     if ticket_type.quantity_available is not None:
         # Count tickets reserved by pending bookings that haven't expired
-        from datetime import datetime
         reserved_count = db.session.query(func.sum(Booking.quantity)).filter(
             Booking.event_id == event.id,
             Booking.status == 'pending',
@@ -266,7 +265,6 @@ def book_event(current_user):
                 db.session.commit()
     
     # Create booking with 5-minute reservation timer for paid events
-    from datetime import timedelta
     reserved_until = None
     if not event.is_free:
         reserved_until = datetime.utcnow() + timedelta(minutes=5)

@@ -5,6 +5,123 @@ from threading import Thread
 from datetime import datetime
 import socket
 import smtplib
+import base64
+import os
+
+# Company colors
+COMPANY_BLUE = "#27aae2"
+COMPANY_BLUE_DARK = "#1e8bb8"
+COMPANY_BLACK = "#333333"
+COMPANY_WHITE = "#ffffff"
+COMPANY_BG_LIGHT = "#f5f5f5"
+
+# Logo base64 (embedded from favicon)
+LOGO_BASE64 = None
+LOGO_LOADED = False
+
+def _get_logo_base64():
+    """Get logo base64 data, loading it once"""
+    global LOGO_BASE64, LOGO_LOADED
+    if not LOGO_LOADED:
+        LOGO_LOADED = True  # Set flag first to prevent infinite recursion
+        # Try multiple path resolutions
+        possible_paths = []
+        
+        # Try Flask instance path if available
+        try:
+            if current_app and hasattr(current_app, 'instance_path'):
+                instance_root = os.path.dirname(current_app.instance_path)
+                possible_paths.append(os.path.join(instance_root, 'niko_free', 'dist', 'assets', 'favicon-C9tFaF8M.png'))
+        except:
+            pass
+        
+        # From app/utils/email.py -> project root -> niko_free/dist/assets/
+        email_file_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(email_file_dir)))
+        possible_paths.append(os.path.join(project_root, 'niko_free', 'dist', 'assets', 'favicon-C9tFaF8M.png'))
+        
+        # From current working directory
+        possible_paths.append(os.path.join(os.getcwd(), 'niko_free', 'dist', 'assets', 'favicon-C9tFaF8M.png'))
+        
+        # Relative path
+        possible_paths.append('niko_free/dist/assets/favicon-C9tFaF8M.png')
+        
+        logo_path = None
+        for path in possible_paths:
+            abs_path = os.path.abspath(path) if not os.path.isabs(path) else path
+            if os.path.exists(abs_path):
+                logo_path = abs_path
+                break
+        
+        if logo_path:
+            try:
+                with open(logo_path, 'rb') as f:
+                    logo_bytes = f.read()
+                    LOGO_BASE64 = base64.b64encode(logo_bytes).decode('utf-8')
+                try:
+                    if current_app and hasattr(current_app, 'logger'):
+                        current_app.logger.info(f"✅ Logo loaded successfully from: {logo_path} ({len(logo_bytes)} bytes)")
+                    else:
+                        print(f"✅ Logo loaded successfully from: {logo_path} ({len(logo_bytes)} bytes)")
+                except:
+                    print(f"✅ Logo loaded successfully from: {logo_path} ({len(logo_bytes)} bytes)")
+            except Exception as e:
+                error_msg = f"❌ Error loading logo from {logo_path}: {str(e)}"
+                try:
+                    if current_app and hasattr(current_app, 'logger'):
+                        current_app.logger.error(error_msg)
+                    else:
+                        print(error_msg)
+                except:
+                    print(error_msg)
+                LOGO_BASE64 = ""
+        else:
+            error_msg = f"❌ Logo file not found. Tried paths: {possible_paths}"
+            try:
+                if current_app and hasattr(current_app, 'logger'):
+                    current_app.logger.warning(error_msg)
+                else:
+                    print(error_msg)
+            except:
+                print(error_msg)
+            LOGO_BASE64 = ""
+    return LOGO_BASE64
+
+def get_email_header(title, subtitle=""):
+    """Generate email header with logo and company colors"""
+    logo_data = _get_logo_base64()
+    # Use logo if available, with proper styling for email clients
+    # Note: Some email clients have issues with base64 images, but this is the most reliable method
+    if logo_data:
+        logo_img = f'''<img src="data:image/png;base64,{logo_data}" 
+                         alt="Niko Free Logo" 
+                         width="150" 
+                         height="150"
+                         style="max-width: 150px; width: 150px; height: auto; display: block; margin: 0 auto 20px; border: 0; outline: none; text-decoration: none;" />'''
+    else:
+        # Fallback: text logo
+        logo_img = '<div style="font-size: 24px; font-weight: bold; color: #ffffff; margin-bottom: 20px;">NIKO FREE</div>'
+    
+    return f"""
+    <div style="background: linear-gradient(135deg, {COMPANY_BLUE} 0%, {COMPANY_BLUE_DARK} 100%); padding: 40px 30px; text-align: center;">
+        {logo_img}
+        <h1 style="color: {COMPANY_WHITE}; margin: 0; font-size: 28px; font-weight: bold;">{title}</h1>
+        {f'<p style="color: {COMPANY_WHITE}; margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">{subtitle}</p>' if subtitle else ''}
+    </div>
+    """
+
+def get_email_footer():
+    """Generate email footer with company info"""
+    return f"""
+    <div style="background-color: #f8f9fa; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e5e5;">
+        <p style="font-size: 12px; color: #999; margin: 0;">
+            © {datetime.now().year} Niko Free. All rights reserved.
+        </p>
+        <p style="font-size: 12px; color: #999; margin: 10px 0 0 0;">
+            <a href="https://niko-free.com" style="color: {COMPANY_BLUE}; text-decoration: none;">Visit Niko Free</a>
+        </p>
+    </div>
+    """
 
 
 def send_async_email(app, msg):
@@ -90,31 +207,39 @@ def send_password_reset_email(user, reset_token):
     reset_url = f"{frontend_url}/reset-password?token={reset_token}"
     
     html_body = f"""
+    <!DOCTYPE html>
     <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #27aae2;">Reset Your Password</h2>
-                <p>Hi {user.first_name},</p>
-                <p>We received a request to reset your password for your Niko Free account.</p>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: {COMPANY_BLACK}; margin: 0; padding: 0; background-color: {COMPANY_BG_LIGHT};">
+        <div style="max-width: 600px; margin: 0 auto; background-color: {COMPANY_WHITE}; padding: 0;">
+            {get_email_header("Reset Your Password", "Password Reset Request")}
+            
+            <div style="padding: 40px 30px;">
+                <p style="font-size: 16px; color: {COMPANY_BLACK}; margin: 0 0 20px 0;">Hi <strong>{user.first_name}</strong>,</p>
+                <p style="font-size: 16px; color: #555; margin: 0 0 30px 0;">We received a request to reset your password for your Niko Free account.</p>
                 
-                <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 15px; 
-                            border-radius: 5px; margin: 20px 0;">
-                    <p style="margin: 0; color: #856404;">
+                <div style="background-color: #e3f2fd; border-left: 4px solid {COMPANY_BLUE}; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                    <p style="margin: 0; color: {COMPANY_BLUE_DARK};">
                         <strong>⚠️ Security Notice:</strong> This link will expire in 1 hour.
                     </p>
                 </div>
                 
-                <p>Click the button below to reset your password:</p>
+                <p style="font-size: 16px; color: #555; margin: 0 0 20px 0;">Click the button below to reset your password:</p>
                 
-                <a href="{reset_url}" 
-                   style="display: inline-block; padding: 12px 30px; background-color: #27aae2; 
-                          color: white; text-decoration: none; border-radius: 5px; margin-top: 20px;">
-                    Reset Password
-                </a>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{reset_url}" 
+                       style="display: inline-block; padding: 14px 35px; background: linear-gradient(135deg, {COMPANY_BLUE} 0%, {COMPANY_BLUE_DARK} 100%); 
+                              color: {COMPANY_WHITE}; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(39, 170, 226, 0.3);">
+                        Reset Password
+                    </a>
+                </div>
                 
                 <p style="margin-top: 30px; font-size: 14px; color: #666;">
                     Or copy and paste this link into your browser:<br>
-                    <a href="{reset_url}" style="color: #27aae2; word-break: break-all;">{reset_url}</a>
+                    <a href="{reset_url}" style="color: {COMPANY_BLUE}; word-break: break-all;">{reset_url}</a>
                 </p>
                 
                 <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
@@ -124,13 +249,11 @@ def send_password_reset_email(user, reset_token):
                         Your password will remain unchanged.
                     </p>
                 </div>
-                
-                <p style="margin-top: 30px; font-size: 12px; color: #999;">
-                    Best regards,<br>
-                    The Niko Free Team
-                </p>
             </div>
-        </body>
+            
+            {get_email_footer()}
+        </div>
+    </body>
     </html>
     """
     
@@ -146,31 +269,39 @@ def send_partner_password_reset_email(partner, reset_token):
     partner_name = partner.contact_person or partner.business_name or 'Partner'
     
     html_body = f"""
+    <!DOCTYPE html>
     <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #27aae2;">Reset Your Partner Password</h2>
-                <p>Hi {partner_name},</p>
-                <p>We received a request to reset your password for your Niko Free partner account ({partner.business_name}).</p>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: {COMPANY_BLACK}; margin: 0; padding: 0; background-color: {COMPANY_BG_LIGHT};">
+        <div style="max-width: 600px; margin: 0 auto; background-color: {COMPANY_WHITE}; padding: 0;">
+            {get_email_header("Reset Your Partner Password", "Password Reset Request")}
+            
+            <div style="padding: 40px 30px;">
+                <p style="font-size: 16px; color: {COMPANY_BLACK}; margin: 0 0 20px 0;">Hi <strong>{partner_name}</strong>,</p>
+                <p style="font-size: 16px; color: #555; margin: 0 0 30px 0;">We received a request to reset your password for your Niko Free partner account ({partner.business_name}).</p>
                 
-                <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 15px; 
-                            border-radius: 5px; margin: 20px 0;">
-                    <p style="margin: 0; color: #856404;">
+                <div style="background-color: #e3f2fd; border-left: 4px solid {COMPANY_BLUE}; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                    <p style="margin: 0; color: {COMPANY_BLUE_DARK};">
                         <strong>⚠️ Security Notice:</strong> This link will expire in 1 hour.
                     </p>
                 </div>
                 
-                <p>Click the button below to reset your password:</p>
+                <p style="font-size: 16px; color: #555; margin: 0 0 20px 0;">Click the button below to reset your password:</p>
                 
-                <a href="{reset_url}" 
-                   style="display: inline-block; padding: 12px 30px; background-color: #27aae2; 
-                          color: white; text-decoration: none; border-radius: 5px; margin-top: 20px;">
-                    Reset Password
-                </a>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{reset_url}" 
+                       style="display: inline-block; padding: 14px 35px; background: linear-gradient(135deg, {COMPANY_BLUE} 0%, {COMPANY_BLUE_DARK} 100%); 
+                              color: {COMPANY_WHITE}; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(39, 170, 226, 0.3);">
+                        Reset Password
+                    </a>
+                </div>
                 
                 <p style="margin-top: 30px; font-size: 14px; color: #666;">
                     Or copy and paste this link into your browser:<br>
-                    <a href="{reset_url}" style="color: #27aae2; word-break: break-all;">{reset_url}</a>
+                    <a href="{reset_url}" style="color: {COMPANY_BLUE}; word-break: break-all;">{reset_url}</a>
                 </p>
                 
                 <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
@@ -180,13 +311,11 @@ def send_partner_password_reset_email(partner, reset_token):
                         Your password will remain unchanged.
                     </p>
                 </div>
-                
-                <p style="margin-top: 30px; font-size: 12px; color: #999;">
-                    Best regards,<br>
-                    The Niko Free Team
-                </p>
             </div>
-        </body>
+            
+            {get_email_footer()}
+        </div>
+    </body>
     </html>
     """
     
@@ -196,30 +325,49 @@ def send_partner_password_reset_email(partner, reset_token):
 def send_welcome_email(user):
     """Send welcome email to new user"""
     subject = "Welcome to Niko Free!"
+    frontend_url = current_app.config.get('FRONTEND_URL') or current_app.config.get('BASE_URL') or 'https://www.niko-free.com'
+    
     html_body = f"""
+    <!DOCTYPE html>
     <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #4CAF50;">Welcome to Niko Free, {user.first_name}! 🎉</h2>
-                <p>Thank you for joining Niko Free - your gateway to amazing events in Kenya!</p>
-                <p>With Niko Free, you can:</p>
-                <ul>
-                    <li>Discover exciting events near you</li>
-                    <li>Book tickets easily and securely</li>
-                    <li>Save events to your bucketlist</li>
-                    <li>Get digital tickets with QR codes</li>
-                </ul>
-                <p>Start exploring events now!</p>
-                <a href="{current_app.config.get('FRONTEND_URL')}/events" 
-                   style="display: inline-block; padding: 12px 30px; background-color: #4CAF50; 
-                          color: white; text-decoration: none; border-radius: 5px; margin-top: 20px;">
-                    Browse Events
-                </a>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: {COMPANY_BLACK}; margin: 0; padding: 0; background-color: {COMPANY_BG_LIGHT};">
+        <div style="max-width: 600px; margin: 0 auto; background-color: {COMPANY_WHITE}; padding: 0;">
+            {get_email_header("Welcome to Niko Free! 🎉", "Your Gateway to Amazing Events")}
+            
+            <div style="padding: 40px 30px;">
+                <p style="font-size: 16px; color: {COMPANY_BLACK}; margin: 0 0 20px 0;">Hi <strong>{user.first_name}</strong>,</p>
+                <p style="font-size: 16px; color: #555; margin: 0 0 30px 0;">Thank you for joining Niko Free - your gateway to amazing events in Kenya!</p>
+                
+                <div style="background-color: #f8f9fa; padding: 25px; border-radius: 8px; margin: 30px 0;">
+                    <h3 style="margin: 0 0 15px 0; color: {COMPANY_BLUE_DARK}; font-size: 18px;">✨ With Niko Free, you can:</h3>
+                    <ul style="margin: 0; padding-left: 20px; color: #555;">
+                        <li style="margin-bottom: 8px;">Discover exciting events near you</li>
+                        <li style="margin-bottom: 8px;">Book tickets easily and securely</li>
+                        <li style="margin-bottom: 8px;">Save events to your bucketlist</li>
+                        <li style="margin-bottom: 8px;">Get digital tickets with QR codes</li>
+                    </ul>
+                </div>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{frontend_url}/events" 
+                       style="display: inline-block; padding: 14px 35px; background: linear-gradient(135deg, {COMPANY_BLUE} 0%, {COMPANY_BLUE_DARK} 100%); 
+                              color: {COMPANY_WHITE}; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(39, 170, 226, 0.3);">
+                        Browse Events
+                    </a>
+                </div>
+                
                 <p style="margin-top: 30px; color: #666; font-size: 14px;">
-                    If you have any questions, feel free to contact us.
+                    If you have any questions, feel free to contact us at <a href="mailto:support@niko-free.com" style="color: {COMPANY_BLUE};">support@niko-free.com</a>.
                 </p>
             </div>
-        </body>
+            
+            {get_email_footer()}
+        </div>
+    </body>
     </html>
     """
     send_email(subject, user.email, html_body)
@@ -231,48 +379,61 @@ def send_booking_confirmation_email(booking, tickets):
     event = booking.event
     
     subject = f"Booking Confirmed: {event.title}"
+    frontend_url = current_app.config.get('FRONTEND_URL') or current_app.config.get('BASE_URL') or 'https://www.niko-free.com'
     
     tickets_html = ""
     for ticket in tickets:
         tickets_html += f"""
-        <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px;">
-            <p><strong>Ticket #{ticket.ticket_number}</strong></p>
-            <p>Type: {ticket.ticket_type.name}</p>
-            <img src="{ticket.qr_code}" alt="QR Code" style="max-width: 200px;">
+        <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px; background-color: {COMPANY_WHITE};">
+            <p style="margin: 0 0 10px 0; color: {COMPANY_BLACK};"><strong>Ticket #{ticket.ticket_number}</strong></p>
+            <p style="margin: 0 0 10px 0; color: #555;">Type: {ticket.ticket_type.name}</p>
+            <img src="{ticket.qr_code}" alt="QR Code" style="max-width: 200px; display: block; margin: 10px auto;">
         </div>
         """
     
     html_body = f"""
+    <!DOCTYPE html>
     <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #4CAF50;">Booking Confirmed! 🎉</h2>
-                <p>Hi {user.first_name},</p>
-                <p>Your booking for <strong>{event.title}</strong> has been confirmed!</p>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: {COMPANY_BLACK}; margin: 0; padding: 0; background-color: {COMPANY_BG_LIGHT};">
+        <div style="max-width: 600px; margin: 0 auto; background-color: {COMPANY_WHITE}; padding: 0;">
+            {get_email_header("Booking Confirmed! 🎉", "Your Event Tickets Are Ready")}
+            
+            <div style="padding: 40px 30px;">
+                <p style="font-size: 16px; color: {COMPANY_BLACK}; margin: 0 0 20px 0;">Hi <strong>{user.first_name}</strong>,</p>
+                <p style="font-size: 16px; color: #555; margin: 0 0 30px 0;">Your booking for <strong>{event.title}</strong> has been confirmed!</p>
                 
-                <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
-                    <h3 style="margin-top: 0;">Event Details</h3>
-                    <p><strong>Event:</strong> {event.title}</p>
-                    <p><strong>Date:</strong> {event.start_date.strftime('%B %d, %Y at %I:%M %p')}</p>
-                    <p><strong>Venue:</strong> {event.venue_name or event.venue_address}</p>
-                    <p><strong>Booking Number:</strong> {booking.booking_number}</p>
-                    <p><strong>Total Amount:</strong> KES {booking.total_amount}</p>
+                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid {COMPANY_BLUE};">
+                    <h3 style="margin-top: 0; color: {COMPANY_BLUE_DARK};">Event Details</h3>
+                    <p style="margin: 5px 0; color: {COMPANY_BLACK};"><strong>Event:</strong> {event.title}</p>
+                    <p style="margin: 5px 0; color: {COMPANY_BLACK};"><strong>Date:</strong> {event.start_date.strftime('%B %d, %Y at %I:%M %p')}</p>
+                    <p style="margin: 5px 0; color: {COMPANY_BLACK};"><strong>Venue:</strong> {event.venue_name or event.venue_address}</p>
+                    <p style="margin: 5px 0; color: {COMPANY_BLACK};"><strong>Booking Number:</strong> {booking.booking_number}</p>
+                    <p style="margin: 5px 0; color: {COMPANY_BLACK};"><strong>Total Amount:</strong> KES {booking.total_amount}</p>
                 </div>
                 
-                <h3>Your Tickets</h3>
+                <h3 style="color: {COMPANY_BLUE_DARK}; margin: 30px 0 15px 0;">Your Tickets</h3>
                 {tickets_html}
                 
-                <p style="margin-top: 30px;">
+                <p style="margin-top: 30px; color: #555; font-size: 14px;">
                     Please present your QR code at the event entrance for check-in.
                 </p>
                 
-                <a href="{current_app.config.get('FRONTEND_URL')}/bookings/{booking.id}" 
-                   style="display: inline-block; padding: 12px 30px; background-color: #4CAF50; 
-                          color: white; text-decoration: none; border-radius: 5px; margin-top: 20px;">
-                    View Booking Details
-                </a>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{frontend_url}/bookings/{booking.id}" 
+                       style="display: inline-block; padding: 14px 35px; background: linear-gradient(135deg, {COMPANY_BLUE} 0%, {COMPANY_BLUE_DARK} 100%); 
+                              color: {COMPANY_WHITE}; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(39, 170, 226, 0.3);">
+                        View Booking Details
+                    </a>
+                </div>
             </div>
-        </body>
+            
+            {get_email_footer()}
+        </div>
+    </body>
     </html>
     """
     send_email(subject, user.email, html_body)
@@ -291,25 +452,21 @@ def send_partner_welcome_email(partner):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
     </head>
-    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 0;">
-            <!-- Header -->
-            <div style="background: linear-gradient(135deg, #27aae2 0%, #1e8bb8 100%); padding: 40px 30px; text-align: center;">
-                <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">🎉 Welcome to Niko Free!</h1>
-                <p style="color: #ffffff; margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Your Application Has Been Received</p>
-            </div>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: {COMPANY_BLACK}; margin: 0; padding: 0; background-color: {COMPANY_BG_LIGHT};">
+        <div style="max-width: 600px; margin: 0 auto; background-color: {COMPANY_WHITE}; padding: 0;">
+            {get_email_header("🎉 Welcome to Niko Free!", "Your Application Has Been Received")}
             
             <!-- Content -->
             <div style="padding: 40px 30px;">
                 <p style="font-size: 16px; color: #333; margin: 0 0 20px 0;">Hi <strong>{partner.business_name}</strong>,</p>
                 <p style="font-size: 16px; color: #555; margin: 0 0 30px 0;">Thank you for your interest in becoming a partner with Niko Free! We're excited to have you join our platform.</p>
                 
-                <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; margin: 30px 0; border-radius: 4px;">
-                    <h3 style="margin: 0 0 15px 0; color: #856404; font-size: 18px;">📋 Application Status</h3>
-                    <p style="margin: 0; color: #856404;">
+                <div style="background-color: #e3f2fd; border-left: 4px solid {COMPANY_BLUE}; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                    <h3 style="margin: 0 0 15px 0; color: {COMPANY_BLUE_DARK}; font-size: 18px;">📋 Application Status</h3>
+                    <p style="margin: 0; color: {COMPANY_BLACK};">
                         Your partner application has been received and is <strong>under review</strong>.
                     </p>
-                    <p style="margin: 15px 0 0 0; color: #856404;">
+                    <p style="margin: 15px 0 0 0; color: {COMPANY_BLACK};">
                         You will receive an email within 24 hours with your login credentials if approved.
                     </p>
                 </div>
@@ -337,17 +494,12 @@ def send_partner_welcome_email(partner):
                 
                 <div style="text-align: center; margin-top: 40px; padding-top: 30px; border-top: 1px solid #e5e5e5;">
                     <p style="font-size: 14px; color: #999; margin: 0;">
-                        Questions? Contact us at <a href="mailto:support@niko-free.com" style="color: #27aae2;">support@niko-free.com</a>
+                        Questions? Contact us at <a href="mailto:support@niko-free.com" style="color: {COMPANY_BLUE};">support@niko-free.com</a>
                     </p>
                 </div>
             </div>
             
-            <!-- Footer -->
-            <div style="background-color: #f8f9fa; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e5e5;">
-                <p style="font-size: 12px; color: #999; margin: 0;">
-                    © {datetime.now().year} Niko Free. All rights reserved.
-                </p>
-            </div>
+            {get_email_footer()}
         </div>
     </body>
     </html>
@@ -365,9 +517,9 @@ def send_partner_approval_email(partner, approved=True, temp_password=None, reje
         credentials_html = ""
         if temp_password:
             credentials_html = f"""
-            <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 15px; 
+            <div style="background-color: #e3f2fd; border: 1px solid {COMPANY_BLUE}; padding: 15px; 
                         border-radius: 5px; margin: 20px 0;">
-                <h3 style="margin-top: 0; color: #856404;">Your Login Credentials</h3>
+                <h3 style="margin-top: 0; color: {COMPANY_BLUE_DARK};">Your Login Credentials</h3>
                 <p><strong>Email:</strong> {partner.email}</p>
                 <p><strong>Temporary Password:</strong></p>
                 <div style="background-color: #f8f9fa; border: 2px solid #dee2e6; padding: 15px; 
@@ -375,10 +527,10 @@ def send_partner_approval_email(partner, approved=True, temp_password=None, reje
                             font-size: 18px; font-weight: bold; letter-spacing: 2px; text-align: center;">
                     {temp_password}
                 </div>
-                <p style="color: #856404; font-size: 12px; margin-top: 10px;">
+                <p style="color: {COMPANY_BLACK}; font-size: 12px; margin-top: 10px;">
                     <strong>⚠️ Important:</strong> Copy this password exactly as shown. Do not add or remove any spaces or characters.
                 </p>
-                <p style="color: #856404; font-size: 14px; margin-top: 15px;">
+                <p style="color: {COMPANY_BLACK}; font-size: 14px; margin-top: 15px;">
                     ⚠️ <strong>Important:</strong> Please change this password immediately after your first login for security. 
                     You can change it in your Profile section after logging in.
                 </p>
@@ -481,7 +633,7 @@ def send_partner_approval_email(partner, approved=True, temp_password=None, reje
                     <p>If you believe this is an error or have any questions, please contact our support team.</p>
                     
                     <p style="margin-top: 30px;">
-                        <strong>Email:</strong> support@nikofree.com<br>
+                        <strong>Email:</strong> support@niko-free.com<br>
                         <strong>Phone:</strong> +254 700 000 000
                     </p>
                 </div>
@@ -523,10 +675,10 @@ def send_partner_unrejection_email(partner, reason):
                     <p style="margin: 0; color: #555; white-space: pre-wrap;">{reason}</p>
                 </div>
                 
-                <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; margin: 30px 0; border-radius: 4px;">
-                    <h3 style="margin: 0 0 15px 0; color: #856404; font-size: 18px;">⚠️ Important: Please Register Again</h3>
-                    <p style="margin: 0 0 15px 0; color: #856404; font-weight: 600;">Your email is now available for a new partner application.</p>
-                    <p style="margin: 0; color: #856404;">Please complete a new registration and make sure to include your business bio/description this time.</p>
+                <div style="background-color: #e3f2fd; border-left: 4px solid {COMPANY_BLUE}; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                    <h3 style="margin: 0 0 15px 0; color: {COMPANY_BLUE_DARK}; font-size: 18px;">⚠️ Important: Please Register Again</h3>
+                    <p style="margin: 0 0 15px 0; color: {COMPANY_BLACK}; font-weight: 600;">Your email is now available for a new partner application.</p>
+                    <p style="margin: 0; color: {COMPANY_BLACK};">Please complete a new registration and make sure to include your business bio/description this time.</p>
                 </div>
                 
                 <div style="background-color: #f8f9fa; border-left: 4px solid #27aae2; padding: 20px; margin: 30px 0; border-radius: 4px;">
@@ -1200,10 +1352,10 @@ def send_event_edit_notification_to_admin(partner, event, changed_fields):
     if changed_fields:
         fields_text = ", ".join(changed_fields)
         changes_html = f"""
-        <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 15px; 
+        <div style="background-color: #e3f2fd; border: 1px solid {COMPANY_BLUE}; padding: 15px; 
                     border-radius: 5px; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #856404;">📝 Fields Changed:</h3>
-            <p style="color: #856404; margin: 0;">{fields_text}</p>
+            <h3 style="margin-top: 0; color: {COMPANY_BLUE_DARK};">📝 Fields Changed:</h3>
+            <p style="color: {COMPANY_BLACK}; margin: 0;">{fields_text}</p>
         </div>
         """
     else:
@@ -1316,7 +1468,7 @@ def send_admin_invitation_email(email, temp_password, inviter_name=None):
                         <p style="margin: 0 0 10px 0; color: #555;"><strong>Temporary Password:</strong></p>
                         <p style="margin: 0; font-size: 18px; font-weight: bold; color: #27aae2; font-family: monospace; letter-spacing: 1px;">{temp_password}</p>
                     </div>
-                    <p style="margin: 15px 0 0 0; color: #856404; font-size: 14px;">
+                    <p style="margin: 15px 0 0 0; color: {COMPANY_BLACK}; font-size: 14px;">
                         ⚠️ <strong>Important:</strong> Please change your password after your first login for security.
                     </p>
                 </div>
@@ -1339,8 +1491,8 @@ def send_admin_invitation_email(email, temp_password, inviter_name=None):
                     </a>
                 </div>
                 
-                <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 30px 0; border-radius: 4px;">
-                    <p style="margin: 0; color: #856404; font-size: 14px;">
+                <div style="background-color: #e3f2fd; border-left: 4px solid {COMPANY_BLUE}; padding: 15px; margin: 30px 0; border-radius: 4px;">
+                    <p style="margin: 0; color: {COMPANY_BLACK}; font-size: 14px;">
                         <strong>Security Note:</strong> Keep your credentials secure and do not share them with anyone. If you did not expect this invitation, please contact support immediately.
                     </p>
                 </div>
@@ -1416,9 +1568,9 @@ def send_partner_account_deletion_email(partner):
                     </div>
                 </div>
                 
-                <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; margin: 30px 0; border-radius: 4px;">
-                    <h3 style="margin: 0 0 15px 0; color: #856404; font-size: 18px;">⚠️ Important Note:</h3>
-                    <p style="margin: 0; color: #856404;">
+                <div style="background-color: #e3f2fd; border-left: 4px solid {COMPANY_BLUE}; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                    <h3 style="margin: 0 0 15px 0; color: {COMPANY_BLUE_DARK}; font-size: 18px;">⚠️ Important Note:</h3>
+                    <p style="margin: 0; color: {COMPANY_BLACK};">
                         If you rejoin, you'll need to submit a new partner application. Your previous account data cannot be restored.
                     </p>
                 </div>

@@ -107,13 +107,18 @@ class Config:
     APPLE_KEY_ID = os.getenv('APPLE_KEY_ID')
     APPLE_PRIVATE_KEY_PATH = os.getenv('APPLE_PRIVATE_KEY_PATH')
     
-    # MPesa - Daraja Sandbox Credentials
-    MPESA_CONSUMER_KEY = os.getenv('MPESA_CONSUMER_KEY', 'wqhprq5SA5GDBM9xegDWJPQ20eZcEdG3LBN4UGXGw47D94Ay')
-    MPESA_CONSUMER_SECRET = os.getenv('MPESA_CONSUMER_SECRET', 'gBB3tVMdVG1d9GiMWgm493Iq1XyBNSPdOqGYdALNh9olB52Sum0pXlzTQICLRoVr')
-    MPESA_PASSKEY = os.getenv('MPESA_PASSKEY', 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919')  # Sandbox passkey
-    MPESA_SHORTCODE = os.getenv('MPESA_SHORTCODE', '174379')  # Sandbox shortcode
-    MPESA_ENVIRONMENT = os.getenv('MPESA_ENVIRONMENT', 'sandbox')
+    # MPesa - Daraja Production Credentials
+    MPESA_CONSUMER_KEY = os.getenv('MPESA_CONSUMER_KEY', 'vZ5QKQpgIZrxDYFxbPXItx1yyoAIbanv8VWP3sZD4UsGClpG')
+    MPESA_CONSUMER_SECRET = os.getenv('MPESA_CONSUMER_SECRET', 'Fj32fhWas7u4Kg2O0DcmRV0EOTA13OesK89L77LNlwv1ABIw7RHZoDWrnQW3liIC')
+    MPESA_PASSKEY = os.getenv('MPESA_PASSKEY', 'e58943fa54dd20876ea5024e4be2b3a5e99a1dbdfb0caa37e4f6ff803d3bfccc')
+    MPESA_SHORTCODE = os.getenv('MPESA_SHORTCODE', '4004285')
+    MPESA_BUSINESS_SHORTCODE = os.getenv('MPESA_BUSINESS_SHORTCODE', '4004285')
+    MPESA_ENVIRONMENT = os.getenv('MPESA_ENVIRONMENT', 'production')
     MPESA_CALLBACK_URL = os.getenv('MPESA_CALLBACK_URL', 'https://nikofree-arhecnfueegrasf8.canadacentral-01.azurewebsites.net/api/payments/mpesa/callback')
+    # B2C Payment Configuration (for partner payouts)
+    # MPESA_INITIATOR_NAME = os.getenv('MPESA_INITIATOR_NAME')
+    # MPESA_INITIATOR_PASSWORD = os.getenv('MPESA_INITIATOR_PASSWORD')
+    # MPESA_SECURITY_CREDENTIAL = os.getenv('MPESA_SECURITY_CREDENTIAL')  # Encrypted credential for production
     
     # Redis
     REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')

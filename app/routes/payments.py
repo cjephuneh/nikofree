@@ -140,7 +140,7 @@ def initiate_payment(current_user):
         
         # Provide more helpful error messages
         if '2001' in str(error_code) or 'invalid' in error_message.lower():
-            error_message = 'Invalid phone number or amount. Please ensure your phone number is registered for M-Pesa and try again. If using sandbox, ensure you are using a test number.'
+            error_message = 'Invalid phone number or amount. Please ensure your phone number is registered for M-Pesa and try again.'
         elif 'insufficient' in error_message.lower() or 'balance' in error_message.lower():
             error_message = 'Insufficient balance. Please ensure you have enough funds in your M-Pesa account.'
         
@@ -359,7 +359,7 @@ def mpesa_callback():
             
             # ResultCode 2001 means the STK push was never sent to the user's phone
             # This happens when MPesa validates the request and finds issues before sending
-            # Common causes: phone not registered for M-Pesa, invalid test number in sandbox, etc.
+            # Common causes: phone not registered for M-Pesa, invalid amount, etc.
             # Since the user never got a prompt, we should mark as failed immediately
             
             # For ResultCode 2004 (timeout), the user might still be processing the payment
@@ -402,16 +402,11 @@ def mpesa_callback():
                 # Send payment failed SMS for ResultCode 2001 (validation failed - STK push never sent)
                 # ResultCode 2001 means the phone number/amount validation failed at MPesa's end
                 # The user never received the STK push prompt, so we should inform them
-                if result_code == 2001:
-                    # Check if we're in sandbox mode for better error messaging
-                    is_sandbox = current_app.config.get('MPESA_ENVIRONMENT', 'sandbox') == 'sandbox'
                 user = booking.user
                 event = booking.event
                 if user and event:
                     try:
-                        # Only send SMS if it's not a sandbox validation issue
-                        # In sandbox, ResultCode 2001 usually means phone not registered as test number
-                        # We'll still send the SMS but the frontend should show a better message
+                        # Send SMS notification for failed payment
                         send_payment_failed_sms(user, payment, event)
                     except Exception as sms_error:
                         current_app.logger.warning(f'Failed to send payment failed SMS: {str(sms_error)}')
